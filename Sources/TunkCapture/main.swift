@@ -1,30 +1,45 @@
 import Foundation
-import TunkCore
-import TunkIMU
+import TunkFormat
 
-// Temporary smoke test: prove the Swift/C accelerometer bridge works.
-let source = AccelSource(reportIntervalUs: 1250)
-var count = 0
-var first: AccelSample?
-var last: AccelSample?
-let lock = NSLock()
+// tunk-capture — records one labelled session per FORMAT.md.
+//
+// record  one category, raw, no prompts
+// guide   the scripted hands-free session the dataset is actually built from
+// verify  re-read a session and say whether the rig is sound
+// doctor  permission and sensor check, five seconds, before you commit an hour
+
+let args = Args(Array(CommandLine.arguments.dropFirst()))
+
+if args.has("help") || args.has("h") || args.sub.isEmpty {
+    print(usageText)
+    exit(args.sub.isEmpty && !args.has("help") && !args.has("h") ? 1 : 0)
+}
+
 do {
-    try source.start { s in
-        lock.lock(); defer { lock.unlock() }
-        if first == nil { first = s }
-        last = s
-        count += 1
+    switch args.sub {
+    case "record":
+        try runRecord(args)
+    case "guide":
+        try runGuide(args)
+    case "verify":
+        runVerify(args)
+    case "doctor":
+        runDoctor(args)
+    case "list":
+        print("categories:")
+        for c in Category.allCases {
+            print("  \(c.rawValue.padding(toLength: 20, withPad: " ", startingAt: 0))\(c.title)")
+        }
+        print("surfaces:")
+        for s in Surface.allCases {
+            print("  \(s.rawValue.padding(toLength: 20, withPad: " ", startingAt: 0))\(s.title)")
+        }
+    default:
+        Console.err("unknown command '\(args.sub)'\n")
+        print(usageText)
+        exit(1)
     }
 } catch {
-    FileHandle.standardError.write("start failed: \(error)\n".data(using: .utf8)!)
+    Console.err("error: \(error)")
     exit(1)
 }
-Thread.sleep(forTimeInterval: 3.0)
-source.stop()
-lock.lock()
-let secs = Double((last?.tNs ?? 0) - (first?.tNs ?? 0)) / 1e9
-print(String(format: "smoke: %d samples in %.3f s => %.1f Hz", count, secs, secs > 0 ? Double(count - 1) / secs : 0))
-print(String(format: "rest reading: x=%+.4f y=%+.4f z=%+.4f", last?.x ?? 0, last?.y ?? 0, last?.z ?? 0))
-let st = source.snapshotStats()
-print("gaps=\(st.gapCount) maxLag=\(Double(st.maxLagNs)/1e6) ms")
-lock.unlock()

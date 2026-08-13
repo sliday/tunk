@@ -1,0 +1,217 @@
+import Foundation
+import TunkCore
+import TunkFormat
+
+/// SYNTHETIC data generation. Nothing here is a recording.
+///
+/// The harness has to be provable before the operator records anything, so
+/// `selftest` plants a known number of double-taps into a made-up signal, writes
+/// it to disk in the real FORMAT.md layout, and then checks that the harness
+/// reports exactly what was planted. Any file this produces carries
+/// `"synthetic": true` in its notes and a `tool_version` that says so.
+///
+/// The waveform is a damped sinusoid, which is what a struck plate does; it is not
+/// claimed to match the real chassis response, and no metric from these files says
+/// anything about the real detector.
+enum Synth {
+    static let intervalNs: Int64 = 1_256_000
+    static let toolVersion = "tunk-score selftest (SYNTHETIC) \(TunkScoreVersion.string)"
+
+    /// Deterministic PRNG so two selftest runs produce byte-identical sessions.
+    struct RNG {
+        private var state: UInt64
+        init(seed: UInt64) { state = seed &* 0x9E3779B97F4A7C15 &+ 0x1 }
+        mutating func next() -> UInt64 {
+            state &+= 0x9E3779B97F4A7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+            z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+            return z ^ (z >> 31)
+        }
+        mutating func uniform() -> Double { Double(next() >> 11) * (1.0 / 9007199254740992.0) }
+        /// Box-Muller, one value per call. Plenty for noise floor.
+        mutating func gaussian() -> Double {
+            let u1 = max(uniform(), 1e-12), u2 = uniform()
+            return (-2 * Foundation.log(u1)).squareRoot() * Foundation.cos(2 * Double.pi * u2)
+        }
+    }
+
+    struct Burst {
+        var tNs: Int64
+        var amplitude: Double
+        var freqHz: Double = 180
+        var tauMs: Double = 6
+    }
+
+    struct Plan {
+        var category: TunkFormat.Category
+        var surface: Surface
+        var durationSec: Double
+        var bursts: [Burst] = []
+        var labels: [TapLabel] = []
+        var inputs: [InputRecord] = []
+        var marks: [Mark] = []
+        var expectedTriggers: Int = 0
+        var notes: String = ""
+        var seed: UInt64 = 1
+        /// Only the holdout-guard check writes `.test`; every scored session is train.
+        var split: Split = .train
+    }
+
+    /// Build a session directory under `root` and return its URL.
+    @discardableResult
+    static func write(_ plan: Plan, root: URL, stamp: String, shortId: String) throws -> URL {
+        let name = "\(plan.category.rawValue)__\(plan.surface.rawValue)__\(stamp)__\(shortId)"
+        let dir = root.appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let n = Int((plan.durationSec * 1e9) / Double(intervalNs))
+        var rng = RNG(seed: plan.seed)
+        var xs = [Double](repeating: 0, count: n)
+        var ys = [Double](repeating: 0, count: n)
+        var zs = [Double](repeating: 0, count: n)
+        for i in 0..<n {
+            xs[i] = 0.0180 + 0.0030 * rng.gaussian()
+            ys[i] = 0.0090 + 0.0030 * rng.gaussian()
+            zs[i] = -0.9796 + 0.0030 * rng.gaussian()
+        }
+
+        // A tap couples into all three axes; z hardest for a strike on the deck.
+        for b in plan.bursts {
+            let start = Int(b.tNs / intervalNs)
+            let tau = b.tauMs * 1e-3
+            let len = Int((tau * 6) / (Double(intervalNs) * 1e-9))
+            for k in 0..<len {
+                let idx = start + k
+                guard idx >= 0, idx < n else { continue }
+                let dt = Double(k) * Double(intervalNs) * 1e-9
+                let env = Foundation.exp(-dt / tau)
+                let s = Foundation.sin(2 * Double.pi * b.freqHz * dt) * env * b.amplitude
+                xs[idx] += 0.30 * s
+                ys[idx] += 0.25 * s
+                zs[idx] += 1.00 * s
+            }
+        }
+
+        let writer = try AccelWriter(url: dir.appendingPathComponent("accel.bin"))
+        for i in 0..<n {
+            let t = Int64(i) * intervalNs
+            // Arrival lag mirrors the measured p50 of 0.27 ms.
+            writer.append(AccelSample(tNs: t, arrivalNs: t + 270_000,
+                                      x: Float(xs[i]), y: Float(ys[i]), z: Float(zs[i])))
+        }
+        writer.close()
+
+        try JSONL.write(plan.inputs.sorted { $0.tNs < $1.tNs }, to: dir.appendingPathComponent("input.jsonl"))
+        try JSONL.write(plan.labels.sorted { $0.tNs < $1.tNs }, to: dir.appendingPathComponent("labels.jsonl"))
+        try JSONL.write(plan.marks.sorted { $0.tNs < $1.tNs }, to: dir.appendingPathComponent("marks.jsonl"))
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let meta = SessionMeta(
+            sessionId: name,
+            category: plan.category,
+            surface: plan.surface,
+            epochMachNs: 0,
+            epochWallIso: iso.string(from: Date()),
+            reportIntervalUs: 1250,
+            nominalRateHz: 1e9 / Double(intervalNs),
+            nominalIntervalNs: intervalNs,
+            durationNs: Int64(n) * intervalNs,
+            sampleCount: n,
+            machine: MachineInfo.current(),
+            split: plan.split,
+            expectedTriggers: plan.expectedTriggers,
+            operatorNotes: "SYNTHETIC — generated by tunk-score selftest, not a recording. " + plan.notes,
+            toolVersion: toolVersion
+        )
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try enc.encode(meta).write(to: dir.appendingPathComponent("meta.json"))
+        try ("# SYNTHETIC session\n\nGenerated by `tunk-score selftest`. Not a recording. "
+             + "Do not use for tuning or for any claim about detector quality.\n\n\(plan.notes)\n")
+            .write(to: dir.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
+        return dir
+    }
+
+    // MARK: - The planted scenarios
+
+    /// Clean double-taps, no input activity. Everything should be detected.
+    static func cleanTaps(count: Int, surface: Surface = .desk,
+                          firstAtNs: Int64 = 3_000_000_000,
+                          spacingNs: Int64 = 5_000_000_000,
+                          interTapNs: Int64 = 160_000_000) -> Plan {
+        var p = Plan(category: .tapDeck, surface: surface,
+                     durationSec: Double(firstAtNs + Int64(count) * spacingNs) / 1e9 + 3,
+                     expectedTriggers: count, seed: 11)
+        p.notes = "\(count) clean double-taps, inter-tap \(interTapNs / 1_000_000) ms, no input activity."
+        for g in 0..<count {
+            let t0 = firstAtNs + Int64(g) * spacingNs
+            let t1 = t0 + interTapNs
+            p.bursts.append(Burst(tNs: t0, amplitude: 2.0))
+            p.bursts.append(Burst(tNs: t1, amplitude: 1.8))
+            p.labels.append(TapLabel(tNs: t0, group: g, indexInGroup: 0, intent: .double, confidence: .autoRefined))
+            p.labels.append(TapLabel(tNs: t1, group: g, indexInGroup: 1, intent: .double, confidence: .autoRefined))
+            p.marks.append(Mark(tNs: t0 - 500_000_000, kind: "beep", group: g))
+        }
+        return p
+    }
+
+    /// Typing: hard key strikes that would pair up into "double-taps" if the gate
+    /// were not there. Each strike carries its `key_down` / `key_up`.
+    static func typing(strikes: Int, surface: Surface = .desk, amplitude: Double = 0.9) -> Plan {
+        var p = Plan(category: .typing, surface: surface, durationSec: 0, expectedTriggers: 0, seed: 23)
+        var rng = RNG(seed: 77)
+        var t: Int64 = 2_000_000_000
+        var i = 0
+        var words = 0
+        // Prose comes in words: a burst of keys, then a pause at the space bar and
+        // the next word. The pause is what turns the last two strikes of a word into
+        // something a double-tap grouper will happily accept.
+        while i < strikes {
+            let wordLength = 3 + Int(rng.uniform() * 5)
+            for _ in 0..<wordLength where i < strikes {
+                p.bursts.append(Burst(tNs: t, amplitude: amplitude * (0.85 + 0.3 * rng.uniform())))
+                p.inputs.append(InputRecord(tNs: t, kind: .keyDown, code: Int32(4 + i % 20)))
+                p.inputs.append(InputRecord(tNs: t + 55_000_000, kind: .keyUp, code: Int32(4 + i % 20)))
+                t += 110_000_000 + Int64(rng.uniform() * 60_000_000)
+                i += 1
+            }
+            t += 300_000_000 + Int64(rng.uniform() * 300_000_000)
+            words += 1
+        }
+        p.durationSec = Double(t) / 1e9 + 2
+        p.notes = "\(strikes) hard key strikes in \(words) word-like bursts of 3-7 keys at ~110-170 ms "
+            + "spacing, separated by 300-600 ms pauses, each strike with its key_down/key_up. "
+            + "Ungated, the last two strikes of every word pair into a double-tap; the gate is the "
+            + "only thing stopping them."
+        return p
+    }
+
+    /// Real double-taps that land inside a gate window, because a key went down
+    /// just before each one. Planted expectation: zero detections.
+    static func gatedTaps(count: Int, surface: Surface = .soft,
+                          leadNs: Int64 = 15_000_000) -> Plan {
+        var p = cleanTaps(count: count, surface: surface)
+        p.category = .tapDeck
+        p.seed = 37
+        p.notes = "\(count) double-taps, each tap preceded by a key_down \(leadNs / 1_000_000) ms earlier. "
+            + "The gate should eat every one of them: planted detections = 0."
+        for (i, b) in p.bursts.enumerated() {
+            p.inputs.append(InputRecord(tNs: b.tNs - leadNs, kind: .keyDown, code: Int32(30 + i % 5)))
+            p.inputs.append(InputRecord(tNs: b.tNs - leadNs + 50_000_000, kind: .keyUp, code: Int32(30 + i % 5)))
+        }
+        return p
+    }
+
+    /// Isolated single transients, far apart. A double-tap detector must ignore them.
+    static func isolatedThumps(count: Int, surface: Surface = .lap) -> Plan {
+        var p = Plan(category: .confoundMug, surface: surface,
+                     durationSec: Double(count) * 2 + 4, expectedTriggers: 0, seed: 53)
+        for i in 0..<count {
+            p.bursts.append(Burst(tNs: 2_000_000_000 + Int64(i) * 2_000_000_000, amplitude: 2.5, tauMs: 9))
+        }
+        p.notes = "\(count) isolated hard thumps 2 s apart. No pairing is possible: planted triggers = 0."
+        return p
+    }
+}

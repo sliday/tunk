@@ -1,0 +1,706 @@
+/* Tunk live progress page.
+   Plain CSS, no build step. Read at 390px first, everything else is an
+   enhancement. Radii are concentric: inner 10 + 8 padding = outer 18. */
+
+:root {
+  color-scheme: light dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
+
+  --pad-card: 8px;
+  --r-inner: 10px;
+  --r-card: 18px;
+  --r-outer: 26px;
+
+  --bg: #f2f3f5;
+  --bg-grad: radial-gradient(120% 90% at 50% 0%, #ffffff 0%, #eeeff2 60%, #e8eaee 100%);
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --ink: #16181d;
+  --ink-2: #454a55;
+  --muted: #6b7280;
+  --pass: #0a7a3d;
+  --pass-soft: rgba(10, 122, 61, 0.10);
+  --fail: #b0231b;
+  --fail-soft: rgba(176, 35, 27, 0.10);
+  --none: #5c6472;
+  --none-soft: rgba(92, 100, 114, 0.10);
+  --info: #4a5566;
+  --info-soft: rgba(74, 85, 102, 0.08);
+  --hatch: rgba(176, 35, 27, 0.16);
+  --hairline: rgba(20, 22, 28, 0.07);
+  --outline: rgba(0, 0, 0, 0.1);
+  --shadow-1: 0 1px 1px rgba(16, 18, 24, 0.05);
+  --shadow-2: 0 4px 10px -4px rgba(16, 18, 24, 0.14);
+  --shadow-3: 0 18px 32px -22px rgba(16, 18, 24, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0e11;
+    --bg-grad: radial-gradient(120% 90% at 50% 0%, #191c22 0%, #111318 55%, #0b0c0f 100%);
+    --surface: #171a20;
+    --surface-2: #1d2129;
+    --ink: #eceef2;
+    --ink-2: #c2c7d1;
+    --muted: #949bab;
+    --pass: #4cd08a;
+    --pass-soft: rgba(76, 208, 138, 0.14);
+    --fail: #ff7d72;
+    --fail-soft: rgba(255, 125, 114, 0.14);
+    --none: #99a1b0;
+    --none-soft: rgba(153, 161, 176, 0.12);
+    --info: #a8b1c0;
+    --info-soft: rgba(168, 177, 192, 0.10);
+    --hatch: rgba(255, 125, 114, 0.20);
+    --hairline: rgba(255, 255, 255, 0.07);
+    --outline: rgba(255, 255, 255, 0.1);
+    --shadow-1: 0 1px 1px rgba(0, 0, 0, 0.5);
+    --shadow-2: 0 6px 14px -6px rgba(0, 0, 0, 0.7);
+    --shadow-3: 0 22px 40px -26px rgba(0, 0, 0, 0.9);
+  }
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 20px 14px 56px;
+  background: var(--bg);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 400 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  text-wrap: pretty;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 650; }
+h2 { font-size: 1.0625rem; font-weight: 620; }
+h3 { font-size: 0.9375rem; font-weight: 620; }
+
+p { margin: 0; }
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--info-soft);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+}
+.skip:focus-visible {
+  left: 12px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--r-inner);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-2), var(--shadow-3);
+}
+
+main,
+.page-head,
+.page-foot {
+  max-width: 780px;
+  margin-inline: auto;
+}
+
+/* ------------------------------------------------------------- head */
+
+.page-head { padding: 4px 6px 22px; }
+
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.lede {
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+}
+
+.stamp {
+  margin-top: 10px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------- sections */
+
+main > section { margin-bottom: 30px; }
+
+.section-note {
+  margin-top: 6px;
+  margin-bottom: 14px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+main > section > h2 { padding-inline: 6px; }
+main > section > .section-note { padding-inline: 6px; }
+
+/* ------------------------------------------------------------- verdict */
+
+.verdict {
+  padding: 16px 16px 18px;
+  border-radius: var(--r-outer);
+  background: var(--surface);
+  box-shadow: inset 4px 0 0 0 var(--none), var(--shadow-1), var(--shadow-2), var(--shadow-3);
+}
+.verdict--pass { box-shadow: inset 4px 0 0 0 var(--pass), var(--shadow-1), var(--shadow-2), var(--shadow-3); }
+.verdict--fail { box-shadow: inset 4px 0 0 0 var(--fail), var(--shadow-1), var(--shadow-2), var(--shadow-3); }
+
+/* Wide, faint hatch: enough to read the state from across the room, light
+   enough to read a paragraph through. */
+.verdict--none {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--none-soft) 0 5px,
+    transparent 5px 22px
+  );
+}
+.verdict--fail {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 5px,
+    transparent 5px 22px
+  );
+}
+
+.verdict-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.0625rem;
+}
+
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tally-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: var(--r-inner);
+  background: var(--info-soft);
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
+.tally-n {
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.tally-item--pass { background: var(--pass-soft); }
+.tally-item--pass .tally-n { color: var(--pass); }
+.tally-item--fail { background: var(--fail-soft); }
+.tally-item--fail .tally-n { color: var(--fail); }
+.tally-item--none { background: var(--none-soft); }
+.tally-item--none .tally-n { color: var(--none); }
+
+.verdict-gap,
+.log-gap {
+  margin-top: 14px;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+/* Concentric: 26 outer radius − 16 padding = 10 inner. Solid backing keeps the
+   sentence readable where the card is hatched. */
+.verdict-gap {
+  padding: 11px 12px 12px;
+  border-radius: var(--r-inner);
+  background: var(--surface);
+}
+
+.log-gap-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--info-soft);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+
+/* ------------------------------------------------------------- pills */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 640;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--info-soft);
+  color: var(--info);
+}
+.pill-glyph { font-size: 0.75em; line-height: 1; }
+.pill--pass { background: var(--pass-soft); color: var(--pass); }
+.pill--fail { background: var(--fail-soft); color: var(--fail); }
+.pill--none { background: var(--none-soft); color: var(--none); }
+
+/* ------------------------------------------------------------- cards */
+
+.cards {
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  padding: var(--pad-card);
+  padding-top: 14px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--shadow-2), var(--shadow-3);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 8px 2px;
+}
+
+.card-coverage {
+  padding: 4px 8px 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.card-regress {
+  margin: 10px 8px 0;
+  padding: 7px 10px;
+  border-radius: var(--r-inner);
+  background: var(--fail-soft);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 6px,
+    transparent 6px 12px
+  );
+  color: var(--fail);
+  font-size: 0.75rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------- metrics */
+
+.metrics {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: separate;
+  border-spacing: 0 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metrics thead th {
+  padding: 0 10px 6px;
+  font-size: 0.625rem;
+  font-weight: 620;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: right;
+}
+.metrics thead th:first-child { text-align: left; }
+
+.metric > * {
+  padding: 7px 9px;
+  background: var(--surface-2);
+  vertical-align: middle;
+}
+.metric > :first-child {
+  border-start-start-radius: var(--r-inner);
+  border-end-start-radius: var(--r-inner);
+  text-align: left;
+  font-weight: 500;
+}
+.metric > :last-child {
+  border-start-end-radius: var(--r-inner);
+  border-end-end-radius: var(--r-inner);
+}
+
+.metric-name {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.metric-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.metric-value {
+  text-align: right;
+  font-size: 0.9375rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.metric--pass .metric-value { color: var(--pass); }
+.metric--fail .metric-value { color: var(--fail); }
+.metric--none .metric-value { color: var(--none); }
+
+.metric-delta,
+.metric-status { text-align: right; }
+
+/* Phone width: the verdict cell keeps its glyph (● pass, ■ fail, ◇ no data)
+   and gives the label back to the name column. Text stays in the a11y tree. */
+@media (max-width: 559px) {
+  .metric-status .pill {
+    padding: 5px 7px;
+    gap: 0;
+  }
+  .metric-status .pill-glyph { font-size: 0.9em; }
+  .metric-status .pill-label {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Regression reads as texture and a downward wedge, never hue alone. */
+.metric--d-regress > * {
+  background-color: var(--fail-soft);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 6px,
+    transparent 6px 12px
+  );
+}
+.metric--d-regress > :first-child {
+  box-shadow: inset 3px 0 0 0 var(--fail);
+}
+.metric--d-improve > :first-child {
+  box-shadow: inset 3px 0 0 0 var(--pass);
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: var(--info-soft);
+  color: var(--muted);
+}
+.delta-glyph { font-size: 0.8em; }
+.delta--improve { background: var(--pass-soft); color: var(--pass); }
+.delta--regress { background: var(--fail-soft); color: var(--fail); }
+.delta--flat { background: var(--info-soft); color: var(--muted); }
+.delta--new { background: var(--none-soft); color: var(--none); }
+
+.metrics--passline { margin-top: 4px; }
+.metrics--passline tbody th {
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--surface-2);
+  border-start-start-radius: var(--r-inner);
+  border-end-start-radius: var(--r-inner);
+}
+.metrics--passline tbody td {
+  padding: 9px 10px;
+  text-align: right;
+  font-weight: 640;
+  background: var(--surface-2);
+  border-start-end-radius: var(--r-inner);
+  border-end-end-radius: var(--r-inner);
+}
+
+/* ------------------------------------------------------------- trends */
+
+.trend-group {
+  margin-top: 14px;
+  padding: 14px var(--pad-card) var(--pad-card);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--shadow-2), var(--shadow-3);
+}
+.trend-group > h3 { padding-inline: 8px; }
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trend {
+  margin: 0;
+  padding: 9px 8px;
+  border-radius: var(--r-inner);
+  background: var(--surface-2);
+}
+.trend--regress {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 6px,
+    transparent 6px 12px
+  );
+  box-shadow: inset 3px 0 0 0 var(--fail);
+}
+.trend--improve { box-shadow: inset 3px 0 0 0 var(--pass); }
+
+.trend figcaption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.trend-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.trend-foot {
+  margin-top: 2px;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 8px 0 2px;
+  border-radius: 8px;
+  outline: 1px solid var(--outline);
+  outline-offset: 0;
+  background: var(--surface);
+  overflow: visible;
+}
+
+.spark-rule {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+.spark-rule-label {
+  fill: var(--muted);
+  font-size: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.spark-line {
+  fill: none;
+  stroke: var(--info);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+.spark-last {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.spark-last--improve { stroke: var(--pass); }
+.spark-last--regress { stroke: var(--fail); }
+.spark-last--flat { stroke: var(--muted); }
+.spark-last--new { stroke: none; }
+.spark-dot--pass { fill: var(--pass); }
+.spark-dot--fail { fill: var(--fail); }
+.spark-dot--info { fill: var(--info); }
+.spark-dot--none {
+  fill: none;
+  stroke: var(--none);
+  stroke-width: 1.4;
+}
+
+/* ------------------------------------------------------------- log */
+
+.log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.log-item {
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--shadow-2);
+}
+.log-item--fail { box-shadow: inset 3px 0 0 0 var(--fail), var(--shadow-1), var(--shadow-2); }
+.log-item--pass { box-shadow: inset 3px 0 0 0 var(--pass), var(--shadow-1), var(--shadow-2); }
+.log-item--none { box-shadow: inset 3px 0 0 0 var(--none), var(--shadow-1), var(--shadow-2); }
+
+.log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.log-head h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.log-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.log-time {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.log-headline {
+  margin-top: 8px;
+  font-size: 0.9375rem;
+  color: var(--ink-2);
+}
+
+/* ------------------------------------------------------------- foot */
+
+.page-foot {
+  margin-top: 34px;
+  padding: 0 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.foot-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.foot-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-inner);
+  color: var(--ink-2);
+  text-decoration: none;
+  background: var(--info-soft);
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1),
+              color 160ms cubic-bezier(0.2, 0, 0, 1),
+              box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.foot-links a:hover,
+.foot-links a:focus-visible {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1), var(--shadow-2);
+}
+
+/* Only shown once progress.js confirms a newer progress.json. */
+.refresh-note {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin: 18px auto 0;
+  padding: 0 16px;
+  max-width: 780px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  box-shadow: var(--shadow-2), var(--shadow-3);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1),
+              transform 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.refresh-note[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-note {
+    transition: opacity 1ms linear;
+    transform: none;
+  }
+  .refresh-note[data-visible="true"] { transform: none; }
+  .foot-links a { transition: background-color 1ms linear, color 1ms linear; }
+}
+
+/* ------------------------------------------------------------- wider */
+
+@media (min-width: 560px) {
+  body { padding: 30px 20px 64px; }
+  h1 { font-size: 1.875rem; }
+  .trend-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (min-width: 860px) {
+  .cards { grid-template-columns: 1fr; }
+}

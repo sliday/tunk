@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "title": "Tunk — gauntlet loop",
+  "generated_at": "2026-08-13T18:20:00Z",
+  "pass_line": {
+    "detection_rate": { "op": ">=", "value": 98, "unit": "%" },
+    "false_triggers_typing": { "op": "==", "value": 0, "unit": "" },
+    "false_triggers_confound": { "op": "==", "value": 0, "unit": "" },
+    "false_triggers_per_20min": { "op": "<", "value": 1, "unit": "/20min" },
+    "latency_p95_ms": { "op": "<=", "value": 250, "unit": "ms" },
+    "stuck_modifiers": { "op": "==", "value": 0, "unit": "" }
+  },
+  "rounds": [
+    {
+      "round": 0,
+      "label": "bootstrap",
+      "timestamp": "2026-08-13T18:20:00Z",
+      "status": "no_data",
+      "headline": "no data yet — dataset not recorded",
+      "biggest_gap": "No dataset exists. Nothing on this page has been measured. The operator has not yet recorded a single session, so detection rate, false triggers and latency are all unknown — not zero, not passing. First blocking step: record data/raw and data/holdout per FORMAT.md across desk, soft and lap.",
+      "dataset": { "sessions": 0, "double_tap_groups": 0, "minutes": 0.0 },
+      "surfaces": {
+        "desk": {
+          "coverage": { "sessions": 0, "double_tap_groups": 0, "typing_minutes": 0.0, "confound_minutes": 0.0 },
+          "metrics": {
+            "detection_rate": { "value": null, "n": 0, "note": "no held-out tap groups recorded" },
+            "false_triggers_typing": { "value": null, "n": 0, "note": "no typing sessions recorded" },
+            "false_triggers_confound": { "value": null, "n": 0, "note": "no confound sessions recorded" },
+            "false_triggers_per_20min": { "value": null, "n": 0 },
+            "latency_p50_ms": { "value": null, "n": 0 },
+            "latency_p95_ms": { "value": null, "n": 0 },
+            "latency_max_ms": { "value": null, "n": 0 },
+            "stuck_modifiers": { "value": null, "n": 0, "note": "emission not exercised yet" }
+          }
+        },
+        "soft": {
+          "coverage": { "sessions": 0, "double_tap_groups": 0, "typing_minutes": 0.0, "confound_minutes": 0.0 },
+          "metrics": {
+            "detection_rate": { "value": null, "n": 0 },
+            "false_triggers_typing": { "value": null, "n": 0 },
+            "false_triggers_confound": { "value": null, "n": 0 },
+            "false_triggers_per_20min": { "value": null, "n": 0 },
+            "latency_p50_ms": { "value": null, "n": 0 },
+            "latency_p95_ms": { "value": null, "n": 0 },
+            "latency_max_ms": { "value": null, "n": 0 },
+            "stuck_modifiers": { "value": null, "n": 0 }
+          }
+        },
+        "lap": {
+          "coverage": { "sessions": 0, "double_tap_groups": 0, "typing_minutes": 0.0, "confound_minutes": 0.0 },
+          "metrics": {
+            "detection_rate": { "value": null, "n": 0 },
+            "false_triggers_typing": { "value": null, "n": 0 },
+            "false_triggers_confound": { "value": null, "n": 0 },
+            "false_triggers_per_20min": { "value": null, "n": 0 },
+            "latency_p50_ms": { "value": null, "n": 0 },
+            "latency_p95_ms": { "value": null, "n": 0 },
+            "latency_max_ms": { "value": null, "n": 0 },
+            "stuck_modifiers": { "value": null, "n": 0 }
+          }
+        }
+      }
+    }
+  ]
+}
