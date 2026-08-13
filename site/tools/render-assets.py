@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 """Rasterise the icon set and compose og.png, then install both into site/.
 
-Two sources, and using the wrong one is the mistake this script exists to
-prevent. IDENTITY.md section 8: `favicon.svg` is the flat mark and owns
-everything under 32 px; `icon.svg` is the full mark and owns 32 px and up. The
-full mark's bloom and shock ring turn to haze when shrunk to a browser tab, and
-a favicon cut from it reads as a smudge.
+Three sources, and using the wrong one is the mistake this script exists to
+prevent. Per IDENTITY.md section 8 and the icon designer's source table:
+
+  favicon.svg        flat mark, owns everything under 32 px. The full mark's
+                     bloom and shock ring turn to haze at tab size.
+  icon.svg           full mark with its squircle, rim and cast shadow. Owns the
+                     browser PNGs declared `purpose: any`, and the OG card.
+  icon-fullbleed.svg same artwork with the squircle, the transparent gutter, the
+                     rim and the cast shadow removed. Owns apple-touch-icon and
+                     any maskable manifest icon, because iOS and Android apply
+                     their own corner mask. Feed those icon.svg and you get a
+                     rounded tile floating inside another rounded tile with a
+                     transparent gutter and a shadow smeared along one edge.
 
 Chromium does the rendering, so the icon's gradients survive. ImageMagick's own
 SVG renderer flattens them into mud and must not be used here.
@@ -27,18 +35,20 @@ from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.normpath(os.path.join(HERE, ".."))
 DESIGN = os.path.normpath(os.path.join(SITE, "..", "design"))
-FLAT = os.path.join(DESIGN, "favicon.svg")   # under 32 px
-FULL = os.path.join(DESIGN, "icon.svg")      # 32 px and up
+FLAT = os.path.join(DESIGN, "favicon.svg")          # under 32 px
+FULL = os.path.join(DESIGN, "icon.svg")             # squircle, corners wanted
+BLEED = os.path.join(DESIGN, "icon-fullbleed.svg")  # platform applies the mask
 STAGE = os.path.join(HERE, ".stage")
 
-# size -> which source owns it
+# (output name, size, source)
 RENDERS = [
-    (16, FLAT),
-    (32, FLAT),
-    (48, FLAT),
-    (180, FULL),
-    (192, FULL),
-    (512, FULL),
+    ("icon-16.png", 16, FLAT),
+    ("icon-32.png", 32, FLAT),
+    ("icon-48.png", 48, FLAT),
+    ("icon-192.png", 192, FULL),
+    ("icon-512.png", 512, FULL),
+    ("apple-touch-icon.png", 180, BLEED),
+    ("icon-maskable-512.png", 512, BLEED),
 ]
 
 # The gap between the two amber strikes must survive the smallest render, or the
@@ -62,12 +72,12 @@ def gap_at(size_px):
 
 def render(browser):
     os.makedirs(STAGE, exist_ok=True)
-    shutil.copy(FLAT, os.path.join(STAGE, "favicon.svg"))
-    shutil.copy(FULL, os.path.join(STAGE, "icon.svg"))
+    for src in (FLAT, FULL, BLEED):
+        shutil.copy(src, os.path.join(STAGE, os.path.basename(src)))
 
-    for size, src in RENDERS:
+    for out, size, src in RENDERS:
         name = os.path.basename(src)
-        wrap = os.path.join(STAGE, f"r-{size}.html")
+        wrap = os.path.join(STAGE, f"r-{out}.html")
         with open(wrap, "w") as f:
             f.write(
                 '<!doctype html><meta charset="utf-8">'
@@ -79,10 +89,9 @@ def render(browser):
                                 device_scale_factor=1)
         page.goto("file://" + wrap)
         page.wait_for_timeout(150)
-        page.screenshot(path=os.path.join(HERE, f"icon-{size}.png"),
-                        omit_background=True)
+        page.screenshot(path=os.path.join(HERE, out), omit_background=True)
         page.close()
-        print(f"  icon-{size}.png  from {name}")
+        print(f"  {out:24s} {size:>4} px  from {name}")
 
 
 def og(browser):
@@ -99,11 +108,9 @@ def og(browser):
 
 def install():
     """Put the rendered files where index.html expects them."""
-    for src, dst in [("icon-180.png", "apple-touch-icon.png"),
-                     ("icon-192.png", "icon-192.png"),
-                     ("icon-512.png", "icon-512.png"),
-                     ("og.png", "og.png")]:
-        shutil.copy(os.path.join(HERE, src), os.path.join(SITE, dst))
+    for name in ("apple-touch-icon.png", "icon-192.png", "icon-512.png",
+                 "icon-maskable-512.png", "og.png"):
+        shutil.copy(os.path.join(HERE, name), os.path.join(SITE, name))
 
     # The .ico is a browser-tab artefact end to end, so all three sizes come
     # from the flat mark rather than mixing sources inside one file.

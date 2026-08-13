@@ -305,9 +305,11 @@ code {
 .brand__mark {
   width: 30px;
   height: 30px;
-  /* Align the mark's deck to the wordmark baseline rather than box to box: the
-     strikes carry mass above the deck, so geometric centring sits the word low. */
-  transform: translateY(-1px);
+  /* IDENTITY section 3: align the centre line of the two amber strikes to the
+     wordmark's x-height centre, not box to box. Measured in the browser at
+     30 px against Inter 600 20 px, the arithmetic asks for -2.24 px; -2 lands
+     within a quarter pixel of it, on a whole pixel, and looks right. */
+  transform: translateY(-2px);
 }
 
 .head-nav {
