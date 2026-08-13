@@ -73,26 +73,30 @@ Do not deploy `tools/`. It is source, not site.
 | `og.png` | 1200 × 630 | Composed in Chromium from `tools/og-template.html`: the mark at 300 px on an `--ink-000` ground, wordmark and one sentence beside it. Amber appears only on the two strikes. |
 | `favicon.ico` | 16, 32, 48 | Three sizes packed with ImageMagick, each rendered separately from `design/favicon.svg`. |
 | `favicon.svg` | vector | Copied from `design/favicon.svg`, the flat mark. Browsers that support SVG icons take this; the `.ico` is the fallback. |
-| `apple-touch-icon.png` | 180 × 180 | Rendered from `design/icon.svg`. |
-| `icon-192.png`, `icon-512.png` | as named | Rendered from `design/icon.svg`, each size drawn from the vector rather than downscaled from 1024. |
+| `apple-touch-icon.png` | 180 × 180 | Rendered from `design/icon-fullbleed.svg`. See the source table below. |
+| `icon-192.png`, `icon-512.png` | as named | Rendered from `design/icon.svg`, each size drawn from the vector rather than downscaled from 1024. Declared `purpose: any`. |
+| `icon-maskable-512.png` | 512 × 512 | Rendered from `design/icon-fullbleed.svg`. The only manifest icon declared `purpose: maskable`. |
 | `site.webmanifest` | — | Hand-written. |
 | `img/trace-real.svg` | 1200 × 476 | Generated from the real dataset. See below. |
 | `img/hero.jpg`, `hero@2x.jpg` | 720 / 1440 wide | gpt-image-2, then cropped and converted. |
 | `img/gesture.jpg`, `gesture@2x.jpg` | 720 / 1440 wide | gpt-image-2. |
 | `img/surface.jpg`, `surface@2x.jpg` | 600 / 1200 wide | gpt-image-2. |
 
-#### Two icon sources, and picking the wrong one is the trap
+#### Three icon sources, and picking the wrong one is the trap
 
-`design/favicon.svg` is the flat mark and owns **everything under 32 px**:
-`favicon.ico` at 16, 32 and 48, plus the 30 px mark in the site header.
-`design/icon.svg` is the full mark and owns **32 px and up**: the Apple touch
-icon and the 192 and 512 PNGs, plus the 300 px mark on the Open Graph card.
-This split comes from `IDENTITY.md` section 8. The full mark carries a bloom and
-an embossed shock ring that turn to haze when shrunk to a browser tab, so a
-favicon cut from it reads as a smudge.
+| Asset | Source | Why |
+|---|---|---|
+| `favicon.ico` 16/32/48, header mark at 30 px | `design/favicon.svg` | Flat by design. The full mark's bloom and shock ring turn to haze at tab size, so a favicon cut from it reads as a smudge. |
+| `icon-192.png`, `icon-512.png`, the 300 px mark on `og.png` | `design/icon.svg` | These want the squircle, the rim and the cast shadow. |
+| `apple-touch-icon.png`, `icon-maskable-512.png` | `design/icon-fullbleed.svg` | iOS and Android apply **their own** corner mask. Feed them `icon.svg` and you get a rounded tile floating inside another rounded tile, with a transparent gutter and the baked cast shadow smeared along one edge. |
 
-`tools/render-assets.py` encodes the split, so re-cutting is one command and
-cannot pick the wrong source by accident.
+`icon-fullbleed.svg` is the same artwork with the squircle, the gutter, the rim
+and the shadow removed and the deck scaled to reach all four edges, so it cannot
+drift away from `icon.svg`.
+
+`tools/render-assets.py` encodes the table, so re-cutting is one command and
+cannot pick the wrong source by accident. Get this wrong and nothing looks
+broken until someone adds the site to a home screen.
 
 Everything is rendered in headless Chromium. **ImageMagick's own SVG renderer
 must not be used for the icon**; it flattens the gradients into mud, which on
@@ -225,6 +229,43 @@ action follows the build on GitHub, and the page says the repository is private.
 If you add a number here, add it to `llms.txt` and to the FAQ JSON-LD in the
 same commit, or the three will drift apart and an answer engine will quote the
 stale one.
+
+## When the measured numbers change
+
+The operator is recording real tap sessions, including a typing set. When the
+harness scores them, the "Not measured yet" panel starts emptying, and the
+numbers should come from `TunkScore` output rather than from someone retyping
+them.
+
+`TunkScore` emits a `RunReport` as JSON (`Sources/TunkScore/Report.swift`). The
+fields that map onto claims on this page, all on `pooled` or a `perSurface`
+slice (`Sources/TunkScore/Scoring.swift`):
+
+| Claim currently absent from the page | Field |
+|---|---|
+| Detection rate on deliberate taps | `detectionRate` (`detectedGroups / armedGroups`) |
+| End-to-end latency, p95 | `latencyP95Ns` |
+| False positives while typing | `typingFalsePositives`, against `typingSeconds` |
+| False triggers per 20 min | `falsePositivesPer20Min` |
+| Per-surface results | `perSurface`, keyed by surface label |
+
+`detectionRate` and the latency percentiles return `nil` when the denominator is
+empty, which is exactly today's state and the reason no figure is published.
+**A `nil` must render as an entry in the "Not measured yet" panel, never as a
+zero or a dash in the measured column.**
+
+Four places carry these numbers and must move in one commit, or an answer engine
+will quote whichever is stalest:
+
+1. the `.metrics` list and the `.unknowns` list in `index.html`
+2. the FAQ prose in `index.html`
+3. the same answers inside the `FAQPage` JSON-LD
+4. `llms.txt`, both the "Measured numbers" table and the "Explicitly not
+   measured" list
+
+Nothing automated reads the harness today, and writing that consumer against a
+report with empty denominators would be guessing at its shape under load. The
+mapping above is the handover.
 
 ## Open decisions for the owner
 
