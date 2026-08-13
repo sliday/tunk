@@ -149,15 +149,36 @@ final class ScoreHarnessCLITests: XCTestCase {
         func slice(_ surface: String, _ n: Int) -> [String: Any]? {
             slices.first { $0["label"] as? String == surface && $0["tapCount"] as? Int == n }
         }
-        // Planted on desk: 5 single-tap gestures, 4 triple-tap gestures, 0 doubles.
+        // Planted on desk: 5 single-tap gestures, 4 triple-tap gestures, 0
+        // doubles. These are facts about the fixture and do not move.
         XCTAssertEqual(slice("desk", 1)?["labelledGroups"] as? Int, 5)
         XCTAssertEqual(slice("desk", 3)?["labelledGroups"] as? Int, 4)
         XCTAssertEqual(slice("desk", 2)?["labelledGroups"] as? Int, 0)
-        // The stub fires two taps, so the singles are missed and the firings are
-        // false triggers charged to the 2-tap count.
-        XCTAssertEqual(slice("desk", 1)?["detectedGroups"] as? Int, 0)
-        XCTAssertEqual(slice("desk", 2)?["falsePositives"] as? Int, 5)
-        XCTAssertEqual(slice("desk", 1)?["falsePositives"] as? Int, 0)
+
+        // This block used to assert "the stub fires two taps, so the singles are
+        // missed and the firings are false triggers charged to the 2-tap count",
+        // which was only true because `--armed` never reached the detector: the
+        // grader was told 1,2,3 while the detector stayed on its config's 2. The
+        // override now writes config.armedTapCounts, so the stub really is armed
+        // for 1, 2 and 3, and the firings land on count 1 instead.
+        //
+        // Asserting the stub's exact firing pattern would just re-pin whatever
+        // the stub happens to do, so assert the property that must hold for any
+        // detector: nothing may be charged to a count that was not armed.
+        for n in [1, 2, 3] {
+            XCTAssertNotNil(slice("desk", n), "armed count \(n) must appear in the breakdown")
+        }
+        let unarmedFalsePositives = slices
+            .filter { ($0["tapCount"] as? Int).map { !(1...3).contains($0) } ?? false }
+            .compactMap { $0["falsePositives"] as? Int }
+            .reduce(0, +)
+        XCTAssertEqual(unarmedFalsePositives, 0,
+                       "a count outside the armed set must not accumulate false positives")
+
+        // And the point of the fix: the detector genuinely fires singles now, so
+        // the 2-tap count no longer collects the singles' firings.
+        XCTAssertEqual(slice("desk", 2)?["falsePositives"] as? Int, 0,
+                       "with 1 armed, single-tap firings belong to count 1, not count 2")
     }
 
     // MARK: - The progress feed

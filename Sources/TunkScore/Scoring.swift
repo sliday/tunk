@@ -18,8 +18,11 @@ enum Scoring {
 /// never fire, so the policy is what turns a labelled gesture into either a
 /// detection denominator or a must-not-fire trap.
 ///
-/// `DetectorConfig` still carries a single `tapCountToFire`, so that is the
-/// default; `--armed 1,2,3` overrides it until the config struct grows a set.
+/// The default comes from `DetectorConfig.armedTapCounts`, the same stored set
+/// the detector fires on; `--armed 1,2,3` overrides it. Reading `tapCountToFire`
+/// here instead was lossy — that accessor is `armedTapCounts.min()`, so a config
+/// armed for 1 and 2 graded as if only 1 were armed, and every real double-tap
+/// became a must-not-fire violation.
 struct ScoringPolicy: Codable, Equatable {
     /// Sorted, unique.
     let armedCounts: [Int]
@@ -31,7 +34,7 @@ struct ScoringPolicy: Codable, Equatable {
     func isArmed(_ n: Int) -> Bool { armedCounts.contains(n) }
 
     static func from(config: DetectorConfig, override: [Int]?) -> ScoringPolicy {
-        ScoringPolicy(armedCounts: override ?? [config.tapCountToFire])
+        ScoringPolicy(armedCounts: override ?? config.armedTapCounts.sorted())
     }
 
     /// Parse `--armed 1,2,3`.
