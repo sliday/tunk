@@ -5,6 +5,23 @@ import TunkFormat
 /// Re-reads a session the way the harness will and reports whether the rig is
 /// sound. Run this after the first take, before recording for an hour.
 func runVerify(_ args: Args) -> Never {
+    let root = args.str("out") ?? "data/raw"
+    // A block of `guide` phases writes several sessions; verifying only the newest
+    // would leave the earlier ones unchecked until scoring time.
+    if args.has("all") {
+        let all = allSessions(under: root)
+        guard !all.isEmpty else {
+            Console.err("no sessions found under \(root)")
+            exit(2)
+        }
+        var failed = [String]()
+        for dir in all where !verify(directory: dir) { failed.append(dir.lastPathComponent) }
+        Console.banner("\(all.count - failed.count)/\(all.count) SESSIONS OK")
+        for name in failed { Console.line("  FAIL  \(name)") }
+        Console.line("")
+        exit(failed.isEmpty ? 0 : 1)
+    }
+
     let target: URL
     if let p = args.positional.first {
         target = URL(fileURLWithPath: p, isDirectory: true).standardizedFileURL

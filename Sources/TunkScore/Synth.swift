@@ -136,23 +136,76 @@ enum Synth {
 
     // MARK: - The planted scenarios
 
+    /// Clean multi-taps, no input activity. `tapsPerGesture` onsets per group, all
+    /// labelled, so the group's tap count is unambiguous.
+    static func multiTaps(count: Int, tapsPerGesture: Int, surface: Surface = .desk,
+                          firstAtNs: Int64 = 3_000_000_000,
+                          spacingNs: Int64 = 5_000_000_000,
+                          interTapNs: Int64 = 160_000_000,
+                          category: TunkFormat.Category = .tapDeck,
+                          seed: UInt64 = 11) -> Plan {
+        var p = Plan(category: category, surface: surface,
+                     durationSec: Double(firstAtNs + Int64(count) * spacingNs) / 1e9 + 3,
+                     expectedTriggers: count, seed: seed)
+        p.notes = "\(count) clean \(tapsPerGesture)-tap gestures, inter-tap "
+            + "\(interTapNs / 1_000_000) ms, no input activity."
+        // FORMAT.md's TapIntent vocabulary is single/double/none, so a 3-tap gesture
+        // has no word yet. The onset count is what the harness scores against; the
+        // mismatch is reported, not hidden. See the change request in the report.
+        let intent: TapIntent = tapsPerGesture == 1 ? .single : .double
+        for g in 0..<count {
+            let t0 = firstAtNs + Int64(g) * spacingNs
+            for k in 0..<tapsPerGesture {
+                let t = t0 + Int64(k) * interTapNs
+                p.bursts.append(Burst(tNs: t, amplitude: k == 0 ? 2.0 : 1.8))
+                p.labels.append(TapLabel(tNs: t, group: g, indexInGroup: k,
+                                         intent: intent, confidence: .autoRefined))
+            }
+            p.marks.append(Mark(tNs: t0 - 500_000_000, kind: "beep", group: g))
+        }
+        return p
+    }
+
     /// Clean double-taps, no input activity. Everything should be detected.
     static func cleanTaps(count: Int, surface: Surface = .desk,
                           firstAtNs: Int64 = 3_000_000_000,
                           spacingNs: Int64 = 5_000_000_000,
                           interTapNs: Int64 = 160_000_000) -> Plan {
-        var p = Plan(category: .tapDeck, surface: surface,
+        multiTaps(count: count, tapsPerGesture: 2, surface: surface, firstAtNs: firstAtNs,
+                  spacingNs: spacingNs, interTapNs: interTapNs)
+    }
+
+    /// The scenario the old scorer swallowed.
+    ///
+    /// Each gesture is one **deliberate single tap**, labelled as `intent: single`
+    /// with one onset. A stray knock lands `leadNs` earlier — a bounce, a knuckle,
+    /// the case settling. A double-tap detector pairs the two and fires, and its
+    /// second onset sits exactly on the labelled single onset.
+    ///
+    /// Planted expectation with single **not** armed: zero detections, one false
+    /// trigger per gesture, every one attributed to the 2-tap count.
+    /// With single armed and the detector firing on one tap: these become the
+    /// 1-tap detection denominator instead.
+    static func singleTapsWithBounce(count: Int, surface: Surface = .desk,
+                                     leadNs: Int64 = 160_000_000,
+                                     firstAtNs: Int64 = 3_000_000_000,
+                                     spacingNs: Int64 = 5_000_000_000) -> Plan {
+        var p = Plan(category: .tapPalmrest, surface: surface,
                      durationSec: Double(firstAtNs + Int64(count) * spacingNs) / 1e9 + 3,
-                     expectedTriggers: count, seed: 11)
-        p.notes = "\(count) clean double-taps, inter-tap \(interTapNs / 1_000_000) ms, no input activity."
+                     expectedTriggers: 0, seed: 91)
+        p.notes = "\(count) deliberate SINGLE taps, each preceded \(leadNs / 1_000_000) ms earlier by "
+            + "a stray knock. A double-tap detector pairs knock+tap and fires with its second onset "
+            + "on the labelled single onset. Planted: 0 detections, \(count) false triggers while "
+            + "1-tap is not armed."
         for g in 0..<count {
-            let t0 = firstAtNs + Int64(g) * spacingNs
-            let t1 = t0 + interTapNs
-            p.bursts.append(Burst(tNs: t0, amplitude: 2.0))
-            p.bursts.append(Burst(tNs: t1, amplitude: 1.8))
-            p.labels.append(TapLabel(tNs: t0, group: g, indexInGroup: 0, intent: .double, confidence: .autoRefined))
-            p.labels.append(TapLabel(tNs: t1, group: g, indexInGroup: 1, intent: .double, confidence: .autoRefined))
-            p.marks.append(Mark(tNs: t0 - 500_000_000, kind: "beep", group: g))
+            let knock = firstAtNs + Int64(g) * spacingNs
+            let tap = knock + leadNs
+            p.bursts.append(Burst(tNs: knock, amplitude: 1.9))
+            p.bursts.append(Burst(tNs: tap, amplitude: 2.1))
+            // Only the deliberate tap is labelled, and it is labelled `single`.
+            p.labels.append(TapLabel(tNs: tap, group: g, indexInGroup: 0,
+                                     intent: .single, confidence: .humanVerified))
+            p.marks.append(Mark(tNs: knock - 500_000_000, kind: "beep", group: g))
         }
         return p
     }

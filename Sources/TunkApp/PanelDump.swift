@@ -21,10 +21,14 @@ enum PanelDump {
         let settings = AppSettings(suiteName: suite)
         let engine = Engine(settings: settings)
         let panel = PanelModel()
-        panel.refreshShortcuts()
+        engine.refreshShortcutCatalog()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
 
         for kind in TunkAction.Kind.allCases {
-            settings.actionKind = kind
+            // Both rows to the same kind, so one render shows the double-tap row
+            // and the single-tap row with its caution side by side.
+            settings.setActionKind(kind, for: 2)
+            settings.setActionKind(kind, for: 1)
             for dark in [false, true] {
                 let name = "panel-\(kind.rawValue)-\(dark ? "dark" : "light").png"
                 let file = url.appendingPathComponent(name)

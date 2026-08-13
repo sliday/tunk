@@ -26,6 +26,17 @@ func runRecord(_ args: Args) throws -> Never {
         Console.line("note: tap category with --expect 0. `guide` is the prompted, labellable mode.")
     }
 
+    if args.has("dry-run") {
+        Console.banner("DRY RUN  \(category.rawValue)  on \(surface.rawValue)")
+        Console.line("  into      \(root.path) (split=\(split.rawValue))")
+        Console.line("  length    " + (duration.map { String(format: "%.0f s", $0) } ?? "until Ctrl-C"))
+        Console.line("  expect    \(opts.expectedTriggers) triggers")
+        Console.line("  sensor    ReportInterval \(opts.reportIntervalUs) us")
+        Console.line("  --dry-run: nothing was recorded.")
+        Console.line("")
+        exit(0)
+    }
+
     return Runtime.run {
         let recorder: SessionRecorder
         do {
@@ -163,18 +174,19 @@ func doctorCheck(seconds: Double, cue: Cue, captureTouches: Bool,
     let hz = (n > 1 && spanS > 0) ? Double(n - 1) / spanS : 0
     let requestedHz = 1e9 / Double(reportIntervalUs * 1_000)
     let loss = requestedHz > 0 ? 1 - hz / requestedHz : 1
-    if accelOK, n > 1, loss > 0.02 {
-        accelOK = false
-    }
+    // Sample loss is a warning, not a failure: it is worth seeing before an hour
+    // of recording, but it must not refuse to record an otherwise sound rig.
+    if n <= 1 { accelOK = false }
+    let word = !accelOK ? "FAIL" : (loss > 0.02 ? "WARN" : "OK  ")
     Console.line("")
     Console.line(String(format: "  accelerometer  %@  %d samples over %.2f s, %.1f Hz (asked for %.1f Hz)",
-                        accelOK ? "OK  " : "FAIL", n, spanS, hz, requestedHz))
-    if n > 1, loss > 0.02 {
-        Console.line(String(format: "                 %.1f%% of samples are missing. Check for thermal or power",
+                        word, n, spanS, hz, requestedHz))
+    if accelOK, loss > 0.02 {
+        Console.line(String(format: "                 %.1f%% of samples missing. Close anything heavy and",
                             loss * 100))
-        Console.line("                 throttling, and close anything heavy before recording.")
+        Console.line("                 re-run; a lossy stream weakens every latency number.")
     } else if n <= 1 {
-        Console.line("                 the sensor delivered nothing. ReportInterval was not accepted.")
+        Console.line("                 the sensor delivered nothing — ReportInterval was not accepted.")
     }
     lock.lock()
     let total = byKind.values.reduce(0, +)
@@ -284,11 +296,11 @@ func runGuide(_ args: Args) throws -> Never {
         throw CLIError.badArgument("--duration must be greater than 0, got \(uniform)")
     }
 
-    var phases = guidePhases(taps: taps,
-                             typingSec: uniform ?? (try args.number("typing-sec")) ?? 180,
-                             trackpadSec: uniform ?? (try args.number("trackpad-sec")) ?? 90,
-                             confoundSec: uniform ?? (try args.number("confound-sec")) ?? 60,
-                             surface: surface)
+    let typingSec = try uniform ?? args.number("typing-sec") ?? 180
+    let trackpadSec = try uniform ?? args.number("trackpad-sec") ?? 90
+    let confoundSec = try uniform ?? args.number("confound-sec") ?? 60
+    var phases = guidePhases(taps: taps, typingSec: typingSec, trackpadSec: trackpadSec,
+                             confoundSec: confoundSec, surface: surface)
     let only = try parseCategoryList(args, "only")
     let skip = try parseCategoryList(args, "skip")
     if let clash = only.intersection(skip).sorted().first {
@@ -328,27 +340,20 @@ func runGuide(_ args: Args) throws -> Never {
             + " selected (\(selected)).")
     }
 
+    if args.has("dry-run") {
+        printGuidePlan(phases: phases, root: root, split: split, surface: surface,
+                       restSec: restSec, minRest: minRest, maxRest: maxRest)
+        Console.line("  --dry-run: nothing was recorded.")
+        Console.line("")
+        exit(0)
+    }
+
     let cue = Cue(beepEnabled: !args.has("no-audio"), speechEnabled: !args.has("no-speech"),
                   volume: Float(try args.number("volume") ?? 0.35))
 
     return Runtime.run {
-        Console.banner("TUNK GUIDED CAPTURE  —  surface: \(surface.rawValue)")
-        Console.line("  \(phases.count) phases into \(root.path) (split=\(split.rawValue))")
-        Console.line("  Ctrl-C at any point keeps everything recorded so far.")
-        Console.line("")
-        // Print the plan before anything records. The operator can then see that
-        // "one phase" really is one phase, in the time it takes to read four lines.
-        var estimate = 0.0
-        for (i, p) in phases.enumerated() {
-            let what = p.taps > 0
-                ? String(format: "%d prompted double-taps (~%.0fs)", p.taps,
-                         Double(p.taps) * (minRest + maxRest) / 2)
-                : String(format: "%.0f s", p.seconds)
-            estimate += restSec + (p.taps > 0 ? Double(p.taps) * (minRest + maxRest) / 2 : p.seconds)
-            Console.line("    \(i + 1). \(p.category.rawValue.padding(toLength: 20, withPad: " ", startingAt: 0))\(what)")
-        }
-        Console.line(String(format: "  about %.0f min of recording, plus prompts.", estimate / 60))
-        Console.line("")
+        printGuidePlan(phases: phases, root: root, split: split, surface: surface,
+                       restSec: restSec, minRest: minRest, maxRest: maxRest)
         Console.line("  WEAR HEADPHONES, or the beep and my voice shake the chassis")
         Console.line("  and end up in the accelerometer stream.")
         Console.line("")
@@ -423,6 +428,30 @@ func runGuide(_ args: Args) throws -> Never {
         Console.line("  Verify each one:  tunk-capture verify <dir>")
         cue.say("Capture complete.")
     }
+}
+
+/// What this run will record, printed before anything opens the sensor. The
+/// operator can see that "one phase" really is one phase before committing the
+/// next hour to it, and `--dry-run` shows the same thing without recording.
+func printGuidePlan(phases: [Phase], root: URL, split: Split, surface: Surface,
+                    restSec: Double, minRest: Double, maxRest: Double) {
+    Console.banner("TUNK GUIDED CAPTURE  —  surface: \(surface.rawValue)")
+    Console.line("  \(phases.count) phase\(phases.count == 1 ? "" : "s") into \(root.path) (split=\(split.rawValue))")
+    Console.line("  Ctrl-C at any point keeps everything recorded so far.")
+    Console.line("")
+    var estimate = 0.0
+    for (i, p) in phases.enumerated() {
+        let body = p.taps > 0 ? Double(p.taps) * (minRest + maxRest) / 2 : p.seconds
+        let what = p.taps > 0
+            ? String(format: "%d prompted double-taps  (~%.0f s)", p.taps, body)
+            : String(format: "%.0f s", body)
+        estimate += restSec + body
+        Console.line("    \(i + 1). \(p.category.rawValue.padding(toLength: 20, withPad: " ", startingAt: 0))\(what)")
+    }
+    Console.line(estimate < 90
+                 ? String(format: "  about %.0f s of recording, plus spoken prompts.", estimate)
+                 : String(format: "  about %.0f min of recording, plus spoken prompts.", estimate / 60))
+    Console.line("")
 }
 
 private func runTapPhase(recorder: SessionRecorder, cue: Cue, phase: Phase,

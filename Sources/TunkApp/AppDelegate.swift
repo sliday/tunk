@@ -43,6 +43,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] status in self?.render(status: status) }
             .store(in: &cancellables)
 
+        // A Shortcut renamed months ago surfaces here and nowhere else until the
+        // user opens the panel. That is the whole point: passive, never a dialog.
+        engine.$actionStats
+            .map(\.brokenBinding)
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.render(status: self.engine.status)
+            }
+            .store(in: &cancellables)
+
         settings.$enabled
             .receive(on: RunLoop.main)
             .sink { [weak self] on in self?.enableItem?.state = on ? .on : .off }
@@ -128,6 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func statusText() -> String {
         switch engine.status {
         case .running:
+            if let broken = engine.brokenBinding {
+                return "Shortcut \"\(broken.name)\" is missing — open Settings"
+            }
             return String(format: "Listening · %.0f Hz · %d fired",
                           engine.sampleRateHz, engine.triggerCount)
         case .off:
@@ -156,13 +171,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - glyph
 
     private func render(status: EngineStatus) {
-        let state: MenuBarGlyph.State
+        var state: MenuBarGlyph.State
         switch status {
         case .running: state = .armed
         case .off: state = .idle
         case .sensorLost: state = .lost
         case .needsPermission: state = .blocked
         }
+        // A broken binding does not stop detection, so it only overrides the
+        // armed glyph. A sensor or permission problem is the bigger one and
+        // keeps its own mark.
+        if state == .armed && engine.brokenBinding != nil { state = .actionBroken }
         statusItem.button?.image = MenuBarGlyph.image(for: state)
         statusItem.button?.toolTip = "Tunk — " + statusText()
         refreshMenuText()

@@ -5,6 +5,7 @@ import Foundation
 
 let boolFlags: Set<String> = [
     "i-am-a-critic", "verbose", "keep", "help", "version", "check-determinism",
+    "progress-pooled", "progress-replace", "pooled", "replace",
 ]
 
 func main() -> Int32 {
@@ -24,6 +25,7 @@ func main() -> Int32 {
         case "run": return try Commands.run(&args)
         case "sweep": return try Commands.sweep(&args)
         case "explain": return try Commands.explain(&args)
+        case "progress": return try Commands.progress(&args)
         case "selftest": return try SelfTest.run(&args)
         default:
             throw CLIError.usage("unknown command '\(command)'\n\n\(usageText)")

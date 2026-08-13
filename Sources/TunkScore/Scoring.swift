@@ -93,9 +93,6 @@ struct GroupOutcome: Codable {
     var latencyNs: Int64?
     /// `detector last onset - labelled last onset`, for onset-accuracy debugging.
     var onsetErrorNs: Int64?
-
-    /// Kept so older readers of the JSON keep working; same value as `lastOnsetNs`.
-    var secondOnsetNs: Int64 { lastOnsetNs }
 }
 
 struct TriggerOutcome: Codable {
@@ -473,6 +470,13 @@ enum SessionScorer {
 
 struct Aggregate: Codable {
     var label: String
+    /// Set only on a per-tap-count slice. `nil` means "every armed count together".
+    var tapCount: Int?
+    /// Set only on a slice: whether that tap count is armed.
+    var armed: Bool?
+    /// Labelled gesture groups in scope, armed or not. `armedGroups` is the
+    /// detection denominator; this is the coverage number.
+    var labelledGroups: Int = 0
     var sessions: Int = 0
     var tapSessions: Int = 0
     var typingSessions: Int = 0
@@ -515,9 +519,53 @@ struct Aggregate: Codable {
         return Double(c.falseTriggers) / (durationSeconds / 1200.0)
     }
 
+    /// One session, sliced down to a single tap count.
+    ///
+    /// Wall time, session counts and category counts stay whole — a false trigger
+    /// rate is per 20 minutes of the same wall time no matter which count fired.
+    /// Everything gesture-shaped is the count's own.
+    mutating func addSlice(_ s: SessionScore, count n: Int, armed isArmed: Bool) {
+        tapCount = n
+        armed = isArmed
+        let c = s.perCount.first { $0.count == n } ?? CountStats(count: n, armed: isArmed)
+        sessions += 1
+        durationSeconds += s.durationSeconds
+        labelledGroups += c.labelledGroups
+        // A count that must never fire has no detection target, so it gets no
+        // denominator either. The page then shows "no data" instead of 0 %, which
+        // would read as a failure to detect something nobody asked it to detect.
+        armedGroups += isArmed ? c.labelledGroups : 0
+        detectedGroups += c.detectedGroups
+        ambiguousGroups += c.ambiguousGroups
+        mustNotFireGroups += c.mustNotFireGroups
+        mustNotFireViolations += c.mustNotFireViolations
+        triggerCount += c.triggers
+        falsePositives += c.falseTriggers
+        gapCount += s.gapCount
+        deliveryOrderViolations += s.deliveryOrderViolations
+        latencyExcluded += c.latencyExcluded
+        latenciesNs.append(contentsOf: c.latenciesNs)
+        mergeCount(c)
+        if s.category == Category.typing.rawValue {
+            typingSessions += 1
+            typingSeconds += s.durationSeconds
+            typingFalsePositives += c.falseTriggers
+        }
+        if s.category.hasPrefix("confound_") {
+            confoundSessions += 1
+            confoundSeconds += s.durationSeconds
+            confoundFalsePositives += c.falseTriggers
+        }
+        if Category(rawValue: s.category)?.isTapCategory == true {
+            tapSessions += 1
+            tapSessionFalsePositives += c.falseTriggers
+        }
+    }
+
     mutating func add(_ s: SessionScore) {
         sessions += 1
         durationSeconds += s.durationSeconds
+        labelledGroups += s.perCount.reduce(0) { $0 + $1.labelledGroups }
         armedGroups += s.armedGroups
         detectedGroups += s.detectedGroups
         ambiguousGroups += s.ambiguousGroups
@@ -556,7 +604,8 @@ struct Aggregate: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case label, sessions, tapSessions, typingSessions, confoundSessions
+        case label, tapCount, armed, labelledGroups
+        case sessions, tapSessions, typingSessions, confoundSessions
         case durationSeconds, typingSeconds, confoundSeconds
         case armedGroups, detectedGroups, ambiguousGroups
         case mustNotFireGroups, mustNotFireViolations
@@ -564,11 +613,17 @@ struct Aggregate: Codable {
         case tapSessionFalsePositives, gapCount, deliveryOrderViolations, latencyExcluded
         case latenciesNs, perCount
         case detectionRate, falsePositivesPer20Min, latencyP50Ns, latencyP95Ns, latencyMaxNs
+        /// Deprecated alias for `armedGroups`, kept because `web/ingest.py` reads it.
+        case doubleGroups
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(label, forKey: .label)
+        try c.encodeIfPresent(tapCount, forKey: .tapCount)
+        try c.encodeIfPresent(armed, forKey: .armed)
+        try c.encode(labelledGroups, forKey: .labelledGroups)
+        try c.encode(armedGroups, forKey: .doubleGroups)
         try c.encode(sessions, forKey: .sessions)
         try c.encode(tapSessions, forKey: .tapSessions)
         try c.encode(typingSessions, forKey: .typingSessions)
@@ -603,6 +658,9 @@ struct Aggregate: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         label = try c.decode(String.self, forKey: .label)
+        tapCount = try c.decodeIfPresent(Int.self, forKey: .tapCount)
+        armed = try c.decodeIfPresent(Bool.self, forKey: .armed)
+        labelledGroups = try c.decodeIfPresent(Int.self, forKey: .labelledGroups) ?? 0
         sessions = try c.decode(Int.self, forKey: .sessions)
         tapSessions = try c.decode(Int.self, forKey: .tapSessions)
         typingSessions = try c.decode(Int.self, forKey: .typingSessions)

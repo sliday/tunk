@@ -144,25 +144,41 @@ let usageText = """
 tunk-score \(TunkScoreVersion.string) — the referee for the Tunk detector.
 
   tunk-score run [--data <dir>] [--config <json>] [--json <out>] [--md <out>]
-                 [--i-am-a-critic] [--verbose] [--check-determinism]
-                 [--detector real|stub]
+                 [--armed 1,2,3] [--i-am-a-critic] [--verbose]
+                 [--check-determinism] [--detector real|stub]
+                 [--progress-json <file>] [--progress-label <text>]
+                 [--progress-headline <text>] [--progress-gap <text>]
+                 [--progress-round <n>] [--progress-status <text>]
+                 [--progress-pooled] [--progress-replace]
       Replay every session under <dir> (default data/raw) through the detector and
       grade it against the pass line in FORMAT.md. Exit code 0 = PASS,
       1 = FAIL, 3 = INCOMPLETE (something had no data behind it).
       --detector picks the implementation: `real` is TunkCore.TapDetector,
       `stub` is the harness's own placeholder. Default real.
+      --armed lists the tap counts the detector fires on (default: the config's
+      tapCountToFire). Every metric is broken down per tap count, and a trigger
+      with an un-armed tap count is a false trigger.
+      --progress-json appends a round to the progress page feed in the shape
+      web/README.md documents. Re-run `python3 web/render.py` afterwards.
 
   tunk-score sweep --param <name> --from <a> --to <b> --steps <n>
                    [--data <dir>] [--config <json>] [--md <out>] [--json <out>]
-                   [--detector real|stub] [--i-am-a-critic]
+                   [--armed 1,2,3] [--detector real|stub] [--i-am-a-critic]
       Re-run the whole set once per parameter value and print a table.
       Names: \(ConfigParam.allCases.map(\.name).joined(separator: ", "))
       (any ...Ns name also accepts its ...Ms alias, e.g. --param gateWindowMs)
 
-  tunk-score explain <session-dir> [--config <json>] [--md <out>]
+  tunk-score explain <session-dir> [--config <json>] [--md <out>] [--armed 1,2,3]
                      [--detector real|stub] [--i-am-a-critic]
       Per-trigger trace for one session: onsets, strengths, gate state, and why
       each labelled group did or did not fire.
+
+  tunk-score progress --from <report.json> [--out web/progress.json]
+                      [--round <n>] [--label <text>] [--headline <text>]
+                      [--gap <text>] [--status <text>] [--pooled] [--replace]
+      Append a round to the progress page feed from a report `run --json` already
+      wrote. Same output shape as `run --progress-json`, without replaying.
+      Then run `python3 web/render.py` — the page will not update on its own.
 
   tunk-score selftest [--dir <scratch>] [--keep] [--detector real|stub]
       Write synthetic sessions in the real FORMAT.md layout with a known number of

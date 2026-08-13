@@ -51,7 +51,8 @@ final class DetectorTests: XCTestCase {
     }
 
     func testTwoTapsTooFarApartDoNotFire() {
-        // 700 ms apart, well past maxInterTapNs (400 ms).
+        // 700 ms apart, well past the join window (the 180 ms confirm window,
+        // which is what `maxInterTapNs` clamps to).
         let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 700_000_000)
         let result = run(stream)
 
@@ -67,19 +68,27 @@ final class DetectorTests: XCTestCase {
         XCTAssertTrue(result.triggers.isEmpty, "a bounce is not a double-tap")
     }
 
-    func testSlowButLegalDoubleStillFires() {
-        // 260 ms apart: past the 180 ms confirm window, inside the 400 ms join
-        // window. A naive implementation expires the first tap before the second
-        // arrives and misses this.
+    func testASlowDoubleNeedsAWiderConfirmWindow() {
+        // 260 ms apart. `maxInterTapNs <= confirmWindowNs` is what stops a
+        // rhythmic disturbance firing (see DetectorMultiTapTests), and its price
+        // is here: the join window can never be wider than the confirm window,
+        // so with the shipped 180 ms this pair is two separate taps.
         let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 260_000_000)
-        XCTAssertEqual(run(stream).triggers.count, 1)
+        XCTAssertTrue(run(stream).triggers.isEmpty)
+
+        // Buying it back costs latency, one window for one window, and the PRD
+        // budget from last onset to key is 250 ms.
+        var config = DetectorConfig.default
+        config.confirmWindowNs = 300_000_000
+        config.maxInterTapNs = 300_000_000
+        XCTAssertEqual(run(stream, config: config).triggers.count, 1)
     }
 
     func testSpacingsAcrossTheLegalBandFire() {
         // Near both edges but not on them: a detected onset lands up to a
         // sample or two after the strike, so a gesture spaced at exactly
         // maxInterTapNs can measure a hair over it. That is physics, not a bug.
-        for spacing in [90_000_000, 200_000_000, 300_000_000, 390_000_000] as [Int64] {
+        for spacing in [90_000_000, 120_000_000, 150_000_000, 170_000_000] as [Int64] {
             let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: spacing)
             XCTAssertEqual(run(stream).triggers.count, 1,
                            "spacing \(spacing / 1_000_000) ms is inside the band and must fire")
@@ -87,8 +96,8 @@ final class DetectorTests: XCTestCase {
     }
 
     func testTripleTapFiresNothingWithDoubleWired() {
-        // Three strikes 150 ms apart. The third lands inside the confirm window
-        // of the pair, so the group reaches confirm with the wrong count.
+        // Three strikes 150 ms apart chain into one group of three, and nothing
+        // is bound to three in the default config.
         let (stream, _) = SyntheticStream.gesture(count: 3, spacingNs: 150_000_000)
         XCTAssertTrue(run(stream).triggers.isEmpty,
                       "wrong count at confirm fires nothing")
@@ -360,7 +369,7 @@ final class DetectorTests: XCTestCase {
         let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000)
         XCTAssertTrue(run(stream, config: config).triggers.isEmpty)
 
-        config.maxInterTapNs = 400_000_000
+        config.maxInterTapNs = 400_000_000     // clamped back to the 180 ms confirm window
         XCTAssertEqual(run(stream, config: config).triggers.count, 1)
     }
 
@@ -378,23 +387,33 @@ final class DetectorTests: XCTestCase {
     }
 
     func testConfirmWindowSetsTheLatency() {
+        // The confirm window is also the join window, so a short one needs a
+        // brisk gesture to have anything to fire on.
         var config = DetectorConfig.default
-        config.confirmWindowNs = 60_000_000
-        let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000)
+        config.confirmWindowNs = 100_000_000
+        config.maxInterTapNs = 100_000_000
+        let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 90_000_000)
         guard let trigger = run(stream, config: config).triggers.first else {
             return XCTFail("expected a trigger")
         }
         let latency = trigger.tNs - trigger.tapOnsets[1]
-        XCTAssertGreaterThanOrEqual(latency, 60_000_000)
-        XCTAssertLessThan(latency, 70_000_000)
+        XCTAssertGreaterThanOrEqual(latency, 100_000_000)
+        XCTAssertLessThan(latency, 110_000_000)
     }
 
-    func testTapCountToFireOfOneStillRefusesToFire() {
+    func testTapCountToFireOfOneArmsTheSingleTap() {
+        // Changed deliberately: the owner asked for single, double and triple to
+        // be separately bindable, so `tapCountToFire = 1` now means what it says.
+        // Single stays unbound in the shipped default, and the price of arming
+        // it is measured in
+        // DetectorMultiTapTests.testSingleTapArmedOnTheSameStreamMisfiresRepeatedly.
         var config = DetectorConfig.default
         config.tapCountToFire = 1
         let (stream, _) = SyntheticStream.gesture(count: 1, spacingNs: 150_000_000)
-        XCTAssertTrue(run(stream, config: config).triggers.isEmpty,
-                      "single stray taps do nothing, ever")
+        let triggers = run(stream, config: config).triggers
+        XCTAssertEqual(triggers.count, 1)
+        XCTAssertEqual(triggers.first?.tapCount, 1)
+        XCTAssertTrue(run(stream).triggers.isEmpty, "and nothing at all by default")
     }
 
     // MARK: - Monitor plumbing

@@ -16,6 +16,10 @@ struct RunReport: Codable {
     var armedCounts: [Int]
     var pooled: Aggregate
     var perSurface: [Aggregate]
+    /// One aggregate per (surface × tap count), plus one per (pooled × tap count).
+    /// This is what `web/ingest.py` and `--progress-json` turn into the page's
+    /// per-tap-count columns.
+    var perSurfaceTapCount: [Aggregate]
     var perCategory: [Aggregate]
     var sessions: [SessionScore]
     var checks: [Check]
@@ -34,6 +38,33 @@ enum Reporter {
             categories[s.category, default: Aggregate(label: s.category)].add(s)
         }
         return (pooled, surfaces, categories)
+    }
+
+    /// Slice every scope by tap count. A count appears when it is armed, when
+    /// something was labelled for it, or when something fired it — the three ways
+    /// it can carry a number worth reading.
+    static func perSurfaceTapCount(_ scores: [SessionScore], policy: ScoringPolicy) -> [Aggregate] {
+        var counts = Set(policy.armedCounts)
+        for s in scores {
+            for c in s.perCount where c.labelledGroups > 0 || c.triggers > 0 { counts.insert(c.count) }
+        }
+        var out: [Aggregate] = []
+        for n in counts.sorted() {
+            var pooled = Aggregate(label: "pooled")
+            var bySurface: [String: Aggregate] = [:]
+            for s in scores {
+                pooled.addSlice(s, count: n, armed: policy.isArmed(n))
+                bySurface[s.surface, default: Aggregate(label: s.surface)]
+                    .addSlice(s, count: n, armed: policy.isArmed(n))
+            }
+            for surf in Surface.allCases {
+                if let a = bySurface[surf.rawValue] { out.append(a) }
+            }
+            for (k, a) in bySurface.sorted(by: { $0.key < $1.key })
+            where Surface(rawValue: k) == nil { out.append(a) }
+            if !scores.isEmpty { out.append(pooled) }
+        }
+        return out
     }
 
     static func build(dataRoot: URL, split: String, config: DetectorConfig,
@@ -64,6 +95,7 @@ enum Reporter {
             armedCounts: policy.armedCounts,
             pooled: pooled,
             perSurface: Surface.allCases.compactMap { surfaces[$0.rawValue] },
+            perSurfaceTapCount: perSurfaceTapCount(scores, policy: policy),
             perCategory: categories.keys.sorted().map { categories[$0]! },
             sessions: scores,
             checks: checks,
@@ -168,6 +200,8 @@ enum Reporter {
         out += "\n"
         out += "data root   \(r.dataRoot)  (split \(r.split))\n"
         out += "detector    \(r.detectorBackend)\n"
+        out += "armed       \(r.armedCounts.map(String.init).joined(separator: ", ")) tap(s)"
+        out += "   — any other tap count that fires is a false trigger\n"
         out += "sessions    \(r.sessions.count)   wall time "
         out += String(format: "%.1f min\n", r.pooled.durationSeconds / 60)
         out += "\n"
@@ -175,13 +209,30 @@ enum Reporter {
         out += pad("rate", 10) + pad("trig", 6) + pad("FP", 5) + pad("FP/20m", 9)
         out += pad("p50", 10) + pad("p95", 10) + "max\n"
         for a in [r.pooled] + r.perSurface {
-            out += pad(a.label, 10) + pad("\(a.sessions)", 6) + pad("\(a.doubleGroups)", 8)
+            out += pad(a.label, 10) + pad("\(a.sessions)", 6) + pad("\(a.armedGroups)", 8)
             out += pad("\(a.detectedGroups)", 6) + pad(Fmt.pct(a.detectionRate), 10)
             out += pad("\(a.triggerCount)", 6) + pad("\(a.falsePositives)", 5)
             out += pad(Fmt.num(a.falsePositivesPer20Min), 9)
             out += pad(Fmt.msOpt(a.latencyP50Ns), 10) + pad(Fmt.msOpt(a.latencyP95Ns), 10)
             out += Fmt.msOpt(a.latencyMaxNs) + "\n"
         }
+
+        out += "\nper tap count\n"
+        out += pad("scope", 10) + pad("taps", 6) + pad("armed", 7) + pad("labelled", 10)
+        out += pad("det", 6) + pad("rate", 10) + pad("trig", 6) + pad("false", 7)
+        out += pad("FT/20m", 9) + "p95\n"
+        for a in [r.pooled] + r.perSurface {
+            let rows = a.perCount.filter { $0.armed || $0.labelledGroups > 0 || $0.triggers > 0 }
+            for c in rows.sorted(by: { $0.count < $1.count }) {
+                out += pad(a.label, 10) + pad("\(c.count)", 6) + pad(c.armed ? "yes" : "NO", 7)
+                out += pad("\(c.labelledGroups)", 10) + pad("\(c.detectedGroups)", 6)
+                out += pad(Fmt.pct(c.detectionRate), 10) + pad("\(c.triggers)", 6)
+                out += pad("\(c.falseTriggers)", 7)
+                out += pad(Fmt.num(a.falseTriggersPer20Min(count: c.count)), 9)
+                out += Fmt.msOpt(c.latencyP95Ns) + "\n"
+            }
+        }
+
         out += "\npass line\n"
         for c in r.checks {
             let mark = c.status == .pass ? "  ok  " : (c.status == .fail ? " FAIL " : " ---- ")

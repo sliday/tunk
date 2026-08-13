@@ -1,7 +1,10 @@
 {
-  "schema": 1,
+  "schema": 2,
   "title": "Tunk — gauntlet loop",
   "generated_at": "2026-08-13T18:20:00Z",
+  "stale_after_s": 900,
+  "cold_after_s": 7200,
+  "primary_tap_count": "2",
   "pass_line": {
     "detection_rate": { "op": ">=", "value": 98, "unit": "%" },
     "false_triggers_typing": { "op": "==", "value": 0, "unit": "" },
@@ -17,46 +20,145 @@
       "timestamp": "2026-08-13T18:20:00Z",
       "status": "no_data",
       "headline": "no data yet — dataset not recorded",
-      "biggest_gap": "No dataset exists. Nothing on this page has been measured. The operator has not yet recorded a single session, so detection rate, false triggers and latency are all unknown — not zero, not passing. First blocking step: record data/raw and data/holdout per FORMAT.md across desk, soft and lap.",
-      "dataset": { "sessions": 0, "double_tap_groups": 0, "minutes": 0.0 },
+      "biggest_gap": "No dataset exists. Nothing on this page has been measured. The operator has not yet recorded a single session, so detection rate, false triggers and latency are unknown for every tap count — not zero, not passing. First blocking step: record data/raw and data/holdout per FORMAT.md across desk, soft and lap, with prompted single, double and triple taps so each count can be graded against its own action.",
+      "dataset": { "sessions": 0, "minutes": 0.0, "tap_groups": { "1": 0, "2": 0, "3": 0 } },
       "surfaces": {
         "desk": {
-          "coverage": { "sessions": 0, "double_tap_groups": 0, "typing_minutes": 0.0, "confound_minutes": 0.0 },
-          "metrics": {
-            "detection_rate": { "value": null, "n": 0, "note": "no held-out tap groups recorded" },
-            "false_triggers_typing": { "value": null, "n": 0, "note": "no typing sessions recorded" },
-            "false_triggers_confound": { "value": null, "n": 0, "note": "no confound sessions recorded" },
-            "false_triggers_per_20min": { "value": null, "n": 0 },
-            "latency_p50_ms": { "value": null, "n": 0 },
-            "latency_p95_ms": { "value": null, "n": 0 },
-            "latency_max_ms": { "value": null, "n": 0 },
-            "stuck_modifiers": { "value": null, "n": 0, "note": "emission not exercised yet" }
+          "coverage": {
+            "sessions": 0,
+            "typing_minutes": 0.0,
+            "confound_minutes": 0.0,
+            "tap_groups": { "1": 0, "2": 0, "3": 0 }
+          },
+          "taps": {
+            "1": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0, "note": "no held-out single-tap groups recorded" },
+                "false_triggers_typing": { "value": null, "n": 0, "note": "no typing sessions recorded" },
+                "false_triggers_confound": { "value": null, "n": 0, "note": "no confound sessions recorded" },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0, "note": "emission not exercised yet" }
+              }
+            },
+            "2": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0, "note": "no held-out double-tap groups recorded" },
+                "false_triggers_typing": { "value": null, "n": 0, "note": "no typing sessions recorded" },
+                "false_triggers_confound": { "value": null, "n": 0, "note": "no confound sessions recorded" },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0, "note": "emission not exercised yet" }
+              }
+            },
+            "3": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0, "note": "no held-out triple-tap groups recorded" },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            }
           }
         },
         "soft": {
-          "coverage": { "sessions": 0, "double_tap_groups": 0, "typing_minutes": 0.0, "confound_minutes": 0.0 },
-          "metrics": {
-            "detection_rate": { "value": null, "n": 0 },
-            "false_triggers_typing": { "value": null, "n": 0 },
-            "false_triggers_confound": { "value": null, "n": 0 },
-            "false_triggers_per_20min": { "value": null, "n": 0 },
-            "latency_p50_ms": { "value": null, "n": 0 },
-            "latency_p95_ms": { "value": null, "n": 0 },
-            "latency_max_ms": { "value": null, "n": 0 },
-            "stuck_modifiers": { "value": null, "n": 0 }
+          "coverage": {
+            "sessions": 0,
+            "typing_minutes": 0.0,
+            "confound_minutes": 0.0,
+            "tap_groups": { "1": 0, "2": 0, "3": 0 }
+          },
+          "taps": {
+            "1": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0 },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            },
+            "2": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0 },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            },
+            "3": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0 },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            }
           }
         },
         "lap": {
-          "coverage": { "sessions": 0, "double_tap_groups": 0, "typing_minutes": 0.0, "confound_minutes": 0.0 },
-          "metrics": {
-            "detection_rate": { "value": null, "n": 0 },
-            "false_triggers_typing": { "value": null, "n": 0 },
-            "false_triggers_confound": { "value": null, "n": 0 },
-            "false_triggers_per_20min": { "value": null, "n": 0 },
-            "latency_p50_ms": { "value": null, "n": 0 },
-            "latency_p95_ms": { "value": null, "n": 0 },
-            "latency_max_ms": { "value": null, "n": 0 },
-            "stuck_modifiers": { "value": null, "n": 0 }
+          "coverage": {
+            "sessions": 0,
+            "typing_minutes": 0.0,
+            "confound_minutes": 0.0,
+            "tap_groups": { "1": 0, "2": 0, "3": 0 }
+          },
+          "taps": {
+            "1": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0 },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            },
+            "2": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0 },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            },
+            "3": {
+              "metrics": {
+                "detection_rate": { "value": null, "n": 0 },
+                "false_triggers_typing": { "value": null, "n": 0 },
+                "false_triggers_confound": { "value": null, "n": 0 },
+                "false_triggers_per_20min": { "value": null, "n": 0 },
+                "latency_p50_ms": { "value": null, "n": 0 },
+                "latency_p95_ms": { "value": null, "n": 0 },
+                "latency_max_ms": { "value": null, "n": 0 },
+                "stuck_modifiers": { "value": null, "n": 0 }
+              }
+            }
           }
         }
       }

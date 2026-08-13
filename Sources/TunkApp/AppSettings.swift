@@ -15,9 +15,13 @@ final class AppSettings: ObservableObject {
         /// Written by builds that predate `TunkAction`: a bare hotkey string.
         /// Read once, at load, to migrate. Never written again.
         static let legacyHotkey = "hotkey"
-        static let action = "action"
-        static let hotkeyDraft = "hotkeyDraft"
-        static let shortcutDraft = "shortcutDraft"
+        /// Written by the build that had one action and no tap count. Read once,
+        /// at load, to migrate into the double-tap binding. Never written again.
+        static let legacyAction = "action"
+        static let bindings = "actionBindings"
+        static func hotkeyDraft(_ count: Int) -> String { "hotkeyDraft.\(count)" }
+        static func shortcutDraft(_ count: Int) -> String { "shortcutDraft.\(count)" }
+        static func shortcutDraftListed(_ count: Int) -> String { "shortcutDraftListed.\(count)" }
         static let enabled = "enabled"
     }
 
@@ -31,7 +35,7 @@ final class AppSettings: ObservableObject {
     /// it changed. The engine hooks this.
     var onConfigChange: ((DetectorConfig) -> Void)?
     var onEnabledChange: ((Bool) -> Void)?
-    var onActionChange: ((TunkAction) -> Void)?
+    var onBindingsChange: ((ActionBindings) -> Void)?
 
     @Published var config: DetectorConfig {
         didSet {
@@ -41,48 +45,89 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// What a confirmed double-tap does. The one value the engine reads; the
-    /// panel writes only this and the two drafts below, which feed it.
-    @Published var action: TunkAction {
+    /// One action per tap count. The one value the engine reads; the panel
+    /// writes only this and the per-count drafts below, which feed it.
+    @Published var bindings: ActionBindings {
         didSet {
-            guard action != oldValue else { return }
-            persist(action, key: Key.action)
-            onActionChange?(action)
+            guard bindings != oldValue else { return }
+            persist(bindings, key: Key.bindings)
+            armDetectorForBoundCounts()
+            onBindingsChange?(bindings)
         }
     }
 
-    /// The combination to use when the action kind is `.hotkey`. Kept while the
-    /// user is in another mode so switching to "Run a Shortcut" and back does
-    /// not lose the shortcut they spent a minute picking. UI memory only — the
-    /// engine never reads it, and it is written into `action` the moment the
-    /// kind matches.
-    @Published var hotkeyDraft: HotkeySpec {
-        didSet {
-            guard hotkeyDraft != oldValue else { return }
-            defaults.set(hotkeyDraft.description, forKey: Key.hotkeyDraft)
-            if action.kind == .hotkey { action = .hotkey(hotkeyDraft) }
+    /// The detector only reports gestures whose count is in
+    /// `config.armedTapCounts`. Binding an action to a count is the act that
+    /// arms it — two separate switches for one intention would be a trap, and a
+    /// user who binds single tap and sees nothing happen would be right to call
+    /// it broken.
+    ///
+    /// This runs one way only: bindings drive arming, never the reverse. A count
+    /// with nothing bound is disarmed, which keeps the cheapest possible
+    /// false-positive defence in place — an unbound single tap is not merely
+    /// ignored downstream, it is never grouped in the first place.
+    private func armDetectorForBoundCounts() {
+        let wanted = Set(bindings.boundCounts)
+            .intersection(DetectorConfig.supportedTapCounts)
+        guard config.armedTapCounts != wanted else { return }
+        config.armedTapCounts = wanted
+    }
+
+    /// Per-count UI memory. Kept so a user who switches a row to "Do nothing"
+    /// and back gets their own combination returned rather than a shipped
+    /// default. The engine never reads these; they are written into `bindings`
+    /// the moment the row's kind matches.
+    @Published private var hotkeyDrafts: [Int: HotkeySpec] = [:]
+    @Published private var shortcutDrafts: [Int: String] = [:]
+    /// Whether each shortcut draft was picked from a real listing. Carried into
+    /// the binding so a name that later stops resolving can be described as
+    /// renamed rather than as never having existed.
+    @Published private var shortcutDraftListed: [Int: Bool] = [:]
+
+    // MARK: - per-row accessors
+
+    func action(for count: Int) -> TunkAction { bindings[count] }
+
+    func hotkeyDraft(for count: Int) -> HotkeySpec {
+        hotkeyDrafts[count] ?? .recommendedDefault
+    }
+
+    func setHotkeyDraft(_ spec: HotkeySpec, for count: Int) {
+        guard hotkeyDrafts[count] != spec else { return }
+        hotkeyDrafts[count] = spec
+        defaults.set(spec.description, forKey: Key.hotkeyDraft(count))
+        if bindings[count].kind == .hotkey { bindings[count] = .hotkey(spec) }
+    }
+
+    func shortcutDraft(for count: Int) -> String { shortcutDrafts[count] ?? "" }
+
+    /// - Parameter pickedFromListing: true when the name came out of a real
+    ///   `shortcuts list`, which is the only way Tunk can honestly claim it
+    ///   existed at the moment of binding.
+    func setShortcutDraft(_ name: String, for count: Int, pickedFromListing: Bool) {
+        guard shortcutDrafts[count] != name else { return }
+        shortcutDrafts[count] = name
+        shortcutDraftListed[count] = pickedFromListing
+        defaults.set(name, forKey: Key.shortcutDraft(count))
+        defaults.set(pickedFromListing, forKey: Key.shortcutDraftListed(count))
+        if bindings[count].kind == .shortcut {
+            bindings[count] = .shortcut(name: name, wasListedWhenBound: pickedFromListing)
         }
     }
 
-    /// Same idea for the chosen Shortcut's name.
-    @Published var shortcutDraft: String {
-        didSet {
-            guard shortcutDraft != oldValue else { return }
-            defaults.set(shortcutDraft, forKey: Key.shortcutDraft)
-            if action.kind == .shortcut { action = .shortcut(name: shortcutDraft) }
-        }
-    }
+    func actionKind(for count: Int) -> TunkAction.Kind { bindings[count].kind }
 
-    /// The picker's value. Switching kind rebuilds `action` from the draft for
-    /// that kind, so nothing is invented and nothing is lost.
-    var actionKind: TunkAction.Kind {
-        get { action.kind }
-        set {
-            switch newValue {
-            case .hotkey:   action = .hotkey(hotkeyDraft)
-            case .shortcut: action = .shortcut(name: shortcutDraft)
-            case .none:     action = .none
-            }
+    /// Switching a row's kind rebuilds that row's action from its own drafts, so
+    /// nothing is invented and nothing is lost.
+    func setActionKind(_ kind: TunkAction.Kind, for count: Int) {
+        switch kind {
+        case .hotkey:
+            bindings[count] = .hotkey(hotkeyDraft(for: count))
+        case .shortcut:
+            bindings[count] = .shortcut(name: shortcutDraft(for: count),
+                                        wasListedWhenBound: shortcutDraftListed[count] ?? false)
+        case .none:
+            bindings[count] = .none
         }
     }
 
@@ -103,23 +148,31 @@ final class AppSettings: ObservableObject {
         let d = UserDefaults(suiteName: suiteName) ?? .standard
         defaults = d
         config = AppSettings.load(DetectorConfig.self, key: Key.config, from: d) ?? .default
-        let loaded = AppSettings.loadAction(from: d)
-        action = loaded
-        // Seed the drafts from whatever was loaded, so the first switch between
-        // kinds offers the user's own value rather than a shipped default.
-        hotkeyDraft = loaded.hotkeySpec
-            ?? d.string(forKey: Key.hotkeyDraft).flatMap { try? HotkeySpec(parsing: $0) }
-            ?? .recommendedDefault
-        shortcutDraft = loaded.shortcutName ?? d.string(forKey: Key.shortcutDraft) ?? ""
+        // The rules live in `ActionBindings.restored`, in TunkEmit, where they
+        // are under test; this reads the three keys and hands them over.
+        let loaded = ActionBindings.restored(bindingsData: d.data(forKey: Key.bindings),
+                                             actionData: d.data(forKey: Key.legacyAction),
+                                             legacyHotkeyText: d.string(forKey: Key.legacyHotkey))
+        bindings = loaded
         enabled = d.object(forKey: Key.enabled) as? Bool ?? true
-    }
 
-    /// Loads the action, migrating settings written before `TunkAction` existed.
-    /// The rules live in `TunkAction.restored`, in TunkEmit, where they are
-    /// under test; this reads the two keys and hands them over.
-    private static func loadAction(from d: UserDefaults) -> TunkAction {
-        TunkAction.restored(actionData: d.data(forKey: Key.action),
-                            legacyHotkeyText: d.string(forKey: Key.legacyHotkey))
+        // Seed each row's drafts from what was loaded, falling back to what was
+        // stored, so the first switch between kinds offers the user's own value.
+        for count in ActionBindings.representableCounts {
+            let action = loaded[count]
+            hotkeyDrafts[count] = action.hotkeySpec
+                ?? d.string(forKey: Key.hotkeyDraft(count)).flatMap { try? HotkeySpec(parsing: $0) }
+                ?? .recommendedDefault
+            shortcutDrafts[count] = action.shortcutName
+                ?? d.string(forKey: Key.shortcutDraft(count)) ?? ""
+            shortcutDraftListed[count] = action.shortcutName != nil
+                ? action.shortcutWasListedWhenBound
+                : (d.object(forKey: Key.shortcutDraftListed(count)) as? Bool ?? false)
+        }
+        // Reconcile once at launch: a settings file written before the counts
+        // were linked, or hand-edited since, must not leave a bound action
+        // silently disarmed.
+        armDetectorForBoundCounts()
     }
 
     func resetDetectionToDefaults() {

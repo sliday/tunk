@@ -164,6 +164,8 @@ public struct DSPTuning: Sendable, Equatable {
     /// Cap on the undrained onset log, so a live app that never drains cannot
     /// grow without bound.
     public var onsetLogCapacity: Int
+    /// Same cap for the closed-group log behind `drainGroups()`.
+    public var groupLogCapacity: Int
 
     public static let `default` = DSPTuning(
         sampleRateHz: 796.3,
@@ -179,14 +181,16 @@ public struct DSPTuning: Sendable, Equatable {
         warmupSamples: 200,
         gapResetNs: 20_000_000,
         preGateNs: 25_000_000,
-        onsetLogCapacity: 512
+        onsetLogCapacity: 512,
+        groupLogCapacity: 256
     )
 
     public init(sampleRateHz: Double, highPassHz: Double, envelopePeakSamples: Int,
                 noiseRiseTauSeconds: Double, noiseFallTauSeconds: Double,
                 noiseSnrMultiple: Double, minThresholdG: Double, releaseFraction: Double,
                 onsetDebounceNs: Int64, peakHoldNs: Int64, warmupSamples: Int,
-                gapResetNs: Int64, preGateNs: Int64, onsetLogCapacity: Int) {
+                gapResetNs: Int64, preGateNs: Int64, onsetLogCapacity: Int,
+                groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
         self.envelopePeakSamples = envelopePeakSamples
@@ -201,6 +205,7 @@ public struct DSPTuning: Sendable, Equatable {
         self.gapResetNs = gapResetNs
         self.preGateNs = preGateNs
         self.onsetLogCapacity = onsetLogCapacity
+        self.groupLogCapacity = groupLogCapacity
     }
 }
 

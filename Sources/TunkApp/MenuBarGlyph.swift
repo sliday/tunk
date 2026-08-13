@@ -14,6 +14,11 @@ enum MenuBarGlyph {
         case lost
         /// macOS has not granted what Tunk needs.
         case blocked
+        /// Detection works, but a bound action cannot run as configured — a
+        /// Shortcut that has been renamed or deleted. Passive on purpose: this
+        /// glyph is how the user finds out, because the alternative is a modal
+        /// dialog on every stray knock.
+        case actionBroken
         case firing
     }
 
@@ -37,7 +42,8 @@ enum MenuBarGlyph {
         case .idle: return "Tunk, detection off"
         case .lost: return "Tunk, accelerometer unavailable"
         case .blocked: return "Tunk, blocked until permissions are granted"
-        case .firing: return "Tunk, double-tap detected"
+        case .actionBroken: return "Tunk, listening, but a bound Shortcut is missing"
+        case .firing: return "Tunk, tap detected"
         }
     }
 
@@ -65,6 +71,27 @@ enum MenuBarGlyph {
             alpha: alpha * (state == .firing ? 1.0 : 0.7))
 
         if state == .lost || state == .blocked { strikeThrough() }
+        // Not a strike: detection is working, so the glyph must not read as
+        // "off". A mark beside it says "attention", which is the truth.
+        if state == .actionBroken { attentionMark() }
+    }
+
+    /// A small filled square at the lower right. Deliberately not a strike and
+    /// not a second ripple: it has to be legible at 18 pt as a template image,
+    /// in a menu bar the user is not looking at.
+    private static func attentionMark() {
+        guard let context = NSGraphicsContext.current else { return }
+        let mark = CGRect(x: 12.4, y: 1.6, width: 3.8, height: 3.8)
+        // Clear a gutter first so the mark reads against the outer arc rather
+        // than merging with it, same trick as the strike.
+        context.saveGraphicsState()
+        context.compositingOperation = .clear
+        NSColor.black.set()
+        NSBezierPath(ovalIn: mark.insetBy(dx: -1.4, dy: -1.4)).fill()
+        context.restoreGraphicsState()
+
+        NSColor.black.set()
+        NSBezierPath(ovalIn: mark).fill()
     }
 
     private static func dot(x: CGFloat, y: CGFloat, radius: CGFloat,

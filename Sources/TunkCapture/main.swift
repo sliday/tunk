@@ -33,7 +33,7 @@ do {
     case "verify":
         runVerify(args)
     case "doctor":
-        runDoctor(args)
+        try runDoctor(args)
     case "list":
         print("categories:")
         for c in Category.allCases {

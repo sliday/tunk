@@ -45,7 +45,7 @@ enum CommandSpecs {
         synopsis: "record --category <cat> --surface <desk|soft|lap> [flags]",
         blurb: "One unprompted session of one category. No beeps, no labels.",
         flags: [
-            FlagSpec("category", "<cat>", "required. \(categoryList)"),
+            FlagSpec("category", "<cat>", "required. `tunk-capture list` prints the 12 categories"),
             FlagSpec("surface", "<desk|soft|lap>", "required. where the machine is sitting"),
             FlagSpec("out", "<dir>", "session root (default data/raw)"),
             FlagSpec("split", "<train|test>", "must agree with the out directory"),
@@ -55,6 +55,7 @@ enum CommandSpecs {
             FlagSpec("report-interval-us", "<us>", "sensor ReportInterval; 1250 => 796 Hz"),
             FlagSpec("allow-no-input", "", "record even if the event tap cannot start (marks the session degraded)"),
             FlagSpec("no-touch", "", "skip trackpad touch-count capture"),
+            FlagSpec("dry-run", "", "print what would be recorded and exit"),
             help,
         ],
         positional: nil)
@@ -84,6 +85,7 @@ enum CommandSpecs {
             FlagSpec("no-speech", "", "no spoken prompts"),
             FlagSpec("no-touch", "", "skip trackpad touch-count capture"),
             FlagSpec("allow-no-input", "", "record even if the event tap cannot start"),
+            FlagSpec("dry-run", "", "print the phase plan and exit without recording"),
             help,
         ],
         positional: nil)
@@ -210,11 +212,10 @@ extension CommandSpecs {
         guard let spec = spec(command) else { return overview }
         var lines = ["\(spec.name) accepts:"]
         if let p = spec.positional { lines.append("  \(p)") }
-        let width = spec.flags.map { $0.name.count + $0.arg.count + 1 }.max() ?? 20
+        func left(_ f: FlagSpec) -> String { "--\(f.name)" + (f.arg.isEmpty ? "" : " \(f.arg)") }
+        let width = (spec.flags.map { left($0).count }.max() ?? 20) + 2
         for f in spec.flags {
-            let left = "--\(f.name)" + (f.arg.isEmpty ? "" : " \(f.arg)")
-            lines.append("  " + left.padding(toLength: max(width + 3, left.count + 2), withPad: " ", startingAt: 0)
-                         + f.help)
+            lines.append("  " + left(f).padding(toLength: width, withPad: " ", startingAt: 0) + f.help)
         }
         lines.append("")
         lines.append("  usage: tunk-capture \(spec.synopsis)")

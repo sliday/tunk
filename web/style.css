@@ -691,7 +691,395 @@ main > section > .section-note { padding-inline: 6px; }
   }
   .refresh-note[data-visible="true"] { transform: none; }
   .foot-links a { transition: background-color 1ms linear, color 1ms linear; }
+  .trend-details > summary { transition: background-color 1ms linear; }
 }
+
+/* ------------------------------------------------------------- freshness */
+
+/* How old the numbers are. Baked in at render time so it survives with
+   JavaScript off; progress.js only sharpens it into a live figure. */
+.freshness {
+  position: relative;
+  isolation: isolate;
+  margin-top: 14px;
+  padding: 10px 12px 11px;
+  border-radius: var(--r-inner);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 0 var(--pass), var(--shadow-1), var(--shadow-2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.freshness--stale,
+.freshness--cold,
+.freshness--unknown,
+.freshness--future {
+  box-shadow: inset 3px 0 0 0 var(--fail), var(--shadow-1), var(--shadow-2);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 5px,
+    transparent 5px 22px
+  );
+}
+.freshness--unknown {
+  box-shadow: inset 3px 0 0 0 var(--none), var(--shadow-1), var(--shadow-2);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--none-soft) 0 5px,
+    transparent 5px 22px
+  );
+}
+
+.fresh-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--ink-2);
+}
+.fresh-head { font-weight: 620; color: var(--ink); }
+.fresh-glyphs {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 0.8em;
+}
+.fresh-glyph { font-size: 0.75em; color: var(--none); }
+.freshness--fresh .fresh-glyph--now { color: var(--pass); }
+.freshness--stale .fresh-glyph,
+.freshness--cold .fresh-glyph,
+.freshness--future .fresh-glyph { color: var(--fail); }
+.fresh-glyph--aged {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  color: var(--fail);
+}
+
+.fresh-stamps,
+.fresh-lag {
+  margin-top: 5px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.fresh-warn {
+  margin-top: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 0 var(--fail);
+  color: var(--fail);
+  font-size: 0.75rem;
+  text-wrap: pretty;
+}
+
+/* The no-JavaScript staleness clock.
+   A static page has exactly one clock: its own load time. So a page that was
+   built fresh runs a step animation that flips the whole bar to the stale
+   treatment — hatch, red rail, ■ instead of ●, and the warning below — once it
+   has been open past `stale_after_s`. Nothing moves and nothing is visible
+   before that, so first paint is settled; the step timing means there is no
+   tween, only a state change. A page that was already stale at build time skips
+   all of this and renders stale from the start. */
+.fresh-open {
+  margin-top: 0;
+  padding-block: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.freshness--fresh .fresh-open {
+  animation-name: reveal-stale;
+  animation-timing-function: steps(1, end);
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+.freshness--fresh .fresh-open--stale { animation-duration: var(--stale-after, 900s); }
+.freshness--fresh .fresh-open--cold { animation-duration: var(--cold-after, 7200s); }
+@keyframes reveal-stale {
+  from { margin-top: 0; padding-block: 0; max-height: 0; opacity: 0; }
+  to { margin-top: 9px; padding-block: 8px; max-height: 14em; opacity: 1; }
+}
+
+/* The bar itself ages with it: texture and rail, not hue alone. */
+.freshness--fresh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 5px,
+    transparent 5px 22px
+  );
+  animation: reveal-hatch var(--stale-after, 900s) steps(1, end) 1 forwards;
+}
+@keyframes reveal-hatch {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.freshness--fresh {
+  animation: age-rail var(--stale-after, 900s) steps(1, end) 1 forwards;
+}
+@keyframes age-rail {
+  from { box-shadow: inset 3px 0 0 0 var(--pass), var(--shadow-1), var(--shadow-2); }
+  to { box-shadow: inset 3px 0 0 0 var(--fail), var(--shadow-1), var(--shadow-2); }
+}
+.freshness--fresh .fresh-glyph--now {
+  animation: hide-glyph var(--stale-after, 900s) steps(1, end) 1 forwards;
+}
+.freshness--fresh .fresh-glyph--aged {
+  animation: show-glyph var(--stale-after, 900s) steps(1, end) 1 forwards;
+}
+@keyframes hide-glyph { from { opacity: 1; } to { opacity: 0; } }
+@keyframes show-glyph { from { opacity: 0; } to { opacity: 1; } }
+
+/* With the script running, real data age beats page-open time, so the clock is
+   switched off and JavaScript drives the same states directly. */
+[data-js="on"] .freshness--fresh,
+[data-js="on"] .freshness--fresh::after,
+[data-js="on"] .freshness--fresh .fresh-glyph--now,
+[data-js="on"] .freshness--fresh .fresh-glyph--aged,
+[data-js="on"] .fresh-open { animation-name: none; }
+[data-js="on"] .fresh-open[data-shown="true"] {
+  margin-top: 9px;
+  padding-block: 8px;
+  max-height: 14em;
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------- banners */
+
+.banner {
+  margin-bottom: 18px;
+  padding: 13px 14px 14px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 0 var(--fail), var(--shadow-1), var(--shadow-2);
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.banner--warn {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 5px,
+    transparent 5px 22px
+  );
+}
+.banner--synthetic {
+  box-shadow: inset 3px 0 0 0 var(--none), var(--shadow-1), var(--shadow-2);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--none-soft) 0 5px,
+    transparent 5px 22px
+  );
+}
+.banner-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.9375rem;
+  margin-bottom: 8px;
+}
+.banner--warn .banner-title { color: var(--fail); }
+.banner ul {
+  margin: 0;
+  padding-left: 1.15em;
+  display: grid;
+  gap: 5px;
+}
+.banner p,
+.banner li { background: none; }
+
+/* ------------------------------------------------------------- tap strip */
+
+.tapstrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 6px;
+  margin: 10px 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tapchip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 9px 9px;
+  border-radius: var(--r-inner);
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 0 var(--none);
+}
+.tapchip--pass { box-shadow: inset 3px 0 0 0 var(--pass); }
+.tapchip--fail { box-shadow: inset 3px 0 0 0 var(--fail); }
+.tapchip--info { box-shadow: inset 3px 0 0 0 var(--info); }
+.tapchip--regress {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 6px,
+    transparent 6px 12px
+  );
+}
+.tapchip-glyph { font-size: 0.625rem; color: var(--none); }
+.tapchip--pass .tapchip-glyph { color: var(--pass); }
+.tapchip--fail .tapchip-glyph { color: var(--fail); }
+.tapchip-name {
+  font-size: 0.75rem;
+  font-weight: 620;
+  line-height: 1.25;
+}
+.tapchip-sub,
+.tapchip-reg {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tapchip-reg { color: var(--fail); font-weight: 620; }
+
+/* ------------------------------------------------------------- matrix */
+
+abbr[title] { text-decoration: none; }
+
+.metrics--matrix { table-layout: fixed; }
+.metrics--matrix thead th { text-align: center; padding: 0 4px 6px; }
+.metrics--matrix thead th:first-child { text-align: left; padding-left: 9px; }
+.metrics--matrix .metric > th { width: 38%; }
+
+.cell {
+  padding: 6px 4px 7px;
+  text-align: center;
+  background: var(--surface-2);
+  vertical-align: middle;
+}
+.cell-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+.cell-glyph { font-size: 0.625rem; color: var(--none); }
+.cell-value {
+  font-size: 0.8125rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cell-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.625rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cell--pass .cell-glyph,
+.cell--pass .cell-value { color: var(--pass); }
+.cell--fail .cell-glyph,
+.cell--fail .cell-value { color: var(--fail); }
+.cell--none .cell-glyph,
+.cell--none .cell-value { color: var(--none); }
+
+/* A regressed cell reads as texture plus a bottom rail. Neighbouring cells keep
+   their own edges, so the rail sits under the number rather than beside it. */
+.cell--d-regress {
+  background-color: var(--fail-soft);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 6px,
+    transparent 6px 12px
+  );
+  box-shadow: inset 0 -3px 0 0 var(--fail);
+}
+.cell--d-improve { box-shadow: inset 0 -3px 0 0 var(--pass); }
+
+.card-notes {
+  margin: 9px 8px 2px;
+  padding-left: 1.15em;
+  display: grid;
+  gap: 3px;
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------- trend fold */
+
+.trend-details {
+  margin-top: 8px;
+  padding: 4px;
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+}
+.trend-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--r-inner);
+  font-size: 0.8125rem;
+  font-weight: 620;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.trend-details > summary::-webkit-details-marker { display: none; }
+.trend-details > summary:hover,
+.trend-details > summary:focus-visible { background: var(--surface); }
+.trend-tap::before {
+  content: "▸";
+  display: inline-block;
+  width: 1em;
+  color: var(--muted);
+}
+.trend-details[open] > summary .trend-tap::before { content: "▾"; }
+.trend-details--regress {
+  box-shadow: inset 3px 0 0 0 var(--fail);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 6px,
+    transparent 6px 12px
+  );
+}
+.trend-flag {
+  font-size: 0.6875rem;
+  font-weight: 620;
+  color: var(--fail);
+}
+.trend-details .trend-grid { margin-top: 6px; }
+.trend-details .trend { background: var(--surface); }
+
+/* ------------------------------------------------------------- log extras */
+
+.log-status {
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: var(--info-soft);
+  color: var(--muted);
+  font-size: 0.625rem;
+  font-weight: 620;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.log-source {
+  margin-top: 8px;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.log-warnings {
+  margin: 6px 0 0;
+  padding-left: 1.15em;
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--fail);
+}
+
+.metric-value--override { text-decoration: underline dotted; }
 
 /* ------------------------------------------------------------- wider */
 
@@ -699,6 +1087,9 @@ main > section > .section-note { padding-inline: 6px; }
   body { padding: 30px 20px 64px; }
   h1 { font-size: 1.875rem; }
   .trend-grid { grid-template-columns: repeat(4, 1fr); }
+  .cell-value { font-size: 0.9375rem; }
+  .cell-sub { font-size: 0.6875rem; }
+  .metrics--matrix .metric > th { width: 34%; }
 }
 
 @media (min-width: 860px) {

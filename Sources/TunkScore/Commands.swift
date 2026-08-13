@@ -4,6 +4,36 @@ import TunkFormat
 
 enum Commands {
 
+    /// `--armed 1,2,3`. Absent, the armed set is whatever the config fires on.
+    static func armedOverride(_ args: inout Args) throws -> [Int]? {
+        guard let raw = args.string("armed") else { return nil }
+        return try ScoringPolicy.parse(raw)
+    }
+
+    /// Collect the `--progress-*` flags. Returns nil when `--progress-json` is absent.
+    static func progressOptions(_ args: inout Args) throws -> ProgressOptions? {
+        let path = args.string("progress-json")
+        let round = try args.int("progress-round")
+        let label = args.string("progress-label")
+        let headline = args.string("progress-headline")
+        let gap = args.string("progress-gap")
+        let status = args.string("progress-status")
+        let pooled = args.bool("progress-pooled")
+        let replace = args.bool("progress-replace")
+        guard let path else {
+            for (name, present) in [("progress-round", round != nil), ("progress-label", label != nil),
+                                    ("progress-headline", headline != nil), ("progress-gap", gap != nil),
+                                    ("progress-status", status != nil), ("progress-pooled", pooled),
+                                    ("progress-replace", replace)] where present {
+                throw CLIError.usage("--\(name) needs --progress-json <file>")
+            }
+            return nil
+        }
+        return ProgressOptions(path: Paths.resolve(path), round: round, label: label,
+                               headline: headline, biggestGap: gap, status: status,
+                               includePooled: pooled, replace: replace)
+    }
+
     // MARK: - run
 
     static func run(_ args: inout Args) throws -> Int32 {
@@ -15,12 +45,15 @@ enum Commands {
         let isCritic = args.bool("i-am-a-critic")
         let verbose = args.bool("verbose")
         let checkDeterminism = args.bool("check-determinism")
+        let armed = try armedOverride(&args)
+        let progress = try progressOptions(&args)
         try DetectorFactory.select(args.string("detector"), default: .real)
         try args.checkUnknown()
 
         var config = DetectorConfig.default
         if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
         try ConfigIO.validate(config)
+        let policy = ScoringPolicy.from(config: config, override: armed)
 
         // Tripwire 1 fires before a single byte of the directory is read.
         if HoldoutGuard.pathLooksLikeHoldout(root) && !isCritic {
@@ -48,17 +81,18 @@ enum Commands {
                     warnings.append("\(s.meta.sessionId): NON-DETERMINISTIC — two identical replays produced different triggers")
                 }
             }
-            let score = try SessionScorer.score(session: s, replay: replay)
+            let score = try SessionScorer.score(session: s, replay: replay, policy: policy)
             if verbose {
-                print("\(Reporter.pad(s.meta.sessionId, 46)) groups \(score.doubleGroups) "
-                      + "detected \(score.detectedGroups) triggers \(score.triggerCount) FP \(score.falsePositives)")
+                print("\(Reporter.pad(s.meta.sessionId, 46)) armed groups \(score.armedGroups) "
+                      + "detected \(score.detectedGroups) must-not-fire \(score.mustNotFireGroups) "
+                      + "triggers \(score.triggerCount) FP \(score.falsePositives)")
             }
             scores.append(score)
         }
 
         let splitLabel = sessions.first?.meta.split.rawValue ?? "unknown"
         let report = Reporter.build(dataRoot: root, split: splitLabel, config: config,
-                                    scores: scores, warnings: warnings)
+                                    policy: policy, scores: scores, warnings: warnings)
         print(Reporter.console(report))
         if let p = jsonOut {
             try Reporter.writeJSON(report, to: Paths.resolve(p))
@@ -67,6 +101,9 @@ enum Commands {
         if let p = mdOut {
             try Reporter.markdown(report).write(to: Paths.resolve(p), atomically: true, encoding: .utf8)
             print("wrote \(Paths.resolve(p).path)")
+        }
+        if let progress {
+            for line in try ProgressFeed.append(report: report, options: progress) { print(line) }
         }
 
         switch report.verdict {
@@ -82,7 +119,7 @@ enum Commands {
         var value: Double
         var displayValue: String
         var sessions: Int
-        var doubleGroups: Int
+        var armedGroups: Int
         var detected: Int
         var detectionRate: Double?
         var triggers: Int
@@ -114,6 +151,7 @@ enum Commands {
         let mdOut = args.string("md")
         let jsonOut = args.string("json")
         let isCritic = args.bool("i-am-a-critic")
+        let armed = try armedOverride(&args)
         try DetectorFactory.select(args.string("detector"), default: .real)
         try args.checkUnknown()
 
@@ -145,26 +183,29 @@ enum Commands {
             param.set(&cfg, value * scale)
             do { try ConfigIO.validate(cfg) } catch {
                 rows.append(SweepRow(value: value, displayValue: fmtValue(value, paramName),
-                                     sessions: 0, doubleGroups: 0, detected: 0, detectionRate: nil,
+                                     sessions: 0, armedGroups: 0, detected: 0, detectionRate: nil,
                                      triggers: 0, falsePositives: 0, typingFalsePositives: 0,
                                      confoundFalsePositives: 0, falsePositivesPer20Min: nil,
                                      latencyP50Ns: nil, latencyP95Ns: nil, verdict: "invalid"))
                 continue
             }
 
+            // The armed set follows the swept config unless --armed pinned it, so a
+            // sweep over tapCountToFire scores each step against what it fires on.
+            let policy = ScoringPolicy.from(config: cfg, override: armed)
             var scores: [SessionScore] = []
             for (s, samples, inputs) in loaded {
                 let detector = DetectorFactory.make(config: cfg)
                 detector.reset()
                 let replay = Replay.run(samples: samples, inputs: inputs, detector: detector,
                                         nominalIntervalNs: max(1, s.meta.nominalIntervalNs))
-                scores.append(try SessionScorer.score(session: s, replay: replay))
+                scores.append(try SessionScorer.score(session: s, replay: replay, policy: policy))
             }
             let (pooled, surfaces, _) = Reporter.aggregate(scores)
             let (verdict, _) = PassLine.verdict(perSurface: surfaces, pooled: pooled)
             rows.append(SweepRow(
                 value: value, displayValue: fmtValue(value, paramName),
-                sessions: pooled.sessions, doubleGroups: pooled.doubleGroups,
+                sessions: pooled.sessions, armedGroups: pooled.armedGroups,
                 detected: pooled.detectedGroups, detectionRate: pooled.detectionRate,
                 triggers: pooled.triggerCount, falsePositives: pooled.falsePositives,
                 typingFalsePositives: pooled.typingFalsePositives,
@@ -199,7 +240,7 @@ enum Commands {
         out += "| \(param) | detected | rate | triggers | FP | FP typing | FP confound | FP/20min | lat p50 | lat p95 | verdict |\n"
         out += "|---|---|---|---|---|---|---|---|---|---|---|\n"
         for r in rows {
-            out += "| \(r.displayValue) | \(r.detected)/\(r.doubleGroups) | \(Fmt.pct(r.detectionRate)) | "
+            out += "| \(r.displayValue) | \(r.detected)/\(r.armedGroups) | \(Fmt.pct(r.detectionRate)) | "
             out += "\(r.triggers) | \(r.falsePositives) | \(r.typingFalsePositives) | \(r.confoundFalsePositives) | "
             out += "\(Fmt.num(r.falsePositivesPer20Min)) | \(Fmt.msOpt(r.latencyP50Ns)) | "
             out += "\(Fmt.msOpt(r.latencyP95Ns)) | \(r.verdict) |\n"
@@ -217,6 +258,7 @@ enum Commands {
         let configPath = args.string("config")
         let mdOut = args.string("md")
         let isCritic = args.bool("i-am-a-critic")
+        let armed = try armedOverride(&args)
         try DetectorFactory.select(args.string("detector"), default: .real)
         try args.checkUnknown()
 
@@ -225,18 +267,55 @@ enum Commands {
         }
         var config = DetectorConfig.default
         if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
+        let policy = ScoringPolicy.from(config: config, override: armed)
 
         let session = try Session(directory: url)
         for w in try HoldoutGuard.check(root: url, sessions: [session], isCritic: isCritic) {
             FileHandle.standardError.write(Data((w + "\n").utf8))
         }
 
-        let text = try Explainer.trace(session: session, config: config)
+        let text = try Explainer.trace(session: session, config: config, policy: policy)
         print(text)
         if let p = mdOut {
             try text.write(to: Paths.resolve(p), atomically: true, encoding: .utf8)
             print("wrote \(Paths.resolve(p).path)")
         }
+        return 0
+    }
+
+    // MARK: - progress
+
+    /// Turn a report `tunk-score run --json` already wrote into a round on the
+    /// progress page. Same code path as `run --progress-json`; this exists so a
+    /// round can be (re)published without replaying the whole dataset.
+    static func progress(_ args: inout Args) throws -> Int32 {
+        guard let from = args.string("from") else {
+            throw CLIError.usage("progress needs --from <report.json> (written by `run --json`)")
+        }
+        let out = args.string("out") ?? "web/progress.json"
+        let round = try args.int("round")
+        let label = args.string("label")
+        let headline = args.string("headline")
+        let gap = args.string("gap")
+        let status = args.string("status")
+        let pooled = args.bool("pooled")
+        let replace = args.bool("replace")
+        try args.checkUnknown()
+
+        let url = Paths.resolve(from)
+        let data: Data
+        do { data = try Data(contentsOf: url) } catch {
+            throw CLIError.failed("cannot read \(url.path): \(error.localizedDescription)")
+        }
+        let report: RunReport
+        do { report = try JSONDecoder().decode(RunReport.self, from: data) } catch {
+            throw CLIError.failed("\(url.path) is not a tunk-score run report: \(error)")
+        }
+
+        let options = ProgressOptions(path: Paths.resolve(out), round: round, label: label,
+                                      headline: headline, biggestGap: gap, status: status,
+                                      includePooled: pooled, replace: replace)
+        for line in try ProgressFeed.append(report: report, options: options) { print(line) }
         return 0
     }
 }

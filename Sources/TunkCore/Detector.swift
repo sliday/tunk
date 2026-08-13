@@ -242,6 +242,11 @@ public final class TapDetector: TapDetecting {
     /// "saw three taps, nothing bound to three" instead of going quiet, and the
     /// scoring harness can count what a count would have cost before it is
     /// armed. Not required for correctness; not part of `TapDetecting`.
+    ///
+    /// Only groups that reached their confirm deadline appear. A group killed
+    /// early — a bounce inside `minInterTapNs`, a retroactive gate, a sensor gap
+    /// — never had a count worth reporting, though its onsets still reach
+    /// `drainOnsets()`.
     public func drainGroups() -> [TapGroupEvent] {
         let out = groupLog
         groupLog.removeAll(keepingCapacity: true)
@@ -271,11 +276,10 @@ public final class TapDetector: TapDetecting {
     public var noiseFloor: Double { chain.noiseFloor }
     /// The threshold an onset would have to beat right now, in g.
     public var activeThreshold: Double { currentThreshold() }
+    /// The counts that can actually fire, after unsupported ones are dropped.
+    public var effectiveArmedTapCounts: Set<Int> { firingCounts }
 
     // MARK: - Internals
-
-    /// Tap counts a bound action would actually be reached by, after clamping.
-    public var effectiveArmedTapCounts: Set<Int> { firingCounts }
 
     private static func resolveFiringCounts(config: DetectorConfig, armed: Set<Int>?) -> Set<Int> {
         let requested = armed ?? [config.tapCountToFire]
@@ -346,8 +350,8 @@ public final class TapDetector: TapDetecting {
 
     /// Returns true if the onset is now a member of the live group.
     private func join(onset tNs: Int64, strength: Double) -> Bool {
-        guard let last = group.last else {
-            if let previous = lastGroupingOnsetNs, tNs - previous < config.minInterTapNs {
+        guard let last = groupLastOnsetNs else {
+            if let previous = lastGroupingOnsetNs, tNs - previous < effectiveConfig.minInterTapNs {
                 // Still inside the wreckage of a burst. Do not let its tail
                 // become the head of a fresh group.
                 return false
@@ -355,42 +359,53 @@ public final class TapDetector: TapDetecting {
             startGroup(at: tNs, strength: strength)
             return true
         }
-        let delta = tNs - last.tNs
-        if delta < config.minInterTapNs {
+        let delta = tNs - last
+        if delta < effectiveConfig.minInterTapNs {
             // Too close to be a second deliberate tap. Bounce, double-strike, or
             // a fumble. Kill the whole group; do not start a new one from it.
             clearGroup()
             return false
         }
-        if delta > config.maxInterTapNs {
-            // The old group has already expired on the deadline path; this is
-            // the first tap of something new.
+        if delta > effectiveConfig.maxInterTapNs {
+            // Only reachable when the confirm window is set wider than the join
+            // limit, since otherwise the deadline closed this group first. The
+            // pending group cannot absorb this onset and cannot be trusted
+            // beside it, so it dies and this onset heads a new one.
+            clearGroup()
             startGroup(at: tNs, strength: strength)
             return true
         }
-        group.append(GroupOnset(tNs: tNs, strength: strength))
-        groupDeadlineNs = tNs + waitAfterLastOnsetNs(count: group.count)
+        extendGroup(to: tNs, strength: strength)
         return true
     }
 
     private func startGroup(at tNs: Int64, strength: Double) {
-        group = [GroupOnset(tNs: tNs, strength: strength)]
-        groupDeadlineNs = tNs + waitAfterLastOnsetNs(count: 1)
+        group.removeAll(keepingCapacity: true)
+        groupCount = 0
+        extendGroup(to: tNs, strength: strength)
     }
 
-    /// How long to hold a group open after its last onset.
-    ///
-    /// Short of the target count we must wait the full `maxInterTapNs`, or a
-    /// deliberate but slow double (say 260 ms apart, legal by config) would have
-    /// its first tap expired by the 180 ms confirm window before the second tap
-    /// arrived. At or above the target we wait `confirmWindowNs`, which is the
-    /// deliberate delay that keeps room for triple-tap later.
-    private func waitAfterLastOnsetNs(count: Int) -> Int64 {
-        count < config.tapCountToFire ? config.maxInterTapNs : config.confirmWindowNs
+    /// Add an onset to the live group and push its deadline out. The group
+    /// always fires one confirm window after its last onset, whatever the count;
+    /// `maxInterTapNs <= confirmWindowNs` is what makes that safe.
+    private func extendGroup(to tNs: Int64, strength: Double) {
+        groupCount += 1
+        if groupCount <= Self.groupOnsetRetentionLimit {
+            group.append(GroupOnset(tNs: tNs, strength: strength))
+        }
+        groupLastOnsetNs = tNs
+        groupDeadlineNs = tNs + effectiveConfig.confirmWindowNs
     }
+
+    /// How many members are worth keeping. One past the largest bindable count,
+    /// so an over-long group is still recognisably over-long.
+    private static let groupOnsetRetentionLimit =
+        DetectorConfig.supportedTapCounts.upperBound + 1
 
     private func clearGroup() {
         group.removeAll(keepingCapacity: true)
+        groupCount = 0
+        groupLastOnsetNs = nil
         groupDeadlineNs = nil
     }
 
@@ -400,20 +415,49 @@ public final class TapDetector: TapDetecting {
         // configures a confirm window shorter than the peak hold.
         if pending?.joinedGroup == true { publishPending() }
         let members = group
+        let count = groupCount
         clearGroup()
 
-        guard members.count == config.tapCountToFire, config.tapCountToFire > 1 else {
-            // Wrong count, or a build configured to fire on a single tap, which
-            // we refuse: "single stray taps do nothing, ever".
-            return nil
-        }
-
-        refractoryUntilNs = tNs + config.refractoryNs
         // Score is the weakest tap in the gesture, in g. The harness can sweep a
         // score cutoff offline and get exactly what raising the threshold would
         // have done.
         let score = members.map(\.strength).min() ?? 0
+        let fires = firingCounts.contains(count) && members.count == count
+        append(TapGroupEvent(tNs: tNs, tapOnsets: members.map(\.tNs),
+                             tapCount: count, score: score, fired: fires))
+
+        guard fires else {
+            // Either nothing is bound to this count, or the group ran past the
+            // longest gesture we can tell apart. A rhythmic disturbance lands
+            // here, which is the whole point.
+            return nil
+        }
+
+        refractoryUntilNs = tNs + effectiveConfig.refractoryNs
         return Trigger(tNs: tNs, tapOnsets: members.map(\.tNs), score: score)
+    }
+}
+
+/// A group of onsets that reached its confirm deadline, whether or not anything
+/// was bound to its count. For the tap monitor and for offline scoring; the
+/// action path uses `Trigger`.
+public struct TapGroupEvent: Sendable, Equatable {
+    /// When the group closed. Equals `Trigger.tNs` when it fired.
+    public var tNs: Int64
+    /// Onsets that made up the group, ascending. Truncated for a group longer
+    /// than any bindable gesture; `tapCount` is always the true count.
+    public var tapOnsets: [Int64]
+    public var tapCount: Int
+    public var score: Double
+    /// Whether this group produced a `Trigger`.
+    public var fired: Bool
+
+    public init(tNs: Int64, tapOnsets: [Int64], tapCount: Int, score: Double, fired: Bool) {
+        self.tNs = tNs
+        self.tapOnsets = tapOnsets
+        self.tapCount = tapCount
+        self.score = score
+        self.fired = fired
     }
 }
 
@@ -429,12 +473,34 @@ extension TapDetector {
     public static func replay(samples: [AccelSample],
                               inputs: [InputEvent],
                               config: DetectorConfig = .default,
-                              tuning: DSPTuning = .default)
+                              tuning: DSPTuning = .default,
+                              armedTapCounts: Set<Int>? = nil)
         -> (triggers: [Trigger], onsets: [OnsetEvent])
     {
-        let detector = TapDetector(config: config, tuning: tuning)
+        let full = replayGroups(samples: samples, inputs: inputs, config: config,
+                                tuning: tuning, armedTapCounts: armedTapCounts)
+        return (full.triggers, full.onsets)
+    }
+
+    /// Same replay, also returning every closed group.
+    ///
+    /// Arm all of `DetectorConfig.supportedTapCounts` and the groups carry each
+    /// gesture's count, so one pass over a recording yields the false-trigger
+    /// rate for single, double and triple **separately**. Pooling them would
+    /// flatter single, which is the count most likely to misfire: one mug set
+    /// down is one transient.
+    public static func replayGroups(samples: [AccelSample],
+                                    inputs: [InputEvent],
+                                    config: DetectorConfig = .default,
+                                    tuning: DSPTuning = .default,
+                                    armedTapCounts: Set<Int>? = nil)
+        -> (triggers: [Trigger], onsets: [OnsetEvent], groups: [TapGroupEvent])
+    {
+        let detector = TapDetector(config: config, tuning: tuning,
+                                   armedTapCounts: armedTapCounts)
         var triggers: [Trigger] = []
         var onsets: [OnsetEvent] = []
+        var groups: [TapGroupEvent] = []
         var i = 0, j = 0
 
         while i < samples.count || j < inputs.count {
@@ -454,9 +520,11 @@ extension TapDetector {
                 if let trigger = detector.ingest(sample: samples[i]) { triggers.append(trigger) }
                 i += 1
                 onsets.append(contentsOf: detector.drainOnsets())
+                groups.append(contentsOf: detector.drainGroups())
             }
         }
         onsets.append(contentsOf: detector.drainOnsets())
-        return (triggers, onsets)
+        groups.append(contentsOf: detector.drainGroups())
+        return (triggers, onsets, groups)
     }
 }

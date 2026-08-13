@@ -1,0 +1,12 @@
+{"confidence":"auto_refined","group":0,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":3000000000}
+{"confidence":"auto_refined","group":0,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":3160000000}
+{"confidence":"auto_refined","group":1,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":8000000000}
+{"confidence":"auto_refined","group":1,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":8160000000}
+{"confidence":"auto_refined","group":2,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":13000000000}
+{"confidence":"auto_refined","group":2,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":13160000000}
+{"confidence":"auto_refined","group":3,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":18000000000}
+{"confidence":"auto_refined","group":3,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":18160000000}
+{"confidence":"auto_refined","group":4,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":23000000000}
+{"confidence":"auto_refined","group":4,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":23160000000}
+{"confidence":"auto_refined","group":5,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":28000000000}
+{"confidence":"auto_refined","group":5,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":28160000000}

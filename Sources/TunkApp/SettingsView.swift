@@ -5,25 +5,6 @@ import TunkEmit
 
 final class PanelModel: ObservableObject {
     @Published var showCalibration = false
-
-    /// The Shortcuts library, listed once when the panel opens and again when
-    /// the user asks. Held here rather than in a `@State` so reopening the
-    /// window does not re-list on every redraw.
-    @Published private(set) var shortcuts: [String] = []
-    @Published private(set) var didListShortcuts = false
-
-    /// Listing is `shortcuts list`, which is read-only and measured at ~10 ms.
-    /// It never runs a Shortcut — see `ShortcutsCatalog`.
-    func refreshShortcuts() {
-        shortcuts = ShortcutsCatalog.refresh()
-        didListShortcuts = true
-    }
-
-    func listShortcutsIfNeeded() {
-        guard !didListShortcuts else { return }
-        shortcuts = ShortcutsCatalog.available()
-        didListShortcuts = true
-    }
 }
 
 struct SettingsView: View {
@@ -32,7 +13,8 @@ struct SettingsView: View {
     @ObservedObject var panel: PanelModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showAdvanced = false
-    @State private var actionTestResult: String?
+    /// Keyed by tap count: each row's Test button reports into its own row.
+    @State private var testResults: [Int: String] = [:]
 
     var body: some View {
         ScrollView(.vertical) {
@@ -41,7 +23,9 @@ struct SettingsView: View {
                 statusCard
                 monitorCard
                 detectionCard
-                actionCard
+                // Double first: it is what ships armed and the reason the app
+                // exists. Single sits below with its caution.
+                ForEach(ActionBindings.wiredCounts, id: \.self) { actionCard(tapCount: $0) }
                 calibrationCard
                 footnote
             }
@@ -49,7 +33,7 @@ struct SettingsView: View {
         }
         .frame(width: 452)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { panel.listShortcutsIfNeeded() }
+        .onAppear { engine.refreshShortcutCatalog() }
         .sheet(isPresented: $panel.showCalibration) {
             CalibrationView(engine: engine) { panel.showCalibration = false }
         }
@@ -253,16 +237,23 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - action
+    // MARK: - action rows
 
-    /// Modelled on iPhone Back Tap: one fixed gesture, a short list of actions.
+    private func rowTitle(_ count: Int) -> String {
+        switch count {
+        case 1:  return "Single tap"
+        case 2:  return "Double tap"
+        case 3:  return "Triple tap"
+        default: return "\(count) taps"
+        }
+    }
+
+    /// One row of the Back Tap model: a tap count, and the action bound to it.
     /// The kind picker is the only control always on screen; the rest of the
     /// card is whatever that kind needs.
-    private var actionCard: some View {
-        Card(title: "Action",
-             caption: "What a confirmed double-tap does. The gesture is fixed; the action is "
-                    + "yours, the way Back Tap works on iPhone.") {
-            Picker("Action", selection: actionKind) {
+    private func actionCard(tapCount count: Int) -> some View {
+        Card(title: rowTitle(count), caption: rowCaption(count)) {
+            Picker(rowTitle(count), selection: actionKind(count)) {
                 Text("Send a hotkey").tag(TunkAction.Kind.hotkey)
                 Text("Run a Shortcut").tag(TunkAction.Kind.shortcut)
                 Text("Do nothing").tag(TunkAction.Kind.none)
@@ -271,31 +262,57 @@ struct SettingsView: View {
             .labelsHidden()
             .frame(minHeight: 28)
 
+            if count == 1 && settings.actionKind(for: 1) != .none { singleTapCaution }
+
             Group {
-                switch settings.actionKind {
-                case .hotkey:   hotkeySection
-                case .shortcut: shortcutSection
-                case .none:     nothingSection
+                switch settings.actionKind(for: count) {
+                case .hotkey:   hotkeySection(count)
+                case .shortcut: shortcutSection(count)
+                case .none:     nothingSection(count)
                 }
             }
             .transition(.opacity)
 
-            actionFooter
+            actionFooter(count)
                 .transition(.opacity.animation(.tunkSnappy.delay(Metrics.stagger)))
         }
-        .tunkAnimation(.tunkSnappy, value: settings.action, reduceMotion: reduceMotion)
-        .tunkAnimation(.tunkSnappy, value: actionTestResult, reduceMotion: reduceMotion)
+        .tunkAnimation(.tunkSnappy, value: settings.bindings, reduceMotion: reduceMotion)
+        .tunkAnimation(.tunkSnappy, value: testResults[count], reduceMotion: reduceMotion)
     }
 
-    private var actionKind: Binding<TunkAction.Kind> {
-        Binding(get: { settings.actionKind }, set: { settings.actionKind = $0 })
+    private func rowCaption(_ count: Int) -> String {
+        count == 2
+            ? "What a confirmed double-tap does. The gesture is fixed; the action is yours, "
+            + "the way Back Tap works on iPhone."
+            : "A single deliberate tap. Unbound by default."
+    }
+
+    /// Stated once, plainly, and only when the row is actually armed. The point
+    /// is the measured reason, not alarm: one onset is what a mug, a footfall
+    /// and a hard keystroke all produce, and requiring two is the entire
+    /// false-positive defence.
+    private var singleTapCaution: some View {
+        Text("A single tap fires far more easily by accident than a double — one knock is "
+           + "all a mug, a footfall or a hard keystroke produces. Check the harness's "
+           + "false-trigger rate before you rely on this.")
+            .font(.system(size: 11))
+            .foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func actionKind(_ count: Int) -> Binding<TunkAction.Kind> {
+        Binding(get: { settings.actionKind(for: count) },
+                set: { settings.setActionKind($0, for: count) })
     }
 
     // MARK: - action: hotkey
 
-    private var hotkeySection: some View {
+    private func hotkeySection(_ count: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HotkeyRecorderView(binding: $settings.hotkeyDraft)
+            HotkeyRecorderView(binding: Binding(
+                get: { settings.hotkeyDraft(for: count) },
+                set: { settings.setHotkeyDraft($0, for: count) }))
             // The reason the app exists. It stays on screen in this mode.
             Text("Paste the same combination into VoiceInk → Settings → Shortcuts → "
                + "Second Shortcut, recording mode \"toggle\". Leave your Right Shift "
@@ -305,7 +322,7 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 18) {
                 Readout(label: "paste into VoiceInk",
-                        value: settings.hotkeyDraft.description, accent: .primary)
+                        value: settings.hotkeyDraft(for: count).description, accent: .primary)
                 Readout(label: "key downs / ups",
                         value: "\(engine.actionStats.emit.keyDownsPosted) / "
                              + "\(engine.actionStats.emit.keyUpsPosted)",
@@ -316,91 +333,54 @@ struct SettingsView: View {
 
     // MARK: - action: shortcut
 
-    private var shortcutSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func shortcutSection(_ count: Int) -> some View {
+        let names = engine.shortcutNames
+        let chosen = settings.shortcutDraft(for: count)
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                if panel.shortcuts.isEmpty {
-                    Text(ShortcutsCatalog.isCLIAvailable
+                if names.isEmpty {
+                    Text(engine.shortcutsReadable
                          ? "No Shortcuts found."
-                         : "Shortcuts is not available on this Mac.")
+                         : "Tunk cannot read your Shortcuts.")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 } else {
-                    Picker("Shortcut", selection: $settings.shortcutDraft) {
-                        if settings.shortcutDraft.isEmpty {
+                    Picker("Shortcut", selection: Binding(
+                        get: { chosen },
+                        set: { settings.setShortcutDraft($0, for: count,
+                                                         pickedFromListing: names.contains($0)) })) {
+                        if chosen.isEmpty {
                             Text("Choose a Shortcut…").tag("")
-                        } else if !panel.shortcuts.contains(settings.shortcutDraft) {
+                        } else if !names.contains(chosen) {
                             // Renamed or deleted since it was chosen. Shown so
-                            // the picker is not mysteriously blank.
-                            Text("\(settings.shortcutDraft) (not in your library)")
-                                .tag(settings.shortcutDraft)
+                            // the picker is not mysteriously blank, and so the
+                            // reason is on screen next to it.
+                            Text("\(chosen) (missing)").tag(chosen)
                         }
-                        ForEach(panel.shortcuts, id: \.self) { Text($0).tag($0) }
+                        ForEach(names, id: \.self) { Text($0).tag($0) }
                     }
                     .labelsHidden()
                     .frame(maxWidth: 260)
                 }
                 Spacer()
-                Button("Refresh", action: panel.refreshShortcuts)
+                Button("Refresh") { engine.refreshShortcutCatalog() }
                     .buttonStyle(TunkButtonStyle())
                     .help("List your Shortcuts again. This reads the list; it runs nothing.")
             }
             .frame(minHeight: Metrics.hitTarget)
 
-            Text(panel.shortcuts.isEmpty
-                 ? "Add one in Shortcuts.app, then press Refresh."
-                 : "Tunk starts the Shortcut and returns immediately, so a slow Shortcut "
-                 + "never delays detection. It runs only on a real double-tap or on Test.")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: - action: nothing
-
-    private var nothingSection: some View {
-        Text("Taps are still detected, counted and drawn in the monitor above — Tunk just "
-           + "does not send anything. Useful while you tune sensitivity.")
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - action: shared footer
-
-    private var actionFooter: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 18) {
-                // Decision to handoff. This is the figure the 250 ms target is
-                // measured against, and it stays near a millisecond whatever the
-                // action does afterwards.
-                Readout(label: "dispatch",
-                        value: engine.actionStats.lastDispatchMs
-                            .map { String(format: "%.2f ms", $0) } ?? "—")
-                if settings.actionKind == .shortcut {
-                    // Reported, never waited on. A nine-second Shortcut is not a
-                    // Tunk latency failure.
-                    Readout(label: "Shortcut took",
-                            value: engine.actionStats.lastCompletionMs
-                                .map { String(format: "%.0f ms", $0) } ?? "—")
-                }
-                Spacer()
-                Button("Test", action: runTestAction)
-                    .buttonStyle(TunkButtonStyle())
-                    .disabled(!canTest)
-                    .help(testHelp)
-            }
-            .frame(minHeight: Metrics.hitTarget)
-
-            if let text = engine.actionStats.lastErrorText {
-                Text(text)
+            if let broken = engine.brokenBinding, broken.tapCount == count {
+                Text(broken.text)
                     .font(.system(size: 11))
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if let actionTestResult {
-                Text(actionTestResult)
+            } else {
+                Text(names.isEmpty
+                     ? (engine.shortcutsReadable
+                        ? "Add one in Shortcuts.app, then press Refresh."
+                        : "Open Shortcuts.app once, then press Refresh.")
+                     : "Tunk starts the Shortcut and returns immediately, so a slow Shortcut "
+                     + "never delays detection. It runs only on a real tap or on Test.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -408,33 +388,91 @@ struct SettingsView: View {
         }
     }
 
-    private var canTest: Bool {
-        guard settings.action.isRunnable else { return false }
-        guard settings.actionKind == .hotkey else { return true }
+    // MARK: - action: nothing
+
+    private func nothingSection(_ count: Int) -> some View {
+        Text(count == 1
+             ? "Nothing is bound to a single tap. Single taps are still detected and drawn in "
+             + "the monitor above; Tunk just does not act on them."
+             : "Taps are still detected, counted and drawn in the monitor above — Tunk just "
+             + "does not send anything. Useful while you tune sensitivity.")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - action: per-row footer
+
+    private func actionFooter(_ count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 18) {
+                // Only the row that last fired shows a latency. Attributing
+                // another row's number to this one would be a lie.
+                let mine = engine.actionStats.lastTapCount == count
+                // Decision to handoff. This is the figure the 250 ms target is
+                // measured against, and it stays near a millisecond whatever the
+                // action does afterwards.
+                Readout(label: "dispatch",
+                        value: mine ? (engine.actionStats.lastDispatchMs
+                            .map { String(format: "%.2f ms", $0) } ?? "—") : "—")
+                if settings.actionKind(for: count) == .shortcut {
+                    // Reported, never waited on. A nine-second Shortcut is not a
+                    // Tunk latency failure.
+                    Readout(label: "Shortcut took",
+                            value: mine ? (engine.actionStats.lastCompletionMs
+                                .map { String(format: "%.0f ms", $0) } ?? "—") : "—")
+                }
+                Spacer()
+                Button("Test") { runTest(count) }
+                    .buttonStyle(TunkButtonStyle())
+                    .disabled(!canTest(count))
+                    .help(testHelp(count))
+            }
+            .frame(minHeight: Metrics.hitTarget)
+
+            if let text = testResults[count] {
+                Text(text)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func canTest(_ count: Int) -> Bool {
+        guard settings.bindings[count].isRunnable else { return false }
+        guard settings.actionKind(for: count) == .hotkey else { return true }
         return engine.permissions.accessibility
     }
 
-    private var testHelp: String {
-        switch settings.actionKind {
-        case .hotkey:   return "Send the combination to the frontmost app once"
+    private func testHelp(_ count: Int) -> String {
+        switch settings.actionKind(for: count) {
+        case .hotkey:   return "Send this combination to the frontmost app once"
         case .shortcut: return "Run this Shortcut once, now"
         case .none:     return "Nothing to test"
         }
     }
 
-    private func runTestAction() {
+    private func runTest(_ count: Int) {
         do {
-            try engine.testAction()
-            switch settings.action {
+            let stats = try engine.testAction(tapCount: count)
+            // A stale name never spawns, so a Test on one reports the reason
+            // rather than claiming it ran.
+            if let text = stats.lastErrorText {
+                testResults[count] = text
+                return
+            }
+            switch settings.bindings[count] {
             case .hotkey(let spec):
-                actionTestResult = "Sent \(spec.symbolicDescription) to the frontmost app."
-            case .shortcut(let name):
-                actionTestResult = "Started \"\(name)\". Tunk does not wait for it to finish."
+                testResults[count] = "Sent \(spec.symbolicDescription) to the frontmost app."
+            case .shortcut(let name, _):
+                testResults[count] = "Started \"\(name)\". Tunk does not wait for it to finish."
             case .none:
-                actionTestResult = nil
+                testResults[count] = nil
             }
         } catch {
-            actionTestResult = error.localizedDescription
+            testResults[count] = error.localizedDescription
         }
     }
 

@@ -8,7 +8,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let panel = PanelModel()
 
+    private let engine: Engine
+
     init(settings: AppSettings, engine: Engine) {
+        self.engine = engine
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 452, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -32,9 +35,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func present(startCalibration: Bool) {
-        // The user may have added a Shortcut since the last time this opened.
-        // Listing is read-only and measured at ~10 ms; it runs nothing.
-        panel.refreshShortcuts()
+        // The user may have added, renamed or deleted a Shortcut since the last
+        // time this opened. Listing is read-only and ~10 ms; it runs nothing.
+        engine.refreshShortcutCatalog()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         if startCalibration { panel.showCalibration = true }

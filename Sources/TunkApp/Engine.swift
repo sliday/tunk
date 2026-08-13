@@ -60,6 +60,19 @@ final class Engine: ObservableObject {
     /// show a shortcut's dispatch and completion latencies side by side.
     @Published private(set) var actionStats = ActionStats()
 
+    /// The Shortcuts library as last listed, for the panel's dropdown. Refreshed
+    /// when the panel opens, on wake, and on a slow timer — never by running
+    /// anything.
+    @Published private(set) var shortcutNames: [String] = []
+    /// False when `shortcuts list` has not come back cleanly. The panel needs
+    /// the distinction: no Shortcuts and no readable Shortcuts are different
+    /// problems with different fixes.
+    @Published private(set) var shortcutsReadable = false
+
+    /// A bound Shortcut that no longer resolves. Passive by design — the
+    /// menubar glyph and the panel show it, and nothing ever raises a dialog.
+    var brokenBinding: BrokenBinding? { actionStats.brokenBinding }
+
     /// Fired on the main thread each time a gesture is confirmed, so the menubar
     /// can flash.
     var onTrigger: (() -> Void)?
@@ -106,17 +119,23 @@ final class Engine: ObservableObject {
     private var starvedTicks = 0
     private var reacquireBackoff = 1
     private var wantsRunning = false
+    private var catalogTicks = 0
 
     init(settings: AppSettings) {
         self.settings = settings
         let made = DetectorFactory.make(config: settings.config)
         self.detector = made
         self.readout = made as? TapDetector
-        self.runner = ActionRunner(action: settings.action)
+        self.runner = ActionRunner(bindings: settings.bindings)
 
         settings.onConfigChange = { [weak self] config in self?.apply(config: config) }
         settings.onEnabledChange = { [weak self] on in self?.setEnabled(on) }
-        settings.onActionChange = { [weak self] action in self?.runner.action = action }
+        settings.onBindingsChange = { [weak self] bindings in
+            self?.runner.bindings = bindings
+            // The user has just chosen; re-check against the list right away so
+            // a name that is already stale is called out before the first tap.
+            self?.refreshShortcutCatalog()
+        }
 
         // A shortcut reports back long after the tap that started it, from the
         // spawner's queue. This is the only path by which a failed shortcut
@@ -139,6 +158,7 @@ final class Engine: ObservableObject {
             self?.watchdog()
         }
         if let tick { RunLoop.main.add(tick, forMode: .common) }
+        refreshShortcutCatalog()
     }
 
     deinit {
@@ -228,6 +248,10 @@ final class Engine: ObservableObject {
         guard let trigger else { return }
         if calibrating { return }        // learning a tap must never fire a key
 
+        // The runner picks the action bound to `trigger.tapCount`. Nothing bound
+        // to that count is a quiet no-op, which is what lets triple tap stay
+        // unwired and single tap stay unbound without either being a failure.
+        //
         // Throws only on the hotkey path, and the runner has already put the
         // text in `stats.lastErrorText`; catching it here keeps it off the
         // sensor thread's call stack.
@@ -388,15 +412,32 @@ final class Engine: ObservableObject {
         return (calibrationStrengths, calibrationSuppressed, readout?.noiseFloor ?? 0)
     }
 
-    /// Runs the configured action once, on demand, for the panel's Test button.
+    /// Runs one row's action once, on demand, for that row's Test button.
     ///
-    /// This and a real double-tap are the only two things in Tunk that may run a
-    /// user's Shortcut. Nothing probes, validates, warms up or benchmarks one.
+    /// This and a real tap are the only two things in Tunk that may run a user's
+    /// Shortcut. Nothing probes, validates, warms up or benchmarks one — the
+    /// stale-name check reads `shortcuts list` and never runs anything.
     @discardableResult
-    func testAction() throws -> ActionStats {
-        let stats = try runner.run(settings.action)
+    func testAction(tapCount: Int) throws -> ActionStats {
+        let stats = try runner.run(settings.bindings[tapCount], tapCount: tapCount)
         actionStats = stats
         return stats
+    }
+
+    /// Re-lists the Shortcuts library and re-checks every bound name against it.
+    /// Read-only, ~10 ms, and it runs nothing. Off the main thread because
+    /// spawning a process on it, however briefly, is rude.
+    func refreshShortcutCatalog() {
+        let box = WeakEngineRef(self)
+        DispatchQueue.global(qos: .utility).async {
+            let listing = ShortcutsCatalog.refreshListing()
+            DispatchQueue.main.async {
+                guard let engine = box.engine else { return }
+                engine.shortcutNames = listing.names
+                engine.shortcutsReadable = listing.succeeded
+                engine.runner.revalidateShortcutBindings()
+            }
+        }
     }
 
     func clearCalibrationSamples() {
@@ -432,6 +473,9 @@ final class Engine: ObservableObject {
     }
 
     @objc private func didWake() {
+        // Unconditional: the library may have changed while the lid was shut,
+        // and this costs a read-only listing whether or not detection is armed.
+        refreshShortcutCatalog()
         guard wantsRunning else { return }
         // The SPU device can come back a moment after the display does. One
         // delayed attempt, then the watchdog owns retries.
@@ -441,7 +485,18 @@ final class Engine: ObservableObject {
         }
     }
 
+    /// Ticks between Shortcuts re-listings. 60 s against a ~10 ms read-only
+    /// listing is free, and it means a rename is usually caught before the user
+    /// taps rather than after.
+    private static let catalogRefreshTicks = 60
+
     private func watchdog() {
+        catalogTicks += 1
+        if catalogTicks >= Engine.catalogRefreshTicks {
+            catalogTicks = 0
+            refreshShortcutCatalog()
+        }
+
         let stats = accel.snapshotStats()
         let delta = stats.sampleCount >= lastSampleCount ? stats.sampleCount - lastSampleCount : 0
         lastSampleCount = stats.sampleCount
