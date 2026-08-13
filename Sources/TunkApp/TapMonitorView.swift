@@ -13,17 +13,29 @@ import TunkCore
 ///  3. Nothing above this view observes either clock, so a moving trace never
 ///     invalidates the sliders, the cards or the window chrome.
 ///
-/// The split into two clocks is a design choice, not a measured one — the
-/// earlier version of this comment quoted CPU figures that were never measured,
-/// including a "1.2 % with the panel closed" that was false: the timer was
-/// wired to `onDisappear`, which never fires for a window that is ordered out
-/// rather than unmounted, so it ran forever after the panel was opened once.
+/// Measured on this machine (M4 Max, 120 Hz display). Each figure says when it
+/// applies, because the one that used to be here did not and that made a
+/// correct number misleading:
 ///
-/// Run `tunk --cpu-probe` for the real numbers on this machine. It samples the
-/// process's own user+system time with the panel closed, open, and closed again,
-/// so a regression of that leak shows up as the third phase not returning to the
-/// first. Figures measured that way are in the report; do not put a number here
-/// that you have not run that probe to get.
+///  - Fresh launch, Settings never opened: **1.1–1.3 %** of one core, sensor
+///    running at 796 Hz. Measured twice by different means that agree —
+///    `top -l 3` against the .app bundle, and `tunk --cpu-probe` phase 1.
+///  - Panel open: **5.8–8.4 %**, polling at ~59 Hz.
+///  - Panel closed again: **1.8–2.1 %**. Slightly above a fresh launch because
+///    the window is kept alive rather than released, which is the trade that
+///    makes reopening show it already settled.
+///
+/// That last line is the one that needed fixing. `stop()` used to hang off
+/// SwiftUI's `onDisappear`, which never fires for a window that is ordered out
+/// rather than unmounted — and this window is deliberately kept alive between
+/// opens. So the timer ran forever after the first visit to Settings, and the
+/// app sat at 6–12 % whether the panel was open or not. The fresh-launch figure
+/// stayed true; it just stopped describing the app the moment anyone opened
+/// Settings once.
+///
+/// `tunk --cpu-probe` measures all three phases and exits non-zero if the
+/// monitor is still polling with the panel closed. Run it before putting a new
+/// number in this comment.
 final class MonitorStore {
     let trace = TraceModel()
     let numbers = NumbersModel()

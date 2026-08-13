@@ -14,7 +14,8 @@ Measured at `ReportInterval = 1250`: 796 Hz, unbatched, event-to-callback lag p5
 0.27 ms / p95 0.34 ms. Values are in g.
 
 Consequence: sensor transport is under 1 ms at p95, so essentially the entire
-250 ms budget is available to the deliberate 180 ms multi-tap confirm window.
+250 ms budget is available to the deliberate multi-tap confirm window (220 ms as
+shipped — see D7, which is where that number is decided and is likely to move).
 
 ## D2 — Action model: pluggable, on the iPhone Back Tap pattern
 

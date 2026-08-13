@@ -28,7 +28,10 @@ enum Diagnostics {
     static func cpuProbe(seconds: Double) {
         let settings = AppSettings()
         let engine = Engine(settings: settings)
-        let controller = SettingsWindowController(settings: settings, engine: engine)
+        // Built lazily, in phase 2. Constructing it also builds the
+        // `NSHostingView`, so doing it up front would make phase 1 measure
+        // something other than "Settings never opened".
+        var controller: SettingsWindowController?
 
         let perms = PermissionState.current()
         line("permissions: accessibility=\(perms.accessibility) "
@@ -49,17 +52,18 @@ enum Diagnostics {
 
         line("phase                     CPU%%   monitor polls/s")
         let before = measure(seconds: seconds) { }
-        report("1. panel never opened", before, controller.debugState)
+        report("1. panel never opened", before, "window not built yet")
 
         let open = measure(seconds: seconds) {
-            controller.present(startCalibration: false)
+            controller = SettingsWindowController(settings: settings, engine: engine)
+            controller?.present(startCalibration: false)
         }
-        report("2. panel open        ", open, controller.debugState)
+        report("2. panel open        ", open, controller?.debugState ?? "")
 
         let after = measure(seconds: seconds) {
-            controller.dismiss()
+            controller?.dismiss()
         }
-        report("3. panel closed again", after, controller.debugState)
+        report("3. panel closed again", after, controller?.debugState ?? "")
 
         // The poll rate is the real test. CPU alone is too noisy to judge on:
         // it moves with what else the machine is doing, and the first render of

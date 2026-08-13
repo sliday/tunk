@@ -41,6 +41,19 @@ enum PanelDump {
                 FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
             }
         }
+
+        // One extra pass at the gate slider's floor, so the caution that only
+        // appears at low values is inspectable rather than merely written.
+        settings.setActionKind(.hotkey, for: 2)
+        settings.setActionKind(.none, for: 1)
+        settings.config.gateWindowNs = Int64(SettingsView.gateFloorMs) * 1_000_000
+        for dark in [false, true] {
+            let file = url.appendingPathComponent("panel-gatefloor-\(dark ? "dark" : "light").png")
+            let view = SettingsView(settings: settings, engine: engine, panel: panel)
+            guard let data = render(view, dark: dark) else { continue }
+            try? data.write(to: file)
+            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
+        }
     }
 
     /// Hosts the panel in an offscreen window so it picks up a real appearance,
