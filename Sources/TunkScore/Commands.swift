@@ -10,6 +10,21 @@ enum Commands {
         return try ScoringPolicy.parse(raw)
     }
 
+    /// Push `--armed` into the config so it reaches the DETECTOR, not just the
+    /// grader.
+    ///
+    /// This existed as a grading-side override only, which meant `--armed 1`
+    /// scored a tap count the detector was never armed for. On a probe of ten
+    /// isolated thumps, `--config '{"tapCountToFire":1}'` reported 10 false
+    /// triggers and `--armed 1` reported 0, from the same data and the same
+    /// binary, with the banner printing "armed 1 tap(s)" both times. The harness
+    /// answered the question it was asked rather than the one the machine
+    /// settled, which is the one thing a referee must never do.
+    static func applyArmed(_ armed: [Int]?, to config: inout DetectorConfig) {
+        guard let armed else { return }
+        config.armedTapCounts = Set(armed)
+    }
+
     /// Collect the `--progress-*` flags. Returns nil when `--progress-json` is absent.
     static func progressOptions(_ args: inout Args) throws -> ProgressOptions? {
         let path = args.string("progress-json")
@@ -52,6 +67,7 @@ enum Commands {
 
         var config = DetectorConfig.default
         if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
+        applyArmed(armed, to: &config)
         try ConfigIO.validate(config)
         let policy = ScoringPolicy.from(config: config, override: armed)
 
@@ -64,6 +80,21 @@ enum Commands {
         // The banner lands in the report's warnings, which the console, the JSON
         // and the markdown all carry, so it cannot be lost by redirecting stdout.
         var warnings = try HoldoutGuard.check(root: root, sessions: sessions, isCritic: isCritic)
+
+        // Tripwire: the grader and the detector must agree on what was armed.
+        // When they diverged, `--armed 1` scored a count the detector never fired
+        // on and reported a clean 0.00 while the same data under
+        // `--config '{"tapCountToFire":1}'` reported 200.00. Nothing on screen
+        // distinguished the two runs. Refuse to grade rather than print a number
+        // whose provenance is a flag instead of a machine.
+        let detectorArmed = (DetectorFactory.make(config: config) as? TapDetector)?
+            .effectiveArmedTapCounts ?? config.armedTapCounts
+        if detectorArmed != Set(policy.armedCounts) {
+            throw CLIError.usage(
+                "armed-set mismatch: the detector is armed for \(detectorArmed.sorted()) but "
+                + "grading was asked for \(policy.armedCounts.sorted()). Refusing to grade — "
+                + "a pass line computed against a count the detector never fired on is worthless.")
+        }
 
         var scores: [SessionScore] = []
         for s in sessions {
@@ -215,6 +246,7 @@ enum Commands {
 
             // The armed set follows the swept config unless --armed pinned it, so a
             // sweep over tapCountToFire scores each step against what it fires on.
+            applyArmed(armed, to: &cfg)
             let policy = ScoringPolicy.from(config: cfg, override: armed)
             var scores: [SessionScore] = []
             for (s, samples, inputs) in loaded {
@@ -290,6 +322,7 @@ enum Commands {
         }
         var config = DetectorConfig.default
         if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
+        applyArmed(armed, to: &config)
         let policy = ScoringPolicy.from(config: config, override: armed)
 
         let session = try Session(directory: url)
