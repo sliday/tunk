@@ -381,8 +381,9 @@ def surface_card(surface: str, round_obj: dict, prev_round: dict, taps: list,
         cov_bits.append(f'{cov["sessions"]} sessions')
     groups = cov.get("tap_groups") or {}
     if groups:
-        pairs = " ".join(
-            f"{S.TAP_SHORT.get(t, t)} {groups[t]}" for t in sorted(groups, key=S.tap_sort_key)
+        pairs = ", ".join(
+            (f"{t}×{groups[t]}" if t in ("1", "2", "3") else f"{t} {groups[t]}")
+            for t in sorted(groups, key=S.tap_sort_key)
         )
         cov_bits.append(f"tap groups {pairs}")
     if cov.get("typing_minutes") is not None:
@@ -640,7 +641,9 @@ def freshness_block(data: dict, rounds: list, built_at: dt.datetime) -> tuple:
         lag = (generated - latest_stamp).total_seconds()
 
     if level == "fresh":
-        head = f"Data written {fmt_age(age)} before this page was built"
+        # Scoped to build time on purpose. The page cannot claim anything about
+        # "now" without a clock, and the CSS staleness clock below says the rest.
+        head = f"At build time these numbers were {fmt_age(age)} old"
     elif level == "unknown":
         head = "This file carries no generated_at stamp — its age is unknown"
     elif level == "future":

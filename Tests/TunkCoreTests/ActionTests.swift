@@ -829,6 +829,65 @@ final class ActionRunnerTests: XCTestCase {
     }
 }
 
+// MARK: - The arming contract the app wiring depends on
+
+/// `Engine` binds actions per tap count and must arm the detector to match. The
+/// detector exposes two places a count can be named — `config.armedTapCounts`
+/// and `TapDetector.armedTapCounts` — and they do not mean the same thing.
+/// These tests pin the difference, because getting it wrong silently disables
+/// double tap, which no unit test of `ActionRunner` would catch.
+final class DetectorArmingContractTests: XCTestCase {
+
+    private func fires(armed: Set<Int>?, taps: Int) -> Bool {
+        var config = DetectorConfig.default
+        config.armedTapCounts = [1, 2]
+        config.calibratedThreshold = 0.2
+        let detector = TapDetector(config: config, armedTapCounts: armed)
+        let (stream, _) = SyntheticStream.gesture(count: taps, spacingNs: 150_000_000)
+        for sample in stream.samples() where detector.ingest(sample: sample) != nil {
+            return true
+        }
+        return false
+    }
+
+    /// What `DetectorFactory` now does: pass the set explicitly.
+    func testExplicitArmingFiresEveryArmedCount() {
+        XCTAssertTrue(fires(armed: [1, 2], taps: 1), "single tap must fire when armed")
+        XCTAssertTrue(fires(armed: [1, 2], taps: 2), "double tap must fire when armed")
+    }
+
+    /// The trap. `nil` makes the detector derive from `config.tapCountToFire`,
+    /// which is the *lowest* armed count — so a config armed for both fires
+    /// single only, and double taps do nothing. This is why the factory must
+    /// never leave it nil.
+    func testLeavingArmingNilArmsOnlyTheLowestCount() {
+        XCTAssertTrue(fires(armed: nil, taps: 1))
+        XCTAssertFalse(fires(armed: nil, taps: 2),
+                       "if this ever passes, the detector's nil default changed and "
+                       + "DetectorFactory can stop compensating for it")
+    }
+
+    /// An unarmed count is silent, not an error — the quiet no-op the panel and
+    /// `ActionRunner` both rely on.
+    func testUnarmedCountFiresNothing() {
+        XCTAssertFalse(fires(armed: [2], taps: 1))
+        XCTAssertFalse(fires(armed: [1], taps: 2))
+    }
+
+    /// `ActionBindings.boundCounts` is what the app feeds into arming, so the
+    /// two vocabularies have to line up.
+    func testBoundCountsAreUsableAsAnArmingSet() {
+        let bindings = ActionBindings([1: .shortcut(name: "Twitter"),
+                                       2: .hotkey(.recommendedDefault)])
+        let armed = Set(bindings.boundCounts)
+        XCTAssertEqual(armed, [1, 2])
+        XCTAssertTrue(armed.isSubset(of: Set(DetectorConfig.supportedTapCounts)))
+
+        XCTAssertEqual(Set(ActionBindings.default.boundCounts), [2],
+                       "the shipped default must arm double only")
+    }
+}
+
 // MARK: - The real process spawner
 
 /// Exercised against harmless system binaries and a throwaway script. It never

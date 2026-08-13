@@ -393,46 +393,6 @@ main > section > .section-note { padding-inline: 6px; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.metric--pass .metric-value { color: var(--pass); }
-.metric--fail .metric-value { color: var(--fail); }
-.metric--none .metric-value { color: var(--none); }
-
-.metric-delta,
-.metric-status { text-align: right; }
-
-/* Phone width: the verdict cell keeps its glyph (● pass, ■ fail, ◇ no data)
-   and gives the label back to the name column. Text stays in the a11y tree. */
-@media (max-width: 559px) {
-  .metric-status .pill {
-    padding: 5px 7px;
-    gap: 0;
-  }
-  .metric-status .pill-glyph { font-size: 0.9em; }
-  .metric-status .pill-label {
-    position: absolute;
-    width: 1px; height: 1px;
-    margin: -1px; padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
-
-/* Regression reads as texture and a downward wedge, never hue alone. */
-.metric--d-regress > * {
-  background-color: var(--fail-soft);
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--hatch) 0 6px,
-    transparent 6px 12px
-  );
-}
-.metric--d-regress > :first-child {
-  box-shadow: inset 3px 0 0 0 var(--fail);
-}
-.metric--d-improve > :first-child {
-  box-shadow: inset 3px 0 0 0 var(--pass);
-}
 
 .delta {
   display: inline-flex;
@@ -724,7 +684,8 @@ main > section > .section-note { padding-inline: 6px; }
     transparent 5px 22px
   );
 }
-.freshness--unknown {
+.freshness--unknown,
+.freshness--future {
   box-shadow: inset 3px 0 0 0 var(--none), var(--shadow-1), var(--shadow-2);
   background-image: repeating-linear-gradient(
     135deg,
@@ -749,8 +710,8 @@ main > section > .section-note { padding-inline: 6px; }
 .fresh-glyph { font-size: 0.75em; color: var(--none); }
 .freshness--fresh .fresh-glyph--now { color: var(--pass); }
 .freshness--stale .fresh-glyph,
-.freshness--cold .fresh-glyph,
-.freshness--future .fresh-glyph { color: var(--fail); }
+.freshness--cold .fresh-glyph { color: var(--fail); }
+.freshness--future .fresh-glyph { color: var(--none); }
 .fresh-glyph--aged {
   position: absolute;
   left: 0;
@@ -972,6 +933,7 @@ abbr[title] { text-decoration: none; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.cell-sub .delta-glyph { margin-right: 3px; }
 .cell-sub {
   display: block;
   margin-top: 2px;

@@ -77,6 +77,20 @@
       return;
     }
     var age = (Date.now() - generatedMs) / 1000;
+    if (age < -60) {
+      // Somebody's clock is wrong. Guessing an age here would be worse than
+      // saying so.
+      setLevel("future");
+      if (glyph) glyph.textContent = "◇";
+      if (headText) {
+        headText.textContent = "progress.json is stamped "
+          + fmtAge(-age) + " in the future — its age cannot be trusted";
+      }
+      if (openStale) openStale.setAttribute("data-shown", "false");
+      if (openCold) openCold.setAttribute("data-shown", "false");
+      return;
+    }
+    age = Math.max(age, 0);
     var level = age >= coldAfter ? "cold" : (age >= staleAfter ? "stale" : "fresh");
     setLevel(level);
     if (glyph) glyph.textContent = level === "fresh" ? "●" : "■";

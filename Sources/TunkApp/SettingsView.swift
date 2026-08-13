@@ -135,6 +135,24 @@ struct SettingsView: View {
              caption: "Onsets as they land, with the gate window shaded. If a spike is grey "
                     + "the gate ate it on purpose — that is typing suppression working.") {
             TapMonitorView(engine: engine, armed: engine.status.isArmed)
+            // A gesture the detector saw and deliberately did not act on. Without
+            // this the app just looks broken to someone tapping three times.
+            if let seen = engine.lastUnboundGesture,
+               settings.bindings[seen.tapCount] == .none {
+                Text("Last seen: \(gestureName(seen.tapCount)) — nothing bound to it, so "
+                   + "Tunk did nothing.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func gestureName(_ count: Int) -> String {
+        switch count {
+        case 1:  return "1 tap"
+        default: return "\(count) taps"
         }
     }
 
@@ -158,16 +176,32 @@ struct SettingsView: View {
                    help: "Onsets are ignored for this long after any keystroke or click. "
                        + "This is the knob that kills typing false positives.")
 
+            // Read what is in force, not what was typed. The detector clamps
+            // incoherent combinations on every write, so these two can differ —
+            // and a readout showing the number that is not running would be
+            // worse than no readout.
+            let inForce = engine.effectiveConfig
             HStack(spacing: 18) {
                 Readout(label: "effective threshold",
-                        value: String(format: "%.3f", settings.config.effectiveThreshold),
+                        value: String(format: "%.3f", inForce.effectiveThreshold),
                         accent: .primary)
                 Readout(label: "calibrated",
-                        value: settings.config.calibratedThreshold
+                        value: inForce.calibratedThreshold
                             .map { String(format: "%.3f", $0) } ?? "not yet")
                 Readout(label: "confirm window",
                         value: String(format: "%.0f ms",
-                                      Double(settings.config.confirmWindowNs) / 1_000_000))
+                                      Double(inForce.confirmWindowNs) / 1_000_000))
+            }
+
+            // What the clamp changed, in the detector's own words. Shown rather
+            // than swallowed: a slider that silently does nothing past a certain
+            // point reads as a bug.
+            ForEach(engine.coherenceIssues, id: \.description) { issue in
+                Text(issue.description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             DisclosureGroup(isExpanded: $showAdvanced) {

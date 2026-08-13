@@ -155,7 +155,17 @@ Ground truth. One object per line, ascending `t_ns`.
 
 - `group` — taps sharing a `group` are one intended gesture. A double-tap has two
   rows, `index_in_group` 0 and 1.
-- `intent` — `double` (should fire), `single` (must not fire), `none`.
+- `intent` — `single`, `double`, `triple` (deliberate gestures, which should fire
+  when that count is armed) or `none` (must never fire).
+
+  **The number of `tap_onset` rows in a group is authoritative for how many taps
+  it contains.** `intent` records what the operator meant. When the two disagree
+  the labelling is wrong, and the harness emits a warning naming the group rather
+  than silently trusting either one.
+
+  Whether a count fires is a separate question from what it is, and lives in
+  `DetectorConfig.armedTapCounts`. A `single` group in a run where only count 2
+  is armed must not fire, and a trigger near it is a false positive.
 - `confidence` — `prompt_window` (timing from the prompt track only),
   `auto_refined` (onset snapped to the strongest transient inside the prompt
   window), `human_verified` (an agent or the operator eyeballed the waveform).

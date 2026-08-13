@@ -153,7 +153,37 @@ public struct SessionMeta: Codable, Sendable {
 
 // MARK: - Labels and marks
 
-public enum TapIntent: String, Codable, Sendable { case double, single, none }
+/// What a labelled group was meant to be.
+///
+/// The number of `tap_onset` rows in the group is AUTHORITATIVE for how many
+/// taps it contains — this word only says what the operator intended, so a
+/// disagreement between the two is a labelling error worth surfacing rather than
+/// silently resolving.
+///
+/// `single`, `double` and `triple` are deliberate gestures and should fire when
+/// that count is armed. `none` marks a group that must never fire.
+public enum TapIntent: String, Codable, Sendable {
+    case single, double, triple, none
+
+    /// Taps the operator meant to perform, or nil when no count is implied.
+    public var impliedTapCount: Int? {
+        switch self {
+        case .single: return 1
+        case .double: return 2
+        case .triple: return 3
+        case .none: return nil
+        }
+    }
+
+    public static func forTapCount(_ n: Int) -> TapIntent {
+        switch n {
+        case 1: return .single
+        case 2: return .double
+        case 3: return .triple
+        default: return .none
+        }
+    }
+}
 
 public enum LabelConfidence: String, Codable, Sendable {
     case promptWindow = "prompt_window"

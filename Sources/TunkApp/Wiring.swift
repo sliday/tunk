@@ -7,8 +7,13 @@ import TunkEmit
 // one edit here and nothing anywhere else.
 
 enum DetectorFactory {
-    static func make(config: DetectorConfig) -> TapDetecting {
-        TapDetector(config: config)
+    /// - Parameter armedTapCounts: the counts with an action bound. Passed
+    ///   explicitly rather than left `nil`, because `nil` makes the detector
+    ///   derive its firing counts from `config.tapCountToFire`, which is the
+    ///   *lowest* armed count. With single and double both bound that would
+    ///   arm single only and double taps would never fire.
+    static func make(config: DetectorConfig, armedTapCounts: Set<Int>) -> TapDetecting {
+        TapDetector(config: config, armedTapCounts: armedTapCounts)
     }
 }
 

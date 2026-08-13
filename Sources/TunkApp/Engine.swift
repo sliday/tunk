@@ -73,6 +73,23 @@ final class Engine: ObservableObject {
     /// menubar glyph and the panel show it, and nothing ever raises a dialog.
     var brokenBinding: BrokenBinding? { actionStats.brokenBinding }
 
+    /// The last gesture the detector closed without firing, because nothing is
+    /// bound to its tap count. Shown in the monitor so a user who taps three
+    /// times sees "3 taps, nothing bound" instead of silence and concludes the
+    /// app is broken.
+    @Published private(set) var lastUnboundGesture: (tapCount: Int, atNs: Int64)?
+
+    /// What the detector is actually running, after incoherent combinations are
+    /// clamped. The panel reads this, not `settings.config` — a number the user
+    /// typed that is not the number in force has to be visible as both.
+    var effectiveConfig: DetectorConfig {
+        detectorLock.lock(); defer { detectorLock.unlock() }
+        return readout?.effectiveConfig ?? settings.config.madeCoherent()
+    }
+
+    /// What the clamp changed and why, in words the panel can print verbatim.
+    var coherenceIssues: [DetectorConfig.CoherenceIssue] { settings.config.coherenceIssues }
+
     /// Fired on the main thread each time a gesture is confirmed, so the menubar
     /// can flash.
     var onTrigger: (() -> Void)?
@@ -123,7 +140,8 @@ final class Engine: ObservableObject {
 
     init(settings: AppSettings) {
         self.settings = settings
-        let made = DetectorFactory.make(config: settings.config)
+        let made = DetectorFactory.make(config: settings.config,
+                                        armedTapCounts: settings.config.armedTapCounts)
         self.detector = made
         self.readout = made as? TapDetector
         self.runner = ActionRunner(bindings: settings.bindings)
@@ -196,6 +214,7 @@ final class Engine: ObservableObject {
 
         detectorLock.lock()
         detector.config = settings.config
+        arm(for: settings.config)
         detector.reset()
         detectorLock.unlock()
 
@@ -242,8 +261,16 @@ final class Engine: ObservableObject {
         recordEnvelope(tNs: sample.tNs, value: Float(readout?.envelope ?? 0))
         for onset in onsets { record(onset: onset) }
         if let trigger { record(trigger: trigger) }
+        // Groups that closed without firing. Draining is not optional here: the
+        // log is bounded, and an undrained one would just discard the oldest.
+        let unbound = readout?.drainGroups().last { !$0.fired }
         let calibrating = configBeforeCalibration != nil
         detectorLock.unlock()
+
+        if let unbound, !calibrating {
+            let seen = (tapCount: unbound.tapCount, atNs: unbound.tNs)
+            DispatchQueue.main.async { [weak self] in self?.lastUnboundGesture = seen }
+        }
 
         guard let trigger else { return }
         if calibrating { return }        // learning a tap must never fire a key
@@ -382,8 +409,19 @@ final class Engine: ObservableObject {
             configBeforeCalibration = config
         } else {
             detector.config = config
+            arm(for: config)
         }
         detectorLock.unlock()
+    }
+
+    /// Mirrors the armed counts onto the detector. Called with the lock held.
+    ///
+    /// The detector treats a nil `armedTapCounts` as "use `tapCountToFire`",
+    /// which reads the *lowest* armed count — so leaving it nil with single and
+    /// double both bound would arm single alone. Setting it explicitly keeps
+    /// `config.armedTapCounts` the single source of truth for what fires.
+    private func arm(for config: DetectorConfig) {
+        readout?.armedTapCounts = config.armedTapCounts
     }
 
     // MARK: - calibration
@@ -456,6 +494,7 @@ final class Engine: ObservableObject {
         configBeforeCalibration = nil
         if let threshold { restored.calibratedThreshold = threshold }
         detector.config = restored
+        arm(for: restored)
         detector.reset()
         detectorLock.unlock()
 

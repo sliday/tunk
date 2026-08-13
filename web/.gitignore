@@ -1,0 +1,4 @@
+# Scratch output from render.py --out, and Python's bytecode cache. Neither
+# belongs in the repo: index.html is the only generated file we commit.
+_preview.html
+__pycache__/
