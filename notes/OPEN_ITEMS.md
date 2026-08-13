@@ -45,8 +45,31 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   armed, fires on every thump once count 1 is armed. If it holds, it is the
   strongest evidence that single tap cannot ship armed by default. Wanted as a
   measured number, not as the lead's speculation.
-- The adaptive noise floor freezes while the detector is disarmed, so on a noisy
-  surface it stops tracking exactly when it matters (wave-1 critic finding).
+- **Aperiodic knocks still fire.** The `maxInterTapNs <= confirmWindowNs` fix
+  kills a *periodic* train by chaining it into one over-long group; a jittered
+  one does not chain. Measured on a SYNTHETIC 60 s train with gaps drawn
+  uniformly from 100–400 ms, only double armed: 22, 26, 22, 27, 24 triggers
+  across five seeds, mean 24.2 per 60 s. `DetectorAperiodicKnockTests` pins it.
+  Closing it needs tap-shape discrimination, which needs recorded confounds
+  first — see the detector agent's report for what a shape test would key on and
+  why tuning one against synthetic taps would only fit it to our imagination.
+
+### Resolved by the detector agent
+
+- ~~The adaptive noise floor freezes while the detector is disarmed.~~ Fixed.
+  Measured worse than described: the freeze was open-ended, so on a loud surface
+  the detector could not re-arm and the frozen floor was what stopped the
+  threshold rising to let it. On a SYNTHETIC 10 s stretch of 0.25 g broadband
+  shake the floor stayed pinned at 0.0030 g and ten deliberate 3.0 g double-taps
+  fired nothing; now all ten fire. The hold is bounded to one strike's ring-down
+  (`DSPTuning.noiseFloorHoldNs`, 30 ms) so a tap still cannot lift its own
+  reference. `DetectorNoiseFloorTests`.
+- ~~One-sample race at the join boundary.~~ Fixed. An onset arriving in
+  `(maxInterTapNs, maxInterTapNs + one sample]` used to delete the live group
+  instead of closing it, losing the gesture silently: a completed double
+  followed by a stray knock 221 ms later fired nothing, where the same knock at
+  222 ms fired normally. Groups are now closed and take their confirm decision.
+  `DetectorJoinBoundaryTests`.
 
 ## Owned by TunkEmit
 

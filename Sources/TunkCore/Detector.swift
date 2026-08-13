@@ -30,6 +30,12 @@ import Foundation
 /// `releaseFraction * T` **and** `onsetDebounceNs` has passed, so one strike is
 /// one onset.
 ///
+/// The floor keeps tracking the whole time, apart from a bounded
+/// `tuning.noiseFloorHoldNs` after each crossing. It has to: it describes the
+/// surface, not whether the detector currently feels like firing, and the one
+/// state where it matters most is the one where the detector is stuck disarmed.
+/// See `DSPTuning.noiseFloorHoldNs` for the latch this used to cause.
+///
 /// ## Grouping
 ///
 /// Onsets chain into one group while each lands `config.minInterTapNs ...
@@ -54,9 +60,10 @@ import Foundation
 /// An onset closer than `minInterTapNs` is a bounce or a fumbled strike and
 /// aborts the group outright — the make-or-break metric is false triggers, so
 /// ambiguity resolves to "fire nothing". An onset later than `maxInterTapNs`
-/// but still inside the confirm window (possible only when the window is set
-/// wider than the join limit) also aborts the group, and starts a new one.
-/// After any trigger, onsets are ignored for `config.refractoryNs`.
+/// *closes* the live group instead: no later onset could have joined it either,
+/// so its count is already final and it deserves its confirm decision. That
+/// onset then heads a new group. After any trigger, onsets are ignored for
+/// `config.refractoryNs`.
 ///
 /// ## Gate
 ///
@@ -65,8 +72,9 @@ import Foundation
 /// `drainOnsets()` with `suppressedByGate = true` — the tap monitor should show
 /// the user that the sensor saw the knock — but they never join a group. The
 /// gate also reaches backwards by `tuning.preGateNs`: a keystroke's shock can
-/// hit the accelerometer slightly before the HID event reaches us, and since the
-/// trigger is 180 ms away we can still retract an onset that recent for free.
+/// hit the accelerometer slightly before the HID event reaches us, and since a
+/// group does not fire until a whole `config.confirmWindowNs` after its last
+/// onset, an onset that recent can still be retracted for free.
 ///
 /// ## Threading
 ///
@@ -166,6 +174,11 @@ public final class TapDetector: TapDetecting {
 
     private var refractoryUntilNs: Int64 = Int64.min
     private var gateUntilNs: Int64 = Int64.min
+    /// The adaptive noise floor is frozen until this instant, so the strike that
+    /// disarmed the detector cannot lift the floor it is measured against. It is
+    /// a fixed span from the crossing, never "until we re-arm" — see
+    /// `DSPTuning.noiseFloorHoldNs`.
+    private var noiseFloorHoldUntilNs: Int64 = Int64.min
 
     private var onsetLog: [OnsetEvent] = []
     private var groupLog: [TapGroupEvent] = []
@@ -189,7 +202,7 @@ public final class TapDetector: TapDetecting {
         let envelope = chain.process(x: Double(sample.x),
                                      y: Double(sample.y),
                                      z: Double(sample.z),
-                                     holdNoiseFloor: !armed)
+                                     holdNoiseFloor: sample.tNs < noiseFloorHoldUntilNs)
 
         if pending != nil {
             pending!.peak = max(pending!.peak, envelope)
@@ -197,12 +210,14 @@ public final class TapDetector: TapDetecting {
         }
 
         let threshold = currentThreshold()
+        var onsetTrigger: Trigger?
 
         if armed {
             if sampleIndex > tuning.warmupSamples && envelope >= threshold {
                 armed = false
                 lastOnsetNs = sample.tNs
-                acceptOnset(at: sample.tNs, strength: envelope)
+                noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
+                onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
             }
         } else if envelope <= threshold * tuning.releaseFraction,
                   let onset = lastOnsetNs,
@@ -212,7 +227,11 @@ public final class TapDetector: TapDetecting {
 
         // Onsets first, deadlines second: an onset landing on the same sample as
         // an expiring wait window is inside the window, per "min...max join".
-        return checkGroupDeadline(now: sample.tNs)
+        // `acceptOnset` closes any group that the onset is too late to join, so
+        // the two paths cannot both produce a trigger on one sample — a group
+        // started here has its deadline a whole confirm window away.
+        let deadlineTrigger = checkGroupDeadline(now: sample.tNs)
+        return onsetTrigger ?? deadlineTrigger
     }
 
     public func ingest(input: InputEvent) {
@@ -264,6 +283,7 @@ public final class TapDetector: TapDetecting {
         lastGroupingOnsetNs = nil
         refractoryUntilNs = Int64.min
         gateUntilNs = Int64.min
+        noiseFloorHoldUntilNs = Int64.min
         onsetLog.removeAll(keepingCapacity: true)
         groupLog.removeAll(keepingCapacity: true)
     }
@@ -312,6 +332,7 @@ public final class TapDetector: TapDetecting {
         armed = true
         lastOnsetNs = nil
         lastGroupingOnsetNs = nil
+        noiseFloorHoldUntilNs = Int64.min
         publishPending()
         clearGroup()
     }
@@ -339,13 +360,31 @@ public final class TapDetector: TapDetecting {
         }
     }
 
-    private func acceptOnset(at tNs: Int64, strength: Double) {
+    /// Returns a trigger if taking this onset closed a live group that fired.
+    private func acceptOnset(at tNs: Int64, strength: Double) -> Trigger? {
         publishPending()
 
         let suppressed = tNs < gateUntilNs
         var joined = false
+        var trigger: Trigger?
 
         if !suppressed {
+            // Nothing can join the live group any more: this onset is past
+            // `maxInterTapNs` and every later one is further still, so the
+            // group's count is final. Close it here.
+            //
+            // This is where a gesture used to vanish. With `maxInterTapNs ==
+            // confirmWindowNs` the group's deadline falls inside the sample
+            // interval that carries such an onset, and onsets are handled before
+            // deadlines, so `join` reached the group first and deleted it: no
+            // `TapGroupEvent`, no trigger, nothing in the tap monitor. The
+            // window is one sample period wide (~1.26 ms at 796 Hz) but it is a
+            // silent loss, and with count 1 armed it is a dropped trigger.
+            // Measured on two SYNTHETIC 0.5 g thumps: 220 and 221 ms apart gave
+            // groups [1], 222 ms and wider gave [1, 1].
+            if let last = groupLastOnsetNs, tNs - last > effectiveConfig.maxInterTapNs {
+                trigger = closeGroup(now: tNs)
+            }
             if tNs >= refractoryUntilNs {
                 joined = join(onset: tNs, strength: strength)
             }
@@ -354,9 +393,14 @@ public final class TapDetector: TapDetecting {
 
         pending = PendingOnset(tNs: tNs, peak: strength,
                                suppressedByGate: suppressed, joinedGroup: joined)
+        return trigger
     }
 
     /// Returns true if the onset is now a member of the live group.
+    ///
+    /// Any onset too late to join has already closed the live group in
+    /// `acceptOnset`, so a group that is still live here is one this onset can
+    /// legally extend, or one it is too *early* to extend.
     private func join(onset tNs: Int64, strength: Double) -> Bool {
         guard let last = groupLastOnsetNs else {
             if let previous = lastGroupingOnsetNs, tNs - previous < effectiveConfig.minInterTapNs {
@@ -367,21 +411,13 @@ public final class TapDetector: TapDetecting {
             startGroup(at: tNs, strength: strength)
             return true
         }
-        let delta = tNs - last
-        if delta < effectiveConfig.minInterTapNs {
+        if tNs - last < effectiveConfig.minInterTapNs {
             // Too close to be a second deliberate tap. Bounce, double-strike, or
             // a fumble. Kill the whole group; do not start a new one from it.
+            // Nothing is published: a group aborted this early never had a count
+            // worth reporting, unlike one that reaches a confirm decision.
             clearGroup()
             return false
-        }
-        if delta > effectiveConfig.maxInterTapNs {
-            // Only reachable when the confirm window is set wider than the join
-            // limit, since otherwise the deadline closed this group first. The
-            // pending group cannot absorb this onset and cannot be trusted
-            // beside it, so it dies and this onset heads a new one.
-            clearGroup()
-            startGroup(at: tNs, strength: strength)
-            return true
         }
         extendGroup(to: tNs, strength: strength)
         return true
@@ -419,6 +455,18 @@ public final class TapDetector: TapDetecting {
 
     private func checkGroupDeadline(now tNs: Int64) -> Trigger? {
         guard let deadline = groupDeadlineNs, tNs >= deadline else { return nil }
+        return closeGroup(now: tNs)
+    }
+
+    /// Give the live group its confirm decision and retire it. The group is gone
+    /// afterwards either way, and it always leaves a `TapGroupEvent` behind, so
+    /// the tap monitor sees every gesture that got as far as being counted.
+    ///
+    /// Called from two places: the deadline expiring, and an onset arriving too
+    /// late to join. Both mean the same thing — no further onset can change this
+    /// group's count.
+    private func closeGroup(now tNs: Int64) -> Trigger? {
+        guard groupDeadlineNs != nil else { return nil }
         // Normally the peak window closed long ago; it only bites if someone
         // configures a confirm window shorter than the peak hold.
         if pending?.joinedGroup == true { publishPending() }

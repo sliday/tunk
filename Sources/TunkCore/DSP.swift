@@ -91,8 +91,10 @@ public struct SlidingMax: Sendable, Equatable {
 /// Rises slowly (seconds) and falls faster (a fraction of a second), so a 10 ms
 /// tap barely moves it while a genuinely noisy surface (lap, a desk carrying a
 /// subwoofer) pushes it up within a second or two. The detector holds this
-/// tracker frozen while an onset is in flight so a tap cannot raise the very
-/// floor it is being compared against.
+/// tracker frozen for one strike's ring-down after a crossing, so a tap cannot
+/// raise the very floor it is being compared against — see
+/// `DSPTuning.noiseFloorHoldNs` for why that hold is bounded rather than lasting
+/// as long as the detector stays disarmed.
 public struct NoiseFloorTracker: Sendable, Equatable {
     public let riseAlpha: Double
     public let fallAlpha: Double
@@ -158,9 +160,29 @@ public struct DSPTuning: Sendable, Equatable {
     public var gapResetNs: Int64
     /// A gating input event also kills an onset that landed this recently before
     /// it. The chassis shock of a keystroke can reach the sensor a hair before
-    /// the HID event reaches us; the 180 ms confirm window means we can still
-    /// retract that onset for free.
+    /// the HID event reaches us, and a group does not fire until a whole
+    /// `DetectorConfig.confirmWindowNs` after its last onset, so as long as this
+    /// stays well under that window the retraction is free — the group has not
+    /// fired yet and nothing downstream has seen it.
     public var preGateNs: Int64
+    /// How long the adaptive noise floor stays frozen after an onset crossing.
+    ///
+    /// The freeze exists so a strike cannot lift the floor it is measured
+    /// against; the second tap of a double is compared against a floor the first
+    /// tap moved, and the error only ever runs one way (upward, less sensitive).
+    /// One strike's ring-down is all that needs covering: a SYNTHETIC 0.5 g
+    /// strike decays to a tenth of its peak 12.6 ms after the peak, and
+    /// `onsetDebounceNs` already calls 30 ms "still one physical tap".
+    ///
+    /// It is bounded on purpose. Freezing for as long as the detector stays
+    /// disarmed — which is what this used to do — latches on a live surface:
+    /// while the envelope never falls back under `releaseFraction * threshold`
+    /// the detector cannot re-arm, and because the floor is frozen the threshold
+    /// cannot rise to let it. Measured on a SYNTHETIC 10 s stretch of 0.25 g
+    /// broadband shake: floor pinned at 0.0030 g, threshold pinned at 0.3000 g,
+    /// one onset in the first second and none for the remaining nine, and a
+    /// deliberate 3.0 g double-tap partway through produced no onset at all.
+    public var noiseFloorHoldNs: Int64
     /// Cap on the undrained onset log, so a live app that never drains cannot
     /// grow without bound.
     public var onsetLogCapacity: Int
@@ -181,6 +203,7 @@ public struct DSPTuning: Sendable, Equatable {
         warmupSamples: 200,
         gapResetNs: 20_000_000,
         preGateNs: 25_000_000,
+        noiseFloorHoldNs: 30_000_000,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -189,8 +212,9 @@ public struct DSPTuning: Sendable, Equatable {
                 noiseRiseTauSeconds: Double, noiseFallTauSeconds: Double,
                 noiseSnrMultiple: Double, minThresholdG: Double, releaseFraction: Double,
                 onsetDebounceNs: Int64, peakHoldNs: Int64, warmupSamples: Int,
-                gapResetNs: Int64, preGateNs: Int64, onsetLogCapacity: Int,
-                groupLogCapacity: Int = 256) {
+                gapResetNs: Int64, preGateNs: Int64,
+                noiseFloorHoldNs: Int64 = 30_000_000,
+                onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
         self.envelopePeakSamples = envelopePeakSamples
@@ -204,6 +228,7 @@ public struct DSPTuning: Sendable, Equatable {
         self.warmupSamples = warmupSamples
         self.gapResetNs = gapResetNs
         self.preGateNs = preGateNs
+        self.noiseFloorHoldNs = noiseFloorHoldNs
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }
@@ -258,8 +283,9 @@ public struct SignalChain: Sendable, Equatable {
         envelope = 0
     }
 
-    /// Advance one sample. `holdNoiseFloor` freezes the floor while an onset is
-    /// in flight so the tap cannot lift its own reference.
+    /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
+    /// ring-down after a crossing so the tap cannot lift its own reference. The
+    /// caller decides how long that lasts; it must not be open-ended.
     @discardableResult
     public mutating func process(x: Double, y: Double, z: Double, holdNoiseFloor: Bool) -> Double {
         let ax = hpX.process(x)
