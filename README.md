@@ -164,6 +164,22 @@ whether the detector agrees with itself. Every snippet is written with
 `expected_triggers = 0` under a non-tap category so the harness cannot mistake
 one for prompted ground truth. Detection rate still needs `tunk-capture guide`.
 
+## Grading what you recorded
+
+One command from raw recordings to a graded pass line. Recording is the only
+manual step; this does the rest in the right order.
+
+```bash
+./analyse.sh              # grade data/raw
+./analyse.sh --holdout    # grade the held-out set, which is what decides pass or fail
+./analyse.sh --watch      # re-run automatically as sessions appear
+```
+
+It refreshes the binaries first (a stale `bin/` has misled someone three times
+here), checks the taps landed *before* labelling so a session of missed taps is
+caught while you are still set up, writes ground truth, runs the referee with a
+determinism check, and appends a round to the progress page.
+
 ## Recording a dataset
 
 `notes/RECORDING_PLAN.md` is the script, and every command in it has been run
