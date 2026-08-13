@@ -187,6 +187,18 @@ final class CaptureCLITests: XCTestCase {
                            mentioning: ["--confound-sec only applies"])
     }
 
+    // MARK: - verify
+
+    func testVerifyAllReportsAnEmptyRootInsteadOfPassing() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tunk-verify-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let r = try capture(["verify", "--out", dir.path, "--all"])
+        XCTAssertNotEqual(r.status, 0, r.all)
+        XCTAssertTrue(r.all.contains("no sessions found"), r.all)
+    }
+
     // MARK: - The recording plan itself
 
     /// Every command in notes/RECORDING_PLAN.md, run as written with `--dry-run`

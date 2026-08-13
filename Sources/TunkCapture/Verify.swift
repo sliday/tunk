@@ -25,26 +25,32 @@ func runVerify(_ args: Args) -> Never {
     let target: URL
     if let p = args.positional.first {
         target = URL(fileURLWithPath: p, isDirectory: true).standardizedFileURL
-    } else if let newest = newestSession(under: args.str("out") ?? "data/raw") {
+    } else if let newest = allSessions(under: root).last {
         target = newest
-        Console.line("(no path given, using the newest session under \(args.str("out") ?? "data/raw"))")
+        Console.line("(no path given, using the newest session under \(root); --all checks every one)")
     } else {
-        Console.err("nothing to verify: no session directory given and none found under data/raw")
+        Console.err("nothing to verify: no session directory given and none found under \(root)")
         exit(2)
     }
     exit(verify(directory: target) ? 0 : 1)
 }
 
-private func newestSession(under path: String) -> URL? {
+/// Session directories under `path`, oldest first. The name is
+/// `<category>__<surface>__<YYYYMMDD-HHMMSS>__<id>`, so plain lexical order sorts
+/// by category and would call the wrong session "newest"; sort on the stamp.
+private func allSessions(under path: String) -> [URL] {
     let root = URL(fileURLWithPath: path, isDirectory: true)
     let fm = FileManager.default
     guard let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else {
-        return nil
+        return []
+    }
+    func stamp(_ url: URL) -> String {
+        let parts = url.lastPathComponent.components(separatedBy: "__")
+        return parts.count >= 3 ? parts[2] : url.lastPathComponent
     }
     return entries
         .filter { fm.fileExists(atPath: $0.appendingPathComponent("meta.json").path) }
-        .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        .last
+        .sorted { (stamp($0), $0.lastPathComponent) < (stamp($1), $1.lastPathComponent) }
 }
 
 private enum Level: String {

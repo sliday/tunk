@@ -1,5 +1,5 @@
 {
-  "generated_at" : "2026-08-13T17:20:40Z",
+  "generated_at" : "2026-08-13T17:25:37Z",
   "operator_note" : "hand-added, must survive",
   "pass_line" : {
     "detection_rate" : {
@@ -35,6 +35,9 @@
   },
   "rounds" : [
     {
+      "armed_tap_counts" : [
+        2
+      ],
       "biggest_gap" : "soft: detection rate, all armed gestures — required ≥ 98 %, got 0.00 % (0/6). 3 further check(s) also failing.",
       "dataset" : {
         "double_tap_groups" : 16,
@@ -44,219 +47,304 @@
       "headline" : "STUB detector — says nothing about the real build. FAIL — 4 check(s) below the line, armed 2-tap",
       "label" : "replaced",
       "round" : 0,
+      "source" : {
+        "data_root" : "/Users/stas/Playground/tunk/.tunk-selftest-score/sessions",
+        "detector" : "stub (TunkScore/StubDetector.swift)",
+        "is_stub" : true,
+        "split" : "train",
+        "tool" : "tunk-score 0.1.0",
+        "warnings" : [
+          "Graded the HARNESS STUB detector, not a shipping detector. These numbers say nothing about the real build."
+        ]
+      },
       "status" : "scored",
       "surfaces" : {
         "desk" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 10
-            },
             "confound_minutes" : 0,
             "double_tap_groups" : 10,
+            "minutes" : 1.8,
             "sessions" : 2,
+            "tap_groups" : {
+              "2" : 10
+            },
             "typing_minutes" : 0.80000000000000004
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 10,
-              "note" : "by tap count: 2-tap 100.00 % (10/10)",
-              "value" : 100
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 10,
+                  "value" : 100
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 2,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "latency_max_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "latency_p50_ms" : {
+                  "n" : 10,
+                  "value" : 221.56
+                },
+                "latency_p95_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 10,
-              "value" : 100
-            },
-            "false_triggers_confound" : {
-              "n" : 0,
-              "note" : "no confound sessions",
-              "value" : null
-            },
-            "false_triggers_per_20min" : {
-              "n" : 2,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 10,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 10,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 1,
-              "value" : 0
-            },
-            "latency_max_ms" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "latency_p50_ms" : {
-              "n" : 10,
-              "value" : 181.37
-            },
-            "latency_p95_ms" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 10,
+                  "note" : "all armed counts together — 2-tap 10/10",
+                  "value" : 100
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 2,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "latency_max_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "latency_p50_ms" : {
+                  "n" : 10,
+                  "value" : 221.56
+                },
+                "latency_p95_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         },
         "lap" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 0
-            },
             "confound_minutes" : 0.29999999999999999,
             "double_tap_groups" : 0,
+            "minutes" : 0.29999999999999999,
             "sessions" : 1,
+            "tap_groups" : {
+              "2" : 0
+            },
             "typing_minutes" : 0
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 0,
-              "note" : "no labelled armed groups",
-              "value" : null
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 0,
+                  "note" : "no labelled groups in this scope",
+                  "value" : null
+                },
+                "false_triggers_confound" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "false_triggers_confound" : {
-              "n" : 1,
-              "value" : 0
-            },
-            "false_triggers_per_20min" : {
-              "n" : 1,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 0,
-              "note" : "no typing sessions",
-              "value" : null
-            },
-            "latency_max_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p50_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 0,
+                  "note" : "all armed counts together — 2-tap 0/0",
+                  "value" : null
+                },
+                "false_triggers_confound" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         },
         "soft" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 6
-            },
             "confound_minutes" : 0,
             "double_tap_groups" : 6,
+            "minutes" : 0.59999999999999998,
             "sessions" : 1,
+            "tap_groups" : {
+              "2" : 6
+            },
             "typing_minutes" : 0
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 6,
-              "note" : "by tap count: 2-tap 0.00 % (0/6)",
-              "value" : 0
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 6,
+                  "value" : 0
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 6,
-              "value" : 0
-            },
-            "false_triggers_confound" : {
-              "n" : 0,
-              "note" : "no confound sessions",
-              "value" : null
-            },
-            "false_triggers_per_20min" : {
-              "n" : 1,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 0,
-              "note" : "no typing sessions",
-              "value" : null
-            },
-            "latency_max_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p50_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 6,
+                  "note" : "all armed counts together — 2-tap 0/6",
+                  "value" : 0
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         }
       },
-      "timestamp" : "2026-08-13T17:20:40Z",
-      "tunk_score" : {
-        "armed_tap_counts" : [
-          2
-        ],
-        "data_root" : "/Users/stas/Playground/tunk/.tunk-selftest-score/sessions",
-        "detector" : "stub (TunkScore/StubDetector.swift)",
-        "detector_is_stub" : true,
-        "split" : "train",
-        "tool" : "tunk-score 0.1.0",
-        "verdict" : "FAIL"
-      }
+      "timestamp" : "2026-08-13T17:25:37Z"
     },
     {
+      "armed_tap_counts" : [
+        2
+      ],
       "biggest_gap" : "hand-written gap",
       "dataset" : {
         "double_tap_groups" : 16,
@@ -266,219 +354,304 @@
       "headline" : "hand-written headline",
       "label" : "round two",
       "round" : 1,
+      "source" : {
+        "data_root" : "/Users/stas/Playground/tunk/.tunk-selftest-score/sessions",
+        "detector" : "stub (TunkScore/StubDetector.swift)",
+        "is_stub" : true,
+        "split" : "train",
+        "tool" : "tunk-score 0.1.0",
+        "warnings" : [
+          "Graded the HARNESS STUB detector, not a shipping detector. These numbers say nothing about the real build."
+        ]
+      },
       "status" : "scored",
       "surfaces" : {
         "desk" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 10
-            },
             "confound_minutes" : 0,
             "double_tap_groups" : 10,
+            "minutes" : 1.8,
             "sessions" : 2,
+            "tap_groups" : {
+              "2" : 10
+            },
             "typing_minutes" : 0.80000000000000004
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 10,
-              "note" : "by tap count: 2-tap 100.00 % (10/10)",
-              "value" : 100
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 10,
+                  "value" : 100
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 2,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "latency_max_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "latency_p50_ms" : {
+                  "n" : 10,
+                  "value" : 221.56
+                },
+                "latency_p95_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 10,
-              "value" : 100
-            },
-            "false_triggers_confound" : {
-              "n" : 0,
-              "note" : "no confound sessions",
-              "value" : null
-            },
-            "false_triggers_per_20min" : {
-              "n" : 2,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 10,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 10,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 1,
-              "value" : 0
-            },
-            "latency_max_ms" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "latency_p50_ms" : {
-              "n" : 10,
-              "value" : 181.37
-            },
-            "latency_p95_ms" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 10,
+                  "note" : "all armed counts together — 2-tap 10/10",
+                  "value" : 100
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 2,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "latency_max_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "latency_p50_ms" : {
+                  "n" : 10,
+                  "value" : 221.56
+                },
+                "latency_p95_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         },
         "lap" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 0
-            },
             "confound_minutes" : 0.29999999999999999,
             "double_tap_groups" : 0,
+            "minutes" : 0.29999999999999999,
             "sessions" : 1,
+            "tap_groups" : {
+              "2" : 0
+            },
             "typing_minutes" : 0
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 0,
-              "note" : "no labelled armed groups",
-              "value" : null
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 0,
+                  "note" : "no labelled groups in this scope",
+                  "value" : null
+                },
+                "false_triggers_confound" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "false_triggers_confound" : {
-              "n" : 1,
-              "value" : 0
-            },
-            "false_triggers_per_20min" : {
-              "n" : 1,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 0,
-              "note" : "no typing sessions",
-              "value" : null
-            },
-            "latency_max_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p50_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 0,
+                  "note" : "all armed counts together — 2-tap 0/0",
+                  "value" : null
+                },
+                "false_triggers_confound" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         },
         "soft" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 6
-            },
             "confound_minutes" : 0,
             "double_tap_groups" : 6,
+            "minutes" : 0.59999999999999998,
             "sessions" : 1,
+            "tap_groups" : {
+              "2" : 6
+            },
             "typing_minutes" : 0
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 6,
-              "note" : "by tap count: 2-tap 0.00 % (0/6)",
-              "value" : 0
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 6,
+                  "value" : 0
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 6,
-              "value" : 0
-            },
-            "false_triggers_confound" : {
-              "n" : 0,
-              "note" : "no confound sessions",
-              "value" : null
-            },
-            "false_triggers_per_20min" : {
-              "n" : 1,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 0,
-              "note" : "no typing sessions",
-              "value" : null
-            },
-            "latency_max_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p50_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 6,
+                  "note" : "all armed counts together — 2-tap 0/6",
+                  "value" : 0
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         }
       },
-      "timestamp" : "2026-08-13T17:20:40Z",
-      "tunk_score" : {
-        "armed_tap_counts" : [
-          2
-        ],
-        "data_root" : "/Users/stas/Playground/tunk/.tunk-selftest-score/sessions",
-        "detector" : "stub (TunkScore/StubDetector.swift)",
-        "detector_is_stub" : true,
-        "split" : "train",
-        "tool" : "tunk-score 0.1.0",
-        "verdict" : "FAIL"
-      }
+      "timestamp" : "2026-08-13T17:25:37Z"
     },
     {
+      "armed_tap_counts" : [
+        2
+      ],
       "biggest_gap" : "soft: detection rate, all armed gestures — required ≥ 98 %, got 0.00 % (0/6). 3 further check(s) also failing.",
       "dataset" : {
         "double_tap_groups" : 16,
@@ -488,219 +661,301 @@
       "headline" : "STUB detector — says nothing about the real build. FAIL — 4 check(s) below the line, armed 2-tap",
       "label" : "stub, armed 2-tap",
       "round" : 2,
+      "source" : {
+        "data_root" : "/Users/stas/Playground/tunk/.tunk-selftest-score/sessions",
+        "detector" : "stub (TunkScore/StubDetector.swift)",
+        "is_stub" : true,
+        "split" : "train",
+        "tool" : "tunk-score 0.1.0",
+        "warnings" : [
+          "Graded the HARNESS STUB detector, not a shipping detector. These numbers say nothing about the real build."
+        ]
+      },
       "status" : "scored",
       "surfaces" : {
         "desk" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 10
-            },
             "confound_minutes" : 0,
             "double_tap_groups" : 10,
+            "minutes" : 1.8,
             "sessions" : 2,
+            "tap_groups" : {
+              "2" : 10
+            },
             "typing_minutes" : 0.80000000000000004
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 10,
-              "note" : "by tap count: 2-tap 100.00 % (10/10)",
-              "value" : 100
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 10,
+                  "value" : 100
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 2,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "latency_max_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "latency_p50_ms" : {
+                  "n" : 10,
+                  "value" : 221.56
+                },
+                "latency_p95_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 10,
-              "value" : 100
-            },
-            "false_triggers_confound" : {
-              "n" : 0,
-              "note" : "no confound sessions",
-              "value" : null
-            },
-            "false_triggers_per_20min" : {
-              "n" : 2,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 10,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 10,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 1,
-              "value" : 0
-            },
-            "latency_max_ms" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "latency_p50_ms" : {
-              "n" : 10,
-              "value" : 181.37
-            },
-            "latency_p95_ms" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 10,
-              "value" : 182.05000000000001
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 10,
+                  "note" : "all armed counts together — 2-tap 10/10",
+                  "value" : 100
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 2,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "latency_max_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "latency_p50_ms" : {
+                  "n" : 10,
+                  "value" : 221.56
+                },
+                "latency_p95_ms" : {
+                  "n" : 10,
+                  "value" : 222.24000000000001
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         },
         "lap" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 0
-            },
             "confound_minutes" : 0.29999999999999999,
             "double_tap_groups" : 0,
+            "minutes" : 0.29999999999999999,
             "sessions" : 1,
+            "tap_groups" : {
+              "2" : 0
+            },
             "typing_minutes" : 0
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 0,
-              "note" : "no labelled armed groups",
-              "value" : null
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 0,
+                  "note" : "no labelled groups in this scope",
+                  "value" : null
+                },
+                "false_triggers_confound" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "false_triggers_confound" : {
-              "n" : 1,
-              "value" : 0
-            },
-            "false_triggers_per_20min" : {
-              "n" : 1,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 0,
-              "note" : "no typing sessions",
-              "value" : null
-            },
-            "latency_max_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p50_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 0,
+                  "note" : "all armed counts together — 2-tap 0/0",
+                  "value" : null
+                },
+                "false_triggers_confound" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         },
         "soft" : {
           "coverage" : {
-            "armed_groups_by_tap_count" : {
-              "2" : 6
-            },
             "confound_minutes" : 0,
             "double_tap_groups" : 6,
+            "minutes" : 0.59999999999999998,
             "sessions" : 1,
+            "tap_groups" : {
+              "2" : 6
+            },
             "typing_minutes" : 0
           },
-          "metrics" : {
-            "detection_rate" : {
-              "n" : 6,
-              "note" : "by tap count: 2-tap 0.00 % (0/6)",
-              "value" : 0
+          "taps" : {
+            "2" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 6,
+                  "value" : 0
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             },
-            "detection_rate_tap2" : {
-              "n" : 6,
-              "value" : 0
-            },
-            "false_triggers_confound" : {
-              "n" : 0,
-              "note" : "no confound sessions",
-              "value" : null
-            },
-            "false_triggers_per_20min" : {
-              "n" : 1,
-              "note" : "by tap count: 2-tap 0 (0.00/20min)",
-              "value" : 0
-            },
-            "false_triggers_per_20min_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_tap2" : {
-              "n" : 0,
-              "value" : 0
-            },
-            "false_triggers_typing" : {
-              "n" : 0,
-              "note" : "no typing sessions",
-              "value" : null
-            },
-            "latency_max_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p50_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms" : {
-              "n" : 0,
-              "value" : null
-            },
-            "latency_p95_ms_tap2" : {
-              "n" : 0,
-              "value" : null
-            },
-            "stuck_modifiers" : {
-              "n" : 0,
-              "note" : "not measured by tunk-score; owned by the emission tests",
-              "value" : null
+            "any" : {
+              "metrics" : {
+                "detection_rate" : {
+                  "n" : 6,
+                  "note" : "all armed counts together — 2-tap 0/6",
+                  "value" : 0
+                },
+                "false_triggers_confound" : {
+                  "n" : 0,
+                  "note" : "no confound sessions in this scope",
+                  "value" : null
+                },
+                "false_triggers_per_20min" : {
+                  "n" : 1,
+                  "note" : "by tap count: 2-tap 0",
+                  "value" : 0
+                },
+                "false_triggers_typing" : {
+                  "n" : 0,
+                  "note" : "no typing sessions in this scope",
+                  "value" : null
+                },
+                "latency_max_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p50_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "latency_p95_ms" : {
+                  "n" : 0,
+                  "value" : null
+                },
+                "stuck_modifiers" : {
+                  "n" : 0,
+                  "note" : "replay does not emit keys; graded by the emission tests",
+                  "value" : null
+                }
+              }
             }
           }
         }
       },
-      "timestamp" : "2026-08-13T17:20:40Z",
-      "tunk_score" : {
-        "armed_tap_counts" : [
-          2
-        ],
-        "data_root" : "/Users/stas/Playground/tunk/.tunk-selftest-score/sessions",
-        "detector" : "stub (TunkScore/StubDetector.swift)",
-        "detector_is_stub" : true,
-        "split" : "train",
-        "tool" : "tunk-score 0.1.0",
-        "verdict" : "FAIL"
-      }
+      "timestamp" : "2026-08-13T17:25:37Z"
     }
   ],
-  "schema" : 1,
+  "schema" : 2,
   "title" : "Tunk — gauntlet loop"
 }

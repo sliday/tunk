@@ -2,7 +2,7 @@
   "category" : "confound_mug",
   "duration_ns" : 19999288000,
   "epoch_mach_ns" : 0,
-  "epoch_wall_iso" : "2026-08-13T17:20:39.917Z",
+  "epoch_wall_iso" : "2026-08-13T17:25:36.596Z",
   "expected_triggers" : 0,
   "machine" : {
     "chip" : "Apple M4 Max",

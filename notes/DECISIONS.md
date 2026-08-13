@@ -101,6 +101,38 @@ triple possible. Double still fires one confirm window after its last onset
 whether or not a third tap is coming, so adding triple never changes how double
 feels — which is what the PRD asked for.
 
+## D7 — The join window is 220 ms, and it is the number most likely to move
+
+The detector agent asked for `maxInterTapNs = 180 ms` to match the confirm
+window. Applied the invariant, took 220 ms instead, and the deviation is worth
+recording because it is a genuine trade with no free side.
+
+The confirm window essentially *is* the latency: a gesture fires one window after
+its last onset. The PRD's 250 ms p95 budget therefore caps the window near
+240 ms. Pulling the other way: a double-tap slower than the window does not group
+at all, so a tight window costs detection rate silently — the user just feels the
+app ignoring them, which is exactly the felt-reliability failure the Back Tap
+comparison exists to catch. Unhurried double-taps commonly land in the
+180–250 ms range.
+
+220 ms takes most of the available room and keeps 30 ms of headroom. It is a
+guess made without data, and it is flagged as such. `calibratedInterTapNs` exists
+so the learn-my-tap step can replace it with the user's own measured interval,
+which is the per-person variation that step exists to absorb.
+
+**Open, to be measured once the dataset exists:**
+
+1. Re-run the trigger-storm sweep at 220 ms. The 0-triggers result was measured
+   at 180 ms and does not automatically carry.
+2. The predicted failure mode for single tap, which must be measured rather than
+   assumed: a knock train spaced *wider* than the join window gives every thump
+   its own group of one. Harmless while only count 2 is armed. Once count 1 is
+   armed it fires on every thump. If that holds, it is the strongest argument
+   that single-tap cannot ship armed by default.
+3. What statistic calibration should use for the interval — probably a high
+   percentile of the observed distribution plus margin, clamped to the latency
+   budget — decided from real taps, not from a guess.
+
 ## D5 — Stale shortcut bindings fail passively
 
 A bound Shortcut can be renamed or deleted long after binding. Resolution is

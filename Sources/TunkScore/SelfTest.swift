@@ -384,6 +384,34 @@ enum SelfTest {
         a.check("progress: hand-added top-level keys survive an append",
                 (try doc()["operator_note"] as? String) == "hand-added, must survive",
                 "\(String(describing: try doc()["operator_note"]))")
+
+        // A schema-1 file predates tap counts. Its flat metrics belong to double
+        // tap and nothing else; migrating must add columns, never invent data.
+        let legacy = scratch.appendingPathComponent("progress/legacy.json")
+        let legacyDoc: [String: Any] = [
+            "schema": 1,
+            "title": "legacy",
+            "generated_at": "2026-08-13T18:20:00Z",
+            "pass_line": ["detection_rate": ["op": ">=", "value": 98, "unit": "%"]],
+            "rounds": [[
+                "round": 0, "label": "seed", "timestamp": "2026-08-13T18:20:00Z",
+                "headline": "h", "biggest_gap": "g",
+                "surfaces": ["desk": [
+                    "coverage": ["sessions": 0],
+                    "metrics": ["detection_rate": ["value": NSNull(), "n": 0]],
+                ]],
+            ]],
+        ]
+        try JSONSerialization.data(withJSONObject: legacyDoc, options: [.prettyPrinted]).write(to: legacy)
+        _ = try ProgressFeed.append(report: report, options: ProgressOptions(path: legacy))
+        let migrated = (try JSONSerialization.jsonObject(with: Data(contentsOf: legacy)) as? [String: Any]) ?? [:]
+        let seed = ((migrated["rounds"] as? [[String: Any]]) ?? []).first ?? [:]
+        let seedDesk = ((seed["surfaces"] as? [String: Any])?["desk"] as? [String: Any]) ?? [:]
+        a.check("progress: a schema-1 file migrates, old metrics land under tap count 2",
+                migrated["schema"] as? Int == 2 && seedDesk["metrics"] == nil
+                    && ((seedDesk["taps"] as? [String: Any])?["2"] as? [String: Any])?["metrics"] != nil,
+                "schema \(String(describing: migrated["schema"])), "
+                + "seed keys \(seedDesk.keys.sorted().joined(separator: ", "))")
     }
 
     /// Planted counts for the per-tap-count scenarios. Named so the printed summary

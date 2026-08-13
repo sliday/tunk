@@ -96,6 +96,7 @@ enum CommandSpecs {
         blurb: "Re-read a session the way the harness will and say whether the rig is sound.",
         flags: [
             FlagSpec("out", "<dir>", "where to look for the newest session (default data/raw)"),
+            FlagSpec("all", "", "verify every session under --out, not just the newest"),
             help,
         ],
         positional: "<session-dir>   defaults to the newest session under --out")
