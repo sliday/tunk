@@ -25,7 +25,7 @@ final class AppSettings: ObservableObject {
     /// and the .app bundle read and write the same settings instead of drifting
     /// apart during development.
     static let suiteName = "dev.tunk.settings"
-    private let defaults = UserDefaults(suiteName: AppSettings.suiteName) ?? .standard
+    private let defaults: UserDefaults
 
     /// Called on the main thread whenever the detector config changes, however
     /// it changed. The engine hooks this.
@@ -96,8 +96,12 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var launchAtLoginError: String?
 
-    init() {
-        let d = UserDefaults(suiteName: AppSettings.suiteName) ?? .standard
+    /// - Parameter suiteName: the defaults suite to read and write. Only
+    ///   `--dump-panel` passes anything else, so a diagnostic render cannot
+    ///   touch the settings the operator is actually running with.
+    init(suiteName: String = AppSettings.suiteName) {
+        let d = UserDefaults(suiteName: suiteName) ?? .standard
+        defaults = d
         config = AppSettings.load(DetectorConfig.self, key: Key.config, from: d) ?? .default
         let loaded = AppSettings.loadAction(from: d)
         action = loaded

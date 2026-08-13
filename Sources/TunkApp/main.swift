@@ -14,6 +14,12 @@ if let index = arguments.firstIndex(of: "--dump-glyphs") {
     GlyphDump.run(into: directory)
     exit(0)
 }
+if let index = arguments.firstIndex(of: "--dump-panel") {
+    let directory = index + 1 < arguments.count ? arguments[index + 1] : "."
+    app.setActivationPolicy(.accessory)
+    PanelDump.run(into: directory)
+    exit(0)
+}
 
 let delegate = AppDelegate(openSettingsOnLaunch: arguments.contains("--settings"),
                           openCalibrationOnLaunch: arguments.contains("--calibrate"))

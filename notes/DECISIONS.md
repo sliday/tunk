@@ -69,6 +69,38 @@ because a listener bound to the right-hand key ignores the left one, so emitting
 the wrong side is equivalent to emitting nothing. `ROpt` and `RCmd` give the same
 one-key feel without colliding with VoiceInk's primary.
 
+## D6 — Single and double tap ship; triple is built but unwired
+
+The PRD said double only, with the multi-tap grouping built as a state machine
+that could distinguish counts so triple could arrive later without a rewrite. The
+owner has since asked for single and double wired now, triple still deferred.
+
+So a gesture carries a count, and each count binds to its own action, exactly
+like Back Tap's separate Double Tap and Triple Tap rows. Counts 1 and 2 are
+surfaced; 3 is representable and costs nothing to enable later.
+
+**Single tap defaults to unbound, and that is deliberate.** A single tap is a
+different risk class from a double: every mug set down, every footfall and every
+hard keystroke is one transient, whereas the entire false-positive defence rests
+on requiring two deliberate onsets in a narrow window. The owner chose to have
+it, which is their call to make. What the build owes them is the real number, so
+the harness reports single-tap false triggers separately from double rather than
+pooling them into one flattering average.
+
+This also resolved a bug rather than adding one. A critic measured that a 60 s
+stream of periodic 0.5 g thumps 250 ms apart produced 48 triggers, and at 200 ms
+spacing 60 triggers, ungated — because `confirmWindowNs` (180 ms) was shorter
+than `maxInterTapNs` (400 ms), so a group fired before a later tap could retract
+it. Supporting triple requires the opposite invariant:
+
+    maxInterTapNs <= confirmWindowNs
+
+which makes "two knocks then silence" distinguishable from "a stream of knocks at
+double-tap cadence". One change, and it both kills the trigger storm and makes
+triple possible. Double still fires one confirm window after its last onset
+whether or not a third tap is coming, so adding triple never changes how double
+feels — which is what the PRD asked for.
+
 ## D5 — Stale shortcut bindings fail passively
 
 A bound Shortcut can be renamed or deleted long after binding. Resolution is
