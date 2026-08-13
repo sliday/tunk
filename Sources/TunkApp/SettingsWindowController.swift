@@ -32,6 +32,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func present(startCalibration: Bool) {
+        // The user may have added a Shortcut since the last time this opened.
+        // Listing is read-only and measured at ~10 ms; it runs nothing.
+        panel.refreshShortcuts()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         if startCalibration { panel.showCalibration = true }

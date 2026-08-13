@@ -12,7 +12,12 @@ import TunkEmit
 final class AppSettings: ObservableObject {
     private enum Key {
         static let config = "detectorConfig"
-        static let hotkey = "hotkey"
+        /// Written by builds that predate `TunkAction`: a bare hotkey string.
+        /// Read once, at load, to migrate. Never written again.
+        static let legacyHotkey = "hotkey"
+        static let action = "action"
+        static let hotkeyDraft = "hotkeyDraft"
+        static let shortcutDraft = "shortcutDraft"
         static let enabled = "enabled"
     }
 
@@ -26,7 +31,7 @@ final class AppSettings: ObservableObject {
     /// it changed. The engine hooks this.
     var onConfigChange: ((DetectorConfig) -> Void)?
     var onEnabledChange: ((Bool) -> Void)?
-    var onHotkeyChange: ((HotkeySpec) -> Void)?
+    var onActionChange: ((TunkAction) -> Void)?
 
     @Published var config: DetectorConfig {
         didSet {
@@ -36,13 +41,48 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// Stored as the text form ("Ctrl+Opt+Cmd+;") so the value in `defaults` is
-    /// the same string the user pastes into VoiceInk.
-    @Published var hotkey: HotkeySpec {
+    /// What a confirmed double-tap does. The one value the engine reads; the
+    /// panel writes only this and the two drafts below, which feed it.
+    @Published var action: TunkAction {
         didSet {
-            guard hotkey != oldValue else { return }
-            defaults.set(hotkey.description, forKey: Key.hotkey)
-            onHotkeyChange?(hotkey)
+            guard action != oldValue else { return }
+            persist(action, key: Key.action)
+            onActionChange?(action)
+        }
+    }
+
+    /// The combination to use when the action kind is `.hotkey`. Kept while the
+    /// user is in another mode so switching to "Run a Shortcut" and back does
+    /// not lose the shortcut they spent a minute picking. UI memory only — the
+    /// engine never reads it, and it is written into `action` the moment the
+    /// kind matches.
+    @Published var hotkeyDraft: HotkeySpec {
+        didSet {
+            guard hotkeyDraft != oldValue else { return }
+            defaults.set(hotkeyDraft.description, forKey: Key.hotkeyDraft)
+            if action.kind == .hotkey { action = .hotkey(hotkeyDraft) }
+        }
+    }
+
+    /// Same idea for the chosen Shortcut's name.
+    @Published var shortcutDraft: String {
+        didSet {
+            guard shortcutDraft != oldValue else { return }
+            defaults.set(shortcutDraft, forKey: Key.shortcutDraft)
+            if action.kind == .shortcut { action = .shortcut(name: shortcutDraft) }
+        }
+    }
+
+    /// The picker's value. Switching kind rebuilds `action` from the draft for
+    /// that kind, so nothing is invented and nothing is lost.
+    var actionKind: TunkAction.Kind {
+        get { action.kind }
+        set {
+            switch newValue {
+            case .hotkey:   action = .hotkey(hotkeyDraft)
+            case .shortcut: action = .shortcut(name: shortcutDraft)
+            case .none:     action = .none
+            }
         }
     }
 
@@ -59,9 +99,23 @@ final class AppSettings: ObservableObject {
     init() {
         let d = UserDefaults(suiteName: AppSettings.suiteName) ?? .standard
         config = AppSettings.load(DetectorConfig.self, key: Key.config, from: d) ?? .default
-        hotkey = (d.string(forKey: Key.hotkey).flatMap { try? HotkeySpec(parsing: $0) })
+        let loaded = AppSettings.loadAction(from: d)
+        action = loaded
+        // Seed the drafts from whatever was loaded, so the first switch between
+        // kinds offers the user's own value rather than a shipped default.
+        hotkeyDraft = loaded.hotkeySpec
+            ?? d.string(forKey: Key.hotkeyDraft).flatMap { try? HotkeySpec(parsing: $0) }
             ?? .recommendedDefault
+        shortcutDraft = loaded.shortcutName ?? d.string(forKey: Key.shortcutDraft) ?? ""
         enabled = d.object(forKey: Key.enabled) as? Bool ?? true
+    }
+
+    /// Loads the action, migrating settings written before `TunkAction` existed.
+    /// The rules live in `TunkAction.restored`, in TunkEmit, where they are
+    /// under test; this reads the two keys and hands them over.
+    private static func loadAction(from d: UserDefaults) -> TunkAction {
+        TunkAction.restored(actionData: d.data(forKey: Key.action),
+                            legacyHotkeyText: d.string(forKey: Key.legacyHotkey))
     }
 
     func resetDetectionToDefaults() {

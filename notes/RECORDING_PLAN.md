@@ -1,9 +1,29 @@
 # Recording plan
 
 The one thing no agent can do. Everything else in this build is verifiable by
-machine; the ground truth is not. `tunk-capture guide` walks you through each
-block hands-free — it speaks the instructions and beeps when it wants a tap, so
-you never need to look at the screen or touch the keyboard mid-block.
+machine; the ground truth is not.
+
+> Every command below was run against the shipped CLI before being written down.
+> An earlier version of this file invented `--category` and `--duration` flags
+> that `guide` does not accept — it swallowed them and silently recorded all 12
+> phases instead of the one asked for. If a command here ever errors or does
+> something unexpected, stop and say so; the plan is wrong, not you.
+
+**Wear headphones.** The tool speaks the prompts and plays the beeps. Through the
+laptop speakers those shake the chassis and land in the accelerometer stream as
+fake transients, which poisons exactly the data we are collecting.
+
+Check the rig first, once:
+
+```bash
+cd /Users/stas/Playground/tunk
+./bin/tunk-capture doctor
+```
+
+It needs **Input Monitoring** granted to your terminal app. If `input tap` comes
+back anything but OK, the session records no keyboard or trackpad activity, the
+harness cannot reproduce the typing suppression gate, and the false-positive
+numbers become meaningless.
 
 Ordered by value. **Block A alone unblocks the loop.** If you stop after it, the
 run continues on desk-only data and the critics will say so explicitly rather
@@ -11,62 +31,93 @@ than quietly pretending the other surfaces passed.
 
 ## Block A — desk, the core set (~14 min)
 
-The minimum that lets tuning start.
+`guide` runs one phase per `--only` entry, with `--taps` prompted double-taps and
+a randomised rest between them.
 
-| # | Command | Time |
-|---|---|---|
-| A1 | `tunk-capture guide --category tap_palmrest --surface desk` | 2 min |
-| A2 | `tunk-capture guide --category tap_deck --surface desk` | 2 min |
-| A3 | `tunk-capture guide --category tap_bottom --surface desk` | 2 min |
-| A4 | `tunk-capture guide --category typing --surface desk --duration 300` | 5 min |
-| A5 | `tunk-capture guide --category trackpad --surface desk --duration 120` | 2 min |
-| A6 | `tunk-capture guide --category idle --surface desk --duration 60` | 1 min |
+```bash
+cd /Users/stas/Playground/tunk
 
-A4 is the make-or-break recording. Type real prose, at your normal speed, with
-your normal force. No deliberate taps. If you tap by accident, say so out loud —
-the tool records an operator mark — and keep going.
+# three tap locations, 20 prompted double-taps each
+./bin/tunk-capture guide --surface desk --only tap_palmrest --taps 20
+./bin/tunk-capture guide --surface desk --only tap_deck     --taps 20
+./bin/tunk-capture guide --surface desk --only tap_bottom   --taps 20
+
+# five minutes of real prose, no intended taps. The make-or-break recording.
+./bin/tunk-capture guide --surface desk --only typing --typing-sec 300
+
+# trackpad clicks and hard taps
+./bin/tunk-capture guide --surface desk --only trackpad --trackpad-sec 120
+
+# machine untouched
+./bin/tunk-capture guide --surface desk --only idle --confound-sec 60
+```
 
 ## Block B — confounds, desk (~9 min)
 
-Every one of these must produce zero triggers. This is where a naive detector dies.
+Every one of these must produce zero triggers. This is where a naive detector
+dies. One command, six phases, prompts you through each:
 
-| # | Command | What to do |
-|---|---|---|
-| B1 | `... --category confound_mug --surface desk --duration 90` | set a mug down near, then on, the desk. Vary how hard. |
-| B2 | `... --category confound_lid --surface desk --duration 90` | slam a browser tab shut, hard Return presses, nudge the lid |
-| B3 | `... --category confound_phone --surface desk --duration 90` | phone on the same desk, ring it a few times |
-| B4 | `... --category confound_music --surface desk --duration 120` | bass-heavy track, loud enough to feel through the desk |
-| B5 | `... --category confound_footfall --surface desk --duration 90` | someone walks past on the timber floor. Stamp if alone. |
-| B6 | `... --category confound_handling --surface desk --duration 90` | reposition, lift, put down, plug and unplug a cable |
+```bash
+./bin/tunk-capture guide --surface desk --confound-sec 90 \
+  --only confound_mug,confound_lid,confound_phone,confound_music,confound_footfall,confound_handling
+```
+
+What each wants: set a mug down near then on the desk, varying force; slam a
+browser tab shut and hit Return hard, nudge the lid; let a phone buzz on the same
+desk; play something bass-heavy loud enough to feel through the desk; have
+someone walk past on the timber floor, or stamp if you are alone; reposition,
+lift, set down, plug and unplug a cable.
 
 ## Block C — soft surface (~11 min)
 
 Laptop on a bed or cushion. Coupling changes a lot here; this is where a fixed
 threshold falls apart.
 
-C1–C3: the three tap categories. C4: typing, 240 s. C5: idle, 60 s.
-C6: `confound_handling`, 90 s.
+```bash
+./bin/tunk-capture guide --surface soft --taps 20 \
+  --only tap_palmrest,tap_deck,tap_bottom
+./bin/tunk-capture guide --surface soft --typing-sec 240 --only typing
+./bin/tunk-capture guide --surface soft --confound-sec 90 --only idle,confound_handling
+```
 
 ## Block D — lap (~11 min)
 
-Same six as Block C, `--surface lap`. Your body damps the chassis heavily. If
-detection turns out to be physically unreachable here, the critic reports that
-with the data rather than relaxing the number.
+Same shape, `--surface lap`. Your body damps the chassis heavily. If detection
+turns out to be physically unreachable here, the critic reports that with the
+data rather than relaxing the number.
+
+```bash
+./bin/tunk-capture guide --surface lap --taps 20 \
+  --only tap_palmrest,tap_deck,tap_bottom
+./bin/tunk-capture guide --surface lap --typing-sec 240 --only typing
+./bin/tunk-capture guide --surface lap --confound-sec 90 --only idle,confound_handling
+```
 
 ## Block E — holdout (~12 min)
 
-**Recorded last, and I never look at it during tuning.** Same shape as Block A
-plus one confound, but written to `data/holdout/` with `--split test`. Every
-number that decides pass or fail comes from these recordings.
+**Recorded last, and never read during tuning.** Every number that decides pass
+or fail comes from these. `--out data/holdout` plus `--split test` keeps them
+apart, and `tunk-score` refuses to touch them without an explicit critic flag.
 
-| # | Command |
-|---|---|
-| E1 | `tunk-capture guide --category tap_palmrest --surface desk --split test` |
-| E2 | `tunk-capture guide --category tap_deck --surface soft --split test` |
-| E3 | `tunk-capture guide --category tap_bottom --surface lap --split test` |
-| E4 | `tunk-capture guide --category typing --surface desk --duration 300 --split test` |
-| E5 | `tunk-capture guide --category typing --surface lap --duration 180 --split test` |
-| E6 | `tunk-capture guide --category confound_music --surface desk --duration 120 --split test` |
+```bash
+H="--out data/holdout --split test"
+
+./bin/tunk-capture guide --surface desk $H --taps 20 --only tap_palmrest
+./bin/tunk-capture guide --surface soft $H --taps 20 --only tap_deck
+./bin/tunk-capture guide --surface lap  $H --taps 20 --only tap_bottom
+./bin/tunk-capture guide --surface desk $H --typing-sec 300 --only typing
+./bin/tunk-capture guide --surface lap  $H --typing-sec 180 --only typing
+./bin/tunk-capture guide --surface desk $H --confound-sec 120 --only confound_music
+```
+
+## After each block
+
+```bash
+./bin/tunk-capture verify        # checks the newest session
+```
+
+PASS or PASS WITH WARNINGS is fine. A FAIL means that session is unusable and
+worth re-recording while you are still set up.
 
 ## Ground rules
 
@@ -77,9 +128,10 @@ number that decides pass or fail comes from these recordings.
   cannot cheat off a fixed period.
 - If a prompt goes wrong, say what happened out loud and carry on. The tool logs
   an operator mark and that group gets dropped rather than mislabelled.
-- Note the surface in `--notes` if it is unusual (glass desk, thick duvet).
+- Ctrl-C at any point flushes and writes a valid session. Nothing is lost.
+- Note anything unusual about the surface with `--notes "glass desk"`.
 
 ## Total
 
-Roughly 57 minutes of recording, in blocks you can spread out. Block A is 14 of
-those and is the one that matters most.
+Roughly 57 minutes, in blocks you can spread out. Block A is 14 of those and is
+the one that matters most.

@@ -12,6 +12,16 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
     case postFailed(String)
     /// A hotkey string the parser could not read.
     case invalidHotkey(String, reason: String)
+    /// The action is `.shortcut` but no name has been picked yet.
+    case noShortcutChosen
+    /// `/usr/bin/shortcuts` is not there. Shortcuts.app ships with macOS, so
+    /// this means a stripped system or a sandbox, not a missing download.
+    case shortcutsCLIMissing(path: String)
+    /// `shortcuts run <name>` exited non-zero. `detail` is its own stderr.
+    case shortcutFailed(name: String, exitCode: Int32, detail: String)
+    /// The shortcut was still running when the watchdog gave up. It has not been
+    /// killed; Tunk simply stopped waiting to hear about it.
+    case shortcutTimedOut(name: String, seconds: TimeInterval)
 
     public var description: String {
         switch self {
@@ -23,6 +33,15 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
             return "posting the key event failed: \(detail)"
         case .invalidHotkey(let raw, let reason):
             return "\"\(raw)\" is not a valid hotkey: \(reason)."
+        case .noShortcutChosen:
+            return "Tunk is set to run a Shortcut, but no Shortcut has been picked."
+        case .shortcutsCLIMissing(let path):
+            return "the Shortcuts command line tool is missing at \(path)."
+        case .shortcutFailed(let name, let code, let detail):
+            return "the Shortcut \"\(name)\" failed (exit \(code)): \(detail)"
+        case .shortcutTimedOut(let name, let seconds):
+            return "the Shortcut \"\(name)\" has not finished after "
+                 + "\(Int(seconds)) s; it is still running."
         }
     }
 
@@ -42,6 +61,17 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
             return "Check that Accessibility is still granted; macOS revokes it when the app binary changes."
         case .invalidHotkey:
             return "Write it like Ctrl+Opt+Cmd+; or ⌃⌥⌘; — modifiers first, one key last."
+        case .noShortcutChosen:
+            return "Pick one in Settings → Action, or switch the action back to a hotkey."
+        case .shortcutsCLIMissing:
+            return "Open Shortcuts.app once to let macOS install its command line tool."
+        case .shortcutFailed:
+            return "Open Shortcuts.app and run it by hand to see what it is asking for. "
+                 + "A Shortcut that needs a confirmation or an app that is not open will "
+                 + "fail the same way when Tunk runs it."
+        case .shortcutTimedOut:
+            return "Nothing was cancelled. If it waits for you every time, it is not a good "
+                 + "fit for a double-tap; pick a Shortcut that runs unattended."
         }
     }
 

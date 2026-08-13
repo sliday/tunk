@@ -33,8 +33,16 @@ struct MonitorSnapshot {
     var noiseFloor: Double = 0
 }
 
-/// Owns the sensor, the detector, the input gate and the emitter, and is the
-/// only thing that knows how they fit together.
+/// Carries a weak `Engine` across a `@Sendable` boundary. `Engine` is not
+/// `Sendable` and must not pretend to be; this box only moves the reference,
+/// and every read of it happens on the main thread.
+private final class WeakEngineRef: @unchecked Sendable {
+    weak var engine: Engine?
+    init(_ engine: Engine) { self.engine = engine }
+}
+
+/// Owns the sensor, the detector, the input gate and the action runner, and is
+/// the only thing that knows how they fit together.
 ///
 /// Threading: samples arrive on `AccelSource`'s own queue and go straight into
 /// the detector under `detectorLock`. Input events arrive on the main thread and
@@ -45,12 +53,12 @@ final class Engine: ObservableObject {
     @Published private(set) var sampleRateHz: Double = 0
     @Published private(set) var triggerCount: Int = 0
     @Published private(set) var lastLatencyMs: Double?
-    @Published private(set) var lastEmitError: String?
     @Published private(set) var permissions: PermissionState = .current()
     @Published private(set) var isCalibrating = false
-    /// Straight from the emitter, so the panel can show that every key-down got
-    /// its key-up rather than asserting it in a comment.
-    @Published private(set) var emitStats = EmitStats()
+    /// Straight from the action runner, so the panel can show that every
+    /// key-down got its key-up rather than asserting it in a comment, and can
+    /// show a shortcut's dispatch and completion latencies side by side.
+    @Published private(set) var actionStats = ActionStats()
 
     /// Fired on the main thread each time a gesture is confirmed, so the menubar
     /// can flash.
@@ -58,7 +66,7 @@ final class Engine: ObservableObject {
 
     private let settings: AppSettings
     private let accel = AccelSource()
-    private let emitter: HotkeyEmitter
+    private let runner: ActionRunner
     private var input: InputActivityMonitor?
 
     private let detectorLock = NSLock()
@@ -104,11 +112,22 @@ final class Engine: ObservableObject {
         let made = DetectorFactory.make(config: settings.config)
         self.detector = made
         self.readout = made as? TapDetector
-        self.emitter = HotkeyEmitter(hotkey: settings.hotkey)
+        self.runner = ActionRunner(action: settings.action)
 
         settings.onConfigChange = { [weak self] config in self?.apply(config: config) }
         settings.onEnabledChange = { [weak self] on in self?.setEnabled(on) }
-        settings.onHotkeyChange = { [weak self] spec in self?.emitter.hotkey = spec }
+        settings.onActionChange = { [weak self] action in self?.runner.action = action }
+
+        // A shortcut reports back long after the tap that started it, from the
+        // spawner's queue. This is the only path by which a failed shortcut
+        // reaches the panel, so it must not be dropped. The box exists so the
+        // engine is dereferenced on the main thread and nowhere else — its
+        // `@Published` properties are not thread-safe, which is the whole
+        // reason every write in this file hops first.
+        let box = WeakEngineRef(self)
+        runner.onChange = { stats in
+            DispatchQueue.main.async { box.engine?.actionStats = stats }
+        }
 
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(self, selector: #selector(willSleep),
@@ -209,24 +228,21 @@ final class Engine: ObservableObject {
         guard let trigger else { return }
         if calibrating { return }        // learning a tap must never fire a key
 
-        var failure: String?
-        var stats = EmitStats()
-        do {
-            stats = try emitter.emit(for: trigger)
-        } catch {
-            failure = error.localizedDescription
-            stats = emitter.stats
-        }
-        // Measured after the post returns, so this is onset-to-key-out, not
-        // onset-to-decision. The decision-only figure is what the harness scores.
+        // Throws only on the hotkey path, and the runner has already put the
+        // text in `stats.lastErrorText`; catching it here keeps it off the
+        // sensor thread's call stack.
+        _ = try? runner.run(for: trigger)
+
+        // Measured after the runner returns, so this is onset-to-handoff: the
+        // keystroke is out, or the shortcut has been handed to its own queue.
+        // What a shortcut then does with its own time is `ActionStats`'s
+        // completion latency and is not part of this number.
         let latencyMs = Double(nowNs() - (trigger.tapOnsets.last ?? trigger.tNs)) / 1_000_000
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.triggerCount += 1
             self.lastLatencyMs = latencyMs
-            self.lastEmitError = failure
-            self.emitStats = stats
             self.onTrigger?()
         }
     }
@@ -372,11 +388,14 @@ final class Engine: ObservableObject {
         return (calibrationStrengths, calibrationSuppressed, readout?.noiseFloor ?? 0)
     }
 
-    /// Fires the configured combination on demand, for the panel's test button.
+    /// Runs the configured action once, on demand, for the panel's Test button.
+    ///
+    /// This and a real double-tap are the only two things in Tunk that may run a
+    /// user's Shortcut. Nothing probes, validates, warms up or benchmarks one.
     @discardableResult
-    func testEmit() throws -> EmitStats {
-        let stats = try emitter.emit(settings.hotkey)
-        emitStats = stats
+    func testAction() throws -> ActionStats {
+        let stats = try runner.run(settings.action)
+        actionStats = stats
         return stats
     }
 

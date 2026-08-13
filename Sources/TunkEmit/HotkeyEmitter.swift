@@ -41,6 +41,14 @@ public struct EmitStats: Sendable, Equatable {
     public var keyDownsPosted: Int = 0
     public var keyUpsPosted: Int = 0
 
+    /// `mach_absolute_time()` ns of the moment the last key-down went out.
+    ///
+    /// This, not the return of `emit()`, is when the keystroke reached the
+    /// system: the key is then deliberately held for `keyDownHoldNs` before the
+    /// up, and that hold is not latency. `ActionRunner` measures dispatch
+    /// latency to this stamp. Nil until a key-down has actually been posted.
+    public var lastKeyDownMachNs: Int64?
+
     /// True if a key-down was posted whose key-up was not. Must never be true.
     public var hasStuckKey: Bool { keyDownsPosted > keyUpsPosted }
 
@@ -232,7 +240,11 @@ public final class HotkeyEmitter: @unchecked Sendable {
     }
 
     private func countDown() {
-        lock.lock(); _stats.keyDownsPosted += 1; lock.unlock()
+        let now = EmitClock.nowNanos()
+        lock.lock()
+        _stats.keyDownsPosted += 1
+        _stats.lastKeyDownMachNs = now
+        lock.unlock()
     }
 
     private func countUp() {

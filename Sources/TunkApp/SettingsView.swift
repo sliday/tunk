@@ -5,6 +5,25 @@ import TunkEmit
 
 final class PanelModel: ObservableObject {
     @Published var showCalibration = false
+
+    /// The Shortcuts library, listed once when the panel opens and again when
+    /// the user asks. Held here rather than in a `@State` so reopening the
+    /// window does not re-list on every redraw.
+    @Published private(set) var shortcuts: [String] = []
+    @Published private(set) var didListShortcuts = false
+
+    /// Listing is `shortcuts list`, which is read-only and measured at ~10 ms.
+    /// It never runs a Shortcut — see `ShortcutsCatalog`.
+    func refreshShortcuts() {
+        shortcuts = ShortcutsCatalog.refresh()
+        didListShortcuts = true
+    }
+
+    func listShortcutsIfNeeded() {
+        guard !didListShortcuts else { return }
+        shortcuts = ShortcutsCatalog.available()
+        didListShortcuts = true
+    }
 }
 
 struct SettingsView: View {
@@ -13,7 +32,7 @@ struct SettingsView: View {
     @ObservedObject var panel: PanelModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showAdvanced = false
-    @State private var emitTestResult: String?
+    @State private var actionTestResult: String?
 
     var body: some View {
         ScrollView(.vertical) {
@@ -22,7 +41,7 @@ struct SettingsView: View {
                 statusCard
                 monitorCard
                 detectionCard
-                hotkeyCard
+                actionCard
                 calibrationCard
                 footnote
             }
@@ -30,6 +49,7 @@ struct SettingsView: View {
         }
         .frame(width: 452)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear { panel.listShortcutsIfNeeded() }
         .sheet(isPresented: $panel.showCalibration) {
             CalibrationView(engine: engine) { panel.showCalibration = false }
         }
@@ -104,9 +124,6 @@ struct SettingsView: View {
                 .frame(minHeight: Metrics.hitTarget)
                 .contentShape(Rectangle())
 
-            if let error = engine.lastEmitError {
-                Text(error).font(.system(size: 11)).foregroundStyle(.orange)
-            }
         }
     }
 
@@ -236,44 +253,188 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - hotkey
+    // MARK: - action
 
-    private var hotkeyCard: some View {
-        Card(title: "Emitted hotkey",
-             caption: "Tunk posts this on a confirmed double-tap. Paste the same combination "
-                    + "into VoiceInk → Settings → Shortcuts → Second Shortcut, recording mode "
-                    + "\"toggle\". Leave your Right Shift binding alone.") {
-            HStack(spacing: 8) {
-                HotkeyRecorderView(binding: $settings.hotkey)
-                Spacer()
-                Button("Send it now", action: testEmit)
-                    .buttonStyle(TunkButtonStyle())
-                    .disabled(!engine.permissions.accessibility)
+    /// Modelled on iPhone Back Tap: one fixed gesture, a short list of actions.
+    /// The kind picker is the only control always on screen; the rest of the
+    /// card is whatever that kind needs.
+    private var actionCard: some View {
+        Card(title: "Action",
+             caption: "What a confirmed double-tap does. The gesture is fixed; the action is "
+                    + "yours, the way Back Tap works on iPhone.") {
+            Picker("Action", selection: actionKind) {
+                Text("Send a hotkey").tag(TunkAction.Kind.hotkey)
+                Text("Run a Shortcut").tag(TunkAction.Kind.shortcut)
+                Text("Do nothing").tag(TunkAction.Kind.none)
             }
-            HStack(spacing: 18) {
-                Readout(label: "paste into VoiceInk", value: settings.hotkey.description,
-                        accent: .primary)
-                Readout(label: "key downs / ups",
-                        value: "\(engine.emitStats.keyDownsPosted) / "
-                             + "\(engine.emitStats.keyUpsPosted)",
-                        accent: engine.emitStats.hasStuckKey ? .orange : .secondary)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(minHeight: 28)
+
+            Group {
+                switch settings.actionKind {
+                case .hotkey:   hotkeySection
+                case .shortcut: shortcutSection
+                case .none:     nothingSection
+                }
             }
-            if let emitTestResult {
-                Text(emitTestResult)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
-            }
+            .transition(.opacity)
+
+            actionFooter
+                .transition(.opacity.animation(.tunkSnappy.delay(Metrics.stagger)))
         }
-        .tunkAnimation(.tunkSnappy, value: emitTestResult, reduceMotion: reduceMotion)
+        .tunkAnimation(.tunkSnappy, value: settings.action, reduceMotion: reduceMotion)
+        .tunkAnimation(.tunkSnappy, value: actionTestResult, reduceMotion: reduceMotion)
     }
 
-    private func testEmit() {
+    private var actionKind: Binding<TunkAction.Kind> {
+        Binding(get: { settings.actionKind }, set: { settings.actionKind = $0 })
+    }
+
+    // MARK: - action: hotkey
+
+    private var hotkeySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HotkeyRecorderView(binding: $settings.hotkeyDraft)
+            // The reason the app exists. It stays on screen in this mode.
+            Text("Paste the same combination into VoiceInk → Settings → Shortcuts → "
+               + "Second Shortcut, recording mode \"toggle\". Leave your Right Shift "
+               + "binding alone; it stays your manual trigger.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 18) {
+                Readout(label: "paste into VoiceInk",
+                        value: settings.hotkeyDraft.description, accent: .primary)
+                Readout(label: "key downs / ups",
+                        value: "\(engine.actionStats.emit.keyDownsPosted) / "
+                             + "\(engine.actionStats.emit.keyUpsPosted)",
+                        accent: engine.actionStats.hasStuckKey ? .orange : .secondary)
+            }
+        }
+    }
+
+    // MARK: - action: shortcut
+
+    private var shortcutSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if panel.shortcuts.isEmpty {
+                    Text(ShortcutsCatalog.isCLIAvailable
+                         ? "No Shortcuts found."
+                         : "Shortcuts is not available on this Mac.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Shortcut", selection: $settings.shortcutDraft) {
+                        if settings.shortcutDraft.isEmpty {
+                            Text("Choose a Shortcut…").tag("")
+                        } else if !panel.shortcuts.contains(settings.shortcutDraft) {
+                            // Renamed or deleted since it was chosen. Shown so
+                            // the picker is not mysteriously blank.
+                            Text("\(settings.shortcutDraft) (not in your library)")
+                                .tag(settings.shortcutDraft)
+                        }
+                        ForEach(panel.shortcuts, id: \.self) { Text($0).tag($0) }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 260)
+                }
+                Spacer()
+                Button("Refresh", action: panel.refreshShortcuts)
+                    .buttonStyle(TunkButtonStyle())
+                    .help("List your Shortcuts again. This reads the list; it runs nothing.")
+            }
+            .frame(minHeight: Metrics.hitTarget)
+
+            Text(panel.shortcuts.isEmpty
+                 ? "Add one in Shortcuts.app, then press Refresh."
+                 : "Tunk starts the Shortcut and returns immediately, so a slow Shortcut "
+                 + "never delays detection. It runs only on a real double-tap or on Test.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - action: nothing
+
+    private var nothingSection: some View {
+        Text("Taps are still detected, counted and drawn in the monitor above — Tunk just "
+           + "does not send anything. Useful while you tune sensitivity.")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - action: shared footer
+
+    private var actionFooter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 18) {
+                // Decision to handoff. This is the figure the 250 ms target is
+                // measured against, and it stays near a millisecond whatever the
+                // action does afterwards.
+                Readout(label: "dispatch",
+                        value: engine.actionStats.lastDispatchMs
+                            .map { String(format: "%.2f ms", $0) } ?? "—")
+                if settings.actionKind == .shortcut {
+                    // Reported, never waited on. A nine-second Shortcut is not a
+                    // Tunk latency failure.
+                    Readout(label: "Shortcut took",
+                            value: engine.actionStats.lastCompletionMs
+                                .map { String(format: "%.0f ms", $0) } ?? "—")
+                }
+                Spacer()
+                Button("Test", action: runTestAction)
+                    .buttonStyle(TunkButtonStyle())
+                    .disabled(!canTest)
+                    .help(testHelp)
+            }
+            .frame(minHeight: Metrics.hitTarget)
+
+            if let text = engine.actionStats.lastErrorText {
+                Text(text)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let actionTestResult {
+                Text(actionTestResult)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var canTest: Bool {
+        guard settings.action.isRunnable else { return false }
+        guard settings.actionKind == .hotkey else { return true }
+        return engine.permissions.accessibility
+    }
+
+    private var testHelp: String {
+        switch settings.actionKind {
+        case .hotkey:   return "Send the combination to the frontmost app once"
+        case .shortcut: return "Run this Shortcut once, now"
+        case .none:     return "Nothing to test"
+        }
+    }
+
+    private func runTestAction() {
         do {
-            try engine.testEmit()
-            emitTestResult = "Sent \(settings.hotkey.symbolicDescription) to the frontmost app."
+            try engine.testAction()
+            switch settings.action {
+            case .hotkey(let spec):
+                actionTestResult = "Sent \(spec.symbolicDescription) to the frontmost app."
+            case .shortcut(let name):
+                actionTestResult = "Started \"\(name)\". Tunk does not wait for it to finish."
+            case .none:
+                actionTestResult = nil
+            }
         } catch {
-            emitTestResult = error.localizedDescription
+            actionTestResult = error.localizedDescription
         }
     }
 
