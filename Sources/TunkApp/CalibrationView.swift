@@ -102,15 +102,32 @@ struct CalibrationView: View {
                             accent: .primary)
                     Readout(label: "median", value: format(result.medianStrength),
                             accent: .primary)
-                    Readout(label: "threshold", value: format(result.threshold),
+                    Readout(label: scaledBySensitivity ? "threshold in force" : "threshold",
+                            value: format(thresholdInForce ?? result.threshold),
                             accent: .accentColor)
                     Readout(label: "margin",
-                            value: String(format: "%.2f×", result.margin),
-                            accent: result.margin < TapCalibration.comfortableMargin
+                            value: String(format: "%.2f×", marginInForce),
+                            accent: marginInForce < TapCalibration.comfortableMargin
                                 ? .orange : .primary)
                 }
                 .opacity(revealed ? 1 : 0)
                 .tunkAnimation(.tunkSnappy, value: revealed, reduceMotion: reduceMotion)
+
+                // Said out loud rather than folded into one number: the panel's
+                // sensitivity slider multiplies whatever this step derives, so
+                // the bar shown above is not the bar that was measured.
+                if scaledBySensitivity {
+                    Text(String(format: "Your sensitivity slider is at %.2f×, so the %.3f g "
+                                + "measured from these taps runs as %.3f g. Set sensitivity "
+                                + "back to 1.00× to run exactly what was measured.",
+                                engine.calibrationSensitivity, result.threshold,
+                                thresholdInForce ?? result.threshold))
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             distribution
                 .opacity(revealed ? 1 : 0)
@@ -126,9 +143,32 @@ struct CalibrationView: View {
         }
     }
 
+    /// The bar the detector will run once this is committed. Calibration
+    /// measures with sensitivity held at 1.0, but `effectiveThreshold` is
+    /// `calibratedThreshold * sensitivity`, so a user who has moved that slider
+    /// gets a different number than the one this step derived. Same formula the
+    /// detector uses: the calibrated term, or the noise floor, whichever wins.
+    private var thresholdInForce: Double? {
+        guard let result else { return nil }
+        let tuning = DSPTuning.default
+        return max(result.threshold * engine.calibrationSensitivity,
+                   max(tuning.noiseSnrMultiple * result.noiseFloor, tuning.minThresholdG))
+    }
+
+    /// `weakest tap / threshold in force`. `CalibrationResult.margin` is
+    /// measured against the derived threshold, which is not what runs.
+    private var marginInForce: Double {
+        guard let result, let bar = thresholdInForce, bar > 0 else { return .infinity }
+        return result.weakestStrength / bar
+    }
+
+    private var scaledBySensitivity: Bool {
+        abs(engine.calibrationSensitivity - 1.0) > 0.001
+    }
+
     private var warned: Bool {
         guard let result else { return false }
-        return result.noiseLimited || result.margin < TapCalibration.comfortableMargin
+        return result.noiseLimited || marginInForce < TapCalibration.comfortableMargin
     }
 
     private var verdict: String {
@@ -138,10 +178,10 @@ struct CalibrationView: View {
                 + "setting the bar. Tunk will still work, but expect to tap firmly. A hard "
                 + "desk gives a better result than a lap or a cushion."
         }
-        if result.margin < TapCalibration.comfortableMargin {
+        if marginInForce < TapCalibration.comfortableMargin {
             return String(format: "Your weakest tap clears the bar by only %.2f×. That will "
                           + "work, but a light tap may be missed. Redo it hitting a little "
-                          + "harder if that bothers you.", result.margin)
+                          + "harder if that bothers you.", marginInForce)
         }
         return "Every tap clears the line with room to spare. If one bar is much taller than "
             + "the rest you probably hit the deck instead of the palm rest."
@@ -149,7 +189,9 @@ struct CalibrationView: View {
 
     private var distribution: some View {
         let sorted = strengths.sorted()
-        let derived = result?.threshold
+        // The line is drawn where the detector will put it, not where the
+        // derivation put it, so a bar that looks clear of it really is.
+        let derived = thresholdInForce
         let top = max(sorted.last ?? 1, derived ?? 1) * 1.15
         return ZStack(alignment: .bottomLeading) {
             GeometryReader { geo in

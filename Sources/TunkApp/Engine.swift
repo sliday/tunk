@@ -450,6 +450,20 @@ final class Engine: ObservableObject {
         return (calibrationStrengths, calibrationSuppressed, readout?.noiseFloor ?? 0)
     }
 
+    /// The sensitivity slider's value, which is held out of the way while taps
+    /// are measured (`beginCalibration` probes at 1.0) and then multiplies
+    /// whatever threshold this step derives, because `effectiveThreshold` is
+    /// `calibratedThreshold * sensitivity`.
+    ///
+    /// The review screen needs it or it reports a bar the detector will not run:
+    /// at sensitivity 1.35 a derived 0.42 g goes into force as 0.567 g, and a
+    /// "your weakest tap clears by 1.25x" verdict computed against 0.42 is then
+    /// wrong about the only thing it is there to say.
+    var calibrationSensitivity: Double {
+        detectorLock.lock(); defer { detectorLock.unlock() }
+        return (configBeforeCalibration ?? settings.config).sensitivity
+    }
+
     /// Runs one row's action once, on demand, for that row's Test button.
     ///
     /// This and a real tap are the only two things in Tunk that may run a user's

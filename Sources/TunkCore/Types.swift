@@ -270,6 +270,17 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
 public protocol TapDetecting: AnyObject {
     var config: DetectorConfig { get set }
 
+    /// The tap counts this detector will actually fire on, right now.
+    ///
+    /// Part of the protocol rather than one implementation's detail because the
+    /// scoring harness compares it against what it is grading, and refuses to
+    /// grade when they disagree. That check existed once as a cast to the
+    /// concrete type with a fallback to `config.armedTapCounts` — which is
+    /// exactly what it was meant to verify, so a stub reading the lossy
+    /// `tapCountToFire` accessor sailed through while armed for one count and
+    /// graded against three. A detector has to answer for itself.
+    var effectiveArmedTapCounts: Set<Int> { get }
+
     /// Feed one accelerometer sample. Returns a trigger if this sample completed
     /// a gesture.
     func ingest(sample: AccelSample) -> Trigger?

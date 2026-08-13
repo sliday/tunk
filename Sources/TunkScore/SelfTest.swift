@@ -586,6 +586,9 @@ enum SelfTest {
 /// directly instead of guessing at it from the triggers that came out.
 private final class OrderProbe: TapDetecting {
     var config = DetectorConfig.default
+    /// Never fires, so nothing is armed. Stated rather than inherited, because
+    /// the harness refuses to grade a detector whose armed set it cannot read.
+    var effectiveArmedTapCounts: Set<Int> { [] }
     private(set) var log: [String] = []
 
     func ingest(sample: AccelSample) -> Trigger? { log.append("s@\(sample.tNs)"); return nil }

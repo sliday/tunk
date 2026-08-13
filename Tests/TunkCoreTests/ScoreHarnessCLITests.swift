@@ -175,10 +175,25 @@ final class ScoreHarnessCLITests: XCTestCase {
         XCTAssertEqual(unarmedFalsePositives, 0,
                        "a count outside the armed set must not accumulate false positives")
 
-        // And the point of the fix: the detector genuinely fires singles now, so
-        // the 2-tap count no longer collects the singles' firings.
-        XCTAssertEqual(slice("desk", 2)?["falsePositives"] as? Int, 0,
-                       "with 1 armed, single-tap firings belong to count 1, not count 2")
+        // Arming 1 does not turn these into 1-tap detections, and that is not a
+        // bug in the arming. `Synth.singleTapsWithBounce` plants a stray knock
+        // 160 ms before each deliberate single tap, and the detector fires one
+        // confirm window after its LAST onset — so the tap joins the knock and
+        // the gesture closes with a count of 2, whatever else is armed. Measured
+        // identically through `--detector stub` and the real detector: 0/5 of
+        // the labelled singles detected, 5 false triggers charged to count 2.
+        //
+        // That agreement is the thing worth pinning. The stub used to read
+        // `config.tapCountToFire` and fire on the lowest armed count alone, so
+        // with 1, 2 and 3 armed it fired singles the real detector never fires,
+        // and the harness's own armed-set tripwire could not see the divergence
+        // because it only inspects a real `TapDetector`.
+        XCTAssertEqual(slice("desk", 2)?["falsePositives"] as? Int, 5,
+                       "knock+tap closes as a 2-tap gesture, so the firings are charged there")
+        XCTAssertEqual(slice("desk", 1)?["falsePositives"] as? Int, 0,
+                       "nothing fired a single tap")
+        XCTAssertEqual(slice("desk", 1)?["detectedGroups"] as? Int, 0,
+                       "the labelled singles are missed, exactly as the fixture plants them")
     }
 
     // MARK: - The progress feed

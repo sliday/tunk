@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Tunk — Direction 3: Struck Slab</title>
+  <desc>The machine itself, edge on. A thick anodised slab, lit from above, with the flash of a strike travelling through it. One dot still in the air, one already absorbed.</desc>
+
+  <defs>
+    <clipPath id="sq">
+      <path d="M381.76 100 L642.24 100 C723.42 100 763.93 100 807.60 113.81 C855.28 137.55 886.45 168.72 910.19 216.40 C924 260.07 924 300.58 924 381.76 L924 642.24 C924 723.42 924 763.93 910.19 807.60 C886.45 855.28 855.28 886.45 807.60 910.19 C763.93 924 723.42 924 642.24 924 L381.76 924 C300.58 924 260.07 924 216.40 910.19 C168.72 886.45 137.55 855.28 113.81 807.60 C100 763.93 100 723.42 100 642.24 L100 381.76 C100 300.58 100 260.07 113.81 216.40 C137.55 168.72 168.72 137.55 216.40 113.81 C260.07 100 300.58 100 381.76 100 Z"/>
+    </clipPath>
+    <linearGradient id="air" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C313A"/>
+      <stop offset="1" stop-color="#171A1F"/>
+    </linearGradient>
+    <linearGradient id="slab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E4E8EC"/>
+      <stop offset="0.14" stop-color="#B6BCC4"/>
+      <stop offset="0.5" stop-color="#7B828B"/>
+      <stop offset="1" stop-color="#4A5058"/>
+    </linearGradient>
+    <linearGradient id="strike" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE2A6" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FF8A12" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#FFB020" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#FFB020" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#sq)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#air)"/>
+
+    <circle cx="512" cy="640" r="300" fill="url(#halo)"/>
+
+    <!-- the beat still in the air -->
+    <circle cx="512" cy="292" r="62" fill="#FFC24D"/>
+    <path d="M470 396 L554 396 L512 560 Z" fill="url(#strike)" opacity="0.75"/>
+
+    <!-- the slab -->
+    <rect x="100" y="596" width="824" height="176" fill="url(#slab)"/>
+    <rect x="100" y="596" width="824" height="10" fill="#FFFFFF" opacity="0.55"/>
+    <!-- the beat already absorbed: light blooming out of the metal -->
+    <ellipse cx="512" cy="628" rx="230" ry="34" fill="#FFD98A" opacity="0.85"/>
+    <ellipse cx="512" cy="628" rx="120" ry="20" fill="#FFF6E2"/>
+    <g fill="none" stroke="#FF9A1F" stroke-linecap="round" opacity="0.5">
+      <path d="M348 700 A200 200 0 0 0 676 700" stroke-width="14"/>
+      <path d="M266 744 A300 300 0 0 0 758 744" stroke-width="10" opacity="0.6"/>
+    </g>
+    <rect x="100" y="772" width="824" height="152" fill="#0E1114"/>
+  </g>
+</svg>

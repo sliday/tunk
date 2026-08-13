@@ -184,8 +184,15 @@ enum Synth {
     ///
     /// Planted expectation with single **not** armed: zero detections, one false
     /// trigger per gesture, every one attributed to the 2-tap count.
-    /// With single armed and the detector firing on one tap: these become the
-    /// 1-tap detection denominator instead.
+    ///
+    /// Arming single does NOT change that, which is worth stating because the
+    /// obvious guess is wrong. This comment used to claim the gestures "become
+    /// the 1-tap detection denominator instead"; measured against both the real
+    /// detector and the stub with `--armed 1,2,3`, they do not. The detector
+    /// fires one confirm window after its **last** onset, so the stray knock and
+    /// the deliberate tap 160 ms later always close as a group of two whatever
+    /// is armed. Result either way: 0/5 singles detected, 5 false triggers on
+    /// count 2.
     static func singleTapsWithBounce(count: Int, surface: Surface = .desk,
                                      leadNs: Int64 = 160_000_000,
                                      firstAtNs: Int64 = 3_000_000_000,

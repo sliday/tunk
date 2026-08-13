@@ -87,8 +87,11 @@ enum Commands {
         // `--config '{"tapCountToFire":1}'` reported 200.00. Nothing on screen
         // distinguished the two runs. Refuse to grade rather than print a number
         // whose provenance is a flag instead of a machine.
-        let detectorArmed = (DetectorFactory.make(config: config) as? TapDetector)?
-            .effectiveArmedTapCounts ?? config.armedTapCounts
+        // Ask the detector itself. Casting to a concrete type and falling back to
+        // the config would compare the config against the config, which is how
+        // the stub passed this check while armed for one count and graded
+        // against three.
+        let detectorArmed = DetectorFactory.make(config: config).effectiveArmedTapCounts
         if detectorArmed != Set(policy.armedCounts) {
             throw CLIError.usage(
                 "armed-set mismatch: the detector is armed for \(detectorArmed.sorted()) but "

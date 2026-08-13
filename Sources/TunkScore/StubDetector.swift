@@ -40,6 +40,20 @@ final class StubTapDetector: TapDetecting {
     private var onsetLog: [OnsetEvent] = []
     private var lastSeenNs = Int64.min
 
+    /// Counts this stub fires on, read from the whole armed set the way
+    /// `TapDetector` does. It used to read `config.tapCountToFire`, which is
+    /// `armedTapCounts.min()`, so `--armed 1,2,3` armed single alone and the
+    /// harness graded doubles against a detector that could not fire one. The
+    /// run's own armed-set tripwire cannot catch that: it only inspects a real
+    /// `TapDetector`, and falls back to the config for this one.
+    private var firingCounts: Set<Int> { config.armedTapCounts.filter { $0 >= 1 } }
+
+    /// What this stub will actually fire on. The harness compares it against
+    /// what it is grading and refuses to grade on divergence, so it must be the
+    /// real set and not a restatement of the config.
+    var effectiveArmedTapCounts: Set<Int> { firingCounts }
+    private var maxFiringCount: Int { firingCounts.max() ?? 0 }
+
     init(config: DetectorConfig) {
         self.config = config
     }
@@ -116,20 +130,20 @@ final class StubTapDetector: TapDetecting {
             if gap >= config.minInterTapNs && gap <= config.maxInterTapNs {
                 pendingOnsets.append(tNs)
                 pendingStrengths.append(strength)
-                // More taps than we fire on: this is a triple (or worse). Abandon
-                // the group rather than firing a double. Triple wiring goes here.
-                if pendingOnsets.count > config.tapCountToFire {
+                // More taps than any armed count: abandon the group rather than
+                // firing the shorter gesture it passed through.
+                if pendingOnsets.count > maxFiringCount {
                     pendingOnsets.removeAll(); pendingStrengths.removeAll(); fireAtNs = nil
                     return
                 }
-                fireAtNs = pendingOnsets.count == config.tapCountToFire
+                fireAtNs = firingCounts.contains(pendingOnsets.count)
                     ? tNs + config.confirmWindowNs : nil
                 return
             }
         }
         pendingOnsets = [tNs]
         pendingStrengths = [strength]
-        fireAtNs = config.tapCountToFire == 1 ? tNs + config.confirmWindowNs : nil
+        fireAtNs = firingCounts.contains(1) ? tNs + config.confirmWindowNs : nil
     }
 
     private func maybeFire(atSampleNs tNs: Int64) -> Trigger? {
@@ -139,7 +153,7 @@ final class StubTapDetector: TapDetecting {
             return nil
         }
         guard let fireAt = fireAtNs, tNs >= fireAt,
-              pendingOnsets.count == config.tapCountToFire else { return nil }
+              firingCounts.contains(pendingOnsets.count) else { return nil }
         let onsets = pendingOnsets
         let score = (pendingStrengths.min() ?? 0) / max(config.effectiveThreshold, 1e-9)
         pendingOnsets.removeAll(); pendingStrengths.removeAll(); fireAtNs = nil
