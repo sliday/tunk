@@ -134,6 +134,28 @@ which is the per-person variation that step exists to absorb.
    percentile of the observed distribution plus margin, clamped to the latency
    budget — decided from real taps, not from a guess.
 
+## D8 — The referee was drilled before the data arrived
+
+Detection rate and labelled latency had never run through the real path, because
+no labelled session has ever existed. Drilled against a planted synthetic
+holdout, so the machinery is proven rather than assumed the day real taps land:
+
+| check | result |
+|---|---|
+| holdout guard, no flag | refuses, names the path |
+| holdout guard, `--i-am-a-critic` | grades, loud banner |
+| detection rate, all armed | 44.44 % (4/9) — computes |
+| detection rate, 3-tap | 100 % (4/4) — triples detected |
+| detection rate, 1-tap | 0 % (0/5) — expected; the bounce fixture closes them as pairs |
+| **latency p95** | **222.2 ms** |
+
+The latency figure is the valuable one. It is measured the PRD's way — labelled
+last onset to trigger — and lands within 1.5 ms of the 223.7 ms that
+`tunk --latency-probe` measured by a completely independent route (wall clock,
+real `CGEventPost`, observed by an event tap). Two methods that share no code
+agreeing to a millisecond is worth more than either alone, and it is the only
+pass-line number currently backed that way.
+
 ## D5 — Stale shortcut bindings fail passively
 
 A bound Shortcut can be renamed or deleted long after binding. Resolution is
