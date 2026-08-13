@@ -20,6 +20,12 @@ enum PassLine {
     static let detectionRateFloor = 0.98
     static let latencyP95CeilingNs: Int64 = 250_000_000
     static let falsePositivesPer20MinCeiling = 1.0
+
+    /// A session has to hold at least this much recorded time before an absence
+    /// of false triggers in it means anything. Below this the check reports no
+    /// data rather than a pass, so an empty or truncated recording cannot be
+    /// mistaken for a clean one.
+    static let minimumMeaningfulSeconds: Double = 5.0
     static let requiredSurfaces: [Surface] = [.desk, .soft, .lap]
 
     /// Build the checks for one scope (a surface, or the pooled set).
@@ -39,31 +45,52 @@ enum PassLine {
 
         out.append(contentsOf: perCountChecks(for: agg, scope: scope))
 
+        // The make-or-break metric. An empty or near-empty typing session must
+        // never be able to satisfy it — this is the one check where a false
+        // green is worse than no answer at all.
         out.append(Check(
             name: "false triggers, typing sessions",
             scope: scope,
             requirement: "= 0",
             actual: agg.typingSessions == 0 ? "no typing sessions"
-                : "\(agg.typingFalsePositives) in \(agg.typingSessions) session(s)",
-            status: agg.typingSessions == 0 ? .noData : (agg.typingFalsePositives == 0 ? .pass : .fail)
+                : agg.typingSeconds < minimumMeaningfulSeconds
+                    ? String(format: "%d typing session(s) holding only %.1f s of data",
+                             agg.typingSessions, agg.typingSeconds)
+                    : String(format: "%d in %d session(s), %.1f min",
+                             agg.typingFalsePositives, agg.typingSessions,
+                             agg.typingSeconds / 60),
+            status: agg.typingSessions == 0 || agg.typingSeconds < minimumMeaningfulSeconds
+                ? .noData : (agg.typingFalsePositives == 0 ? .pass : .fail)
         ))
 
+        // Counting sessions is not enough. A session file with zero samples in
+        // it is still one session, and it used to satisfy this check outright:
+        // an empty directory bought a green "0 false triggers in 1 session".
+        // Recorded seconds is the thing that makes the check mean something.
         out.append(Check(
             name: "false triggers, confound sessions",
             scope: scope,
             requirement: "= 0",
             actual: agg.confoundSessions == 0 ? "no confound sessions"
-                : "\(agg.confoundFalsePositives) in \(agg.confoundSessions) session(s)",
-            status: agg.confoundSessions == 0 ? .noData : (agg.confoundFalsePositives == 0 ? .pass : .fail)
+                : agg.confoundSeconds < minimumMeaningfulSeconds
+                    ? String(format: "%d confound session(s) holding only %.1f s of data",
+                             agg.confoundSessions, agg.confoundSeconds)
+                    : String(format: "%d in %d session(s), %.1f min",
+                             agg.confoundFalsePositives, agg.confoundSessions,
+                             agg.confoundSeconds / 60),
+            status: agg.confoundSessions == 0 || agg.confoundSeconds < minimumMeaningfulSeconds
+                ? .noData : (agg.confoundFalsePositives == 0 ? .pass : .fail)
         ))
 
         out.append(Check(
             name: "false triggers per 20 min, all sessions",
             scope: scope,
             requirement: "< 1",
-            actual: agg.falsePositivesPer20Min.map { String(format: "%.2f (%d in %.1f min)",
+            actual: agg.durationSeconds < minimumMeaningfulSeconds
+                ? String(format: "only %.1f s of recorded data", agg.durationSeconds)
+                : agg.falsePositivesPer20Min.map { String(format: "%.2f (%d in %.1f min)",
                         $0, agg.falsePositives, agg.durationSeconds / 60) } ?? "no duration",
-            status: agg.durationSeconds <= 0 ? .noData
+            status: agg.durationSeconds < minimumMeaningfulSeconds ? .noData
                 : ((agg.falsePositivesPer20Min ?? 0) < falsePositivesPer20MinCeiling ? .pass : .fail)
         ))
 
@@ -117,9 +144,11 @@ enum PassLine {
                     name: "false triggers per 20 min, \(c.count)-tap",
                     scope: scope,
                     requirement: "< 1",
-                    actual: rate.map { String(format: "%.2f (%d in %.1f min)", $0, c.falseTriggers,
-                                              agg.durationSeconds / 60) } ?? "no duration",
-                    status: agg.durationSeconds <= 0 ? .noData
+                    actual: agg.durationSeconds < minimumMeaningfulSeconds
+                        ? String(format: "only %.1f s of recorded data", agg.durationSeconds)
+                        : rate.map { String(format: "%.2f (%d in %.1f min)", $0, c.falseTriggers,
+                                            agg.durationSeconds / 60) } ?? "no duration",
+                    status: agg.durationSeconds < minimumMeaningfulSeconds ? .noData
                         : ((rate ?? 0) < falsePositivesPer20MinCeiling ? .pass : .fail)
                 ))
             } else {

@@ -428,9 +428,20 @@ enum SessionScorer {
             counts[n] = CountStats(count: n, armed: true)
         }
 
+        // Rates are per unit of time, so whatever supplies the denominator
+        // decides whether the make-or-break metric passes. Trust the SAMPLES,
+        // not `meta.durationNs`: meta is a claim written by the capture tool,
+        // while the span is the data itself. A session declaring an hour and
+        // holding a thousand samples used to report "0 false triggers in
+        // 60.0 min" and buy a pass with 1.3 seconds of silence.
+        //
+        // The smaller of the two is the honest denominator — a claim can only
+        // ever shorten the window, never lengthen it beyond what was recorded.
+        let spanSec = Double(replay.spanNs) / 1e9
+        let claimedSec = Double(meta.durationNs) / 1e9
         let durationSec: Double = {
-            if meta.durationNs > 0 { return Double(meta.durationNs) / 1e9 }
-            return Double(replay.spanNs) / 1e9
+            if spanSec > 0 && claimedSec > 0 { return min(spanSec, claimedSec) }
+            return max(spanSec, 0)
         }()
 
         return SessionScore(

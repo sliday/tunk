@@ -81,6 +81,29 @@ enum Commands {
                     warnings.append("\(s.meta.sessionId): NON-DETERMINISTIC — two identical replays produced different triggers")
                 }
             }
+            // A session that says it holds gestures but carries no labels is
+            // either an unlabelled recording or a failed one, and either way
+            // every detection number computed from it is silently wrong. Left
+            // alone it reads as a neutral "0 labelled groups", which is an
+            // absence dressed up as a non-event — the exact failure this
+            // harness exists to catch.
+            let labelledGroups = (try? s.labelGroups().count) ?? 0
+            if s.meta.expectedTriggers > 0 && labelledGroups == 0 {
+                warnings.append("\(s.meta.sessionId): meta claims \(s.meta.expectedTriggers) "
+                    + "expected trigger(s) but labels.jsonl is empty — run `tunk-label run` on it, "
+                    + "or check the taps actually landed with `tunk-label check`. "
+                    + "It contributes NOTHING to detection rate as it stands.")
+            } else if s.meta.expectedTriggers > 0 && labelledGroups != s.meta.expectedTriggers {
+                warnings.append("\(s.meta.sessionId): meta claims \(s.meta.expectedTriggers) "
+                    + "expected trigger(s) but \(labelledGroups) group(s) are labelled — "
+                    + "some prompted gestures did not land, so the detection denominator "
+                    + "is smaller than the operator intended.")
+            }
+            if s.meta.category.isTapCategory && s.meta.expectedTriggers == 0 && labelledGroups == 0 {
+                warnings.append("\(s.meta.sessionId): a tap session with no expected triggers "
+                    + "and no labels. It is scored only for false positives.")
+            }
+
             let score = try SessionScorer.score(session: s, replay: replay, policy: policy)
             if verbose {
                 print("\(Reporter.pad(s.meta.sessionId, 46)) armed groups \(score.armedGroups) "
