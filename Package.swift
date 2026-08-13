@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "TunkCore", targets: ["TunkCore"]),
         .library(name: "TunkFormat", targets: ["TunkFormat"]),
         .library(name: "TunkIMU", targets: ["TunkIMU"]),
+        .library(name: "TunkEmit", targets: ["TunkEmit"]),
         .executable(name: "tunk-capture", targets: ["TunkCapture"]),
         .executable(name: "tunk-score", targets: ["TunkScore"]),
         .executable(name: "tunk", targets: ["TunkApp"]),
@@ -26,10 +27,13 @@ let package = Package(
         // Accelerometer source + input-activity source.
         .target(name: "TunkIMU", dependencies: ["CTunkHID", "TunkCore"]),
 
+        // Synthetic key emission via CGEventPost, with the stuck-modifier guard.
+        .target(name: "TunkEmit", dependencies: ["TunkCore"]),
+
         .executableTarget(name: "TunkCapture", dependencies: ["TunkIMU", "TunkFormat", "TunkCore"]),
         .executableTarget(name: "TunkScore", dependencies: ["TunkFormat", "TunkCore"]),
-        .executableTarget(name: "TunkApp", dependencies: ["TunkIMU", "TunkCore", "TunkFormat"]),
+        .executableTarget(name: "TunkApp", dependencies: ["TunkIMU", "TunkCore", "TunkFormat", "TunkEmit"]),
 
-        .testTarget(name: "TunkCoreTests", dependencies: ["TunkCore", "TunkFormat"]),
+        .testTarget(name: "TunkCoreTests", dependencies: ["TunkCore", "TunkFormat", "TunkEmit"]),
     ]
 )

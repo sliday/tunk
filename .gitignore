@@ -5,3 +5,4 @@ spike/imuspike2
 spike/batchtest
 *.o
 dist/
+.build-*/
