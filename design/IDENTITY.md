@@ -62,9 +62,9 @@ Three families. Graphite is the room, aluminium is the object, amber is the even
 Aluminium is the app icon's ground: the icon is a space-grey deck seen from above, with two
 amber strikes on it. That is a deliberate value inversion away from the graphite mood —
 the first icon was graphite on graphite and measured 37/255 mean luminance, which is a
-blank tile at 16 px. Use aluminium anywhere you are depicting the machine or a surface
-being struck. Do not use it for ordinary dividers; see the shadow rule below, ordinary
-dividers should not exist.
+blank tile at 16 px. The shipped mark measures 106 and holds that flat from 16 to 256. Use
+aluminium anywhere you are depicting the machine or a surface being struck. Do not use it
+for ordinary dividers; see the shadow rule below, ordinary dividers should not exist.
 
 ### Amber — the tap
 
@@ -198,8 +198,12 @@ lettering, no logotype file — the mark is the icon, the wordmark is just type 
 Lockup: favicon mark on the left, wordmark on the right, gap equal to 0.5× the mark's
 height, and align the **centre line of the two amber strikes** to the wordmark's x-height
 centre rather than centring the two boxes. Box-centring puts the wordmark slightly low,
-because the mark's strikes sit above its own centre. Expect to need a 1 px nudge on top of
-the arithmetic; take the one that looks right.
+because the mark's strikes sit above its own centre.
+
+Do the arithmetic, then render the candidates at 6× and pick by eye. At the shipped size —
+mark 30 px, Inter 600 at 20 px — the arithmetic asks for `-2.24 px` and the answer is
+**`-2 px`**: within a quarter pixel of the maths, on a whole pixel, and the one that looks
+right. Take the whole pixel when it is that close. Recompute if either size changes.
 
 ---
 
@@ -383,17 +387,19 @@ the preference, not an oversight.
 
 **The mark is a space-grey deck seen from above, struck twice.** Two amber impact points
 own about two-thirds of the tile's width. There is no horizontal surface line — the tile
-itself is the surface, which is what frees the strikes to be that large. A single
-low-contrast embossed ring, centred between the two strikes rather than around either one,
-is the shock the plate carries; it is the only element permitted to vanish below 128 px.
+itself is the surface, which is what frees the strikes to be that large. The two strikes
+have radii 128 and 104, a 1.23 ratio; unequal is load-bearing, because two equal discs at
+equal height on a rounded tile read as a face. A single low-contrast embossed ring, centred
+between the strikes rather than around either one, is the shock the plate carries; it is
+the only element permitted to vanish below 128 px.
 
-### Three files, three jobs. Picking the wrong one is the usual way this goes wrong.
+### Three sources, three jobs. Picking the wrong one is the usual way this goes wrong.
 
-| File | Use it for | Never use it for |
+| Source | Cut these from it | Never |
 |---|---|---|
-| `icon.svg` | Dock, Finder, `.icns`, OG image, anything 32 px and up that keeps its own corners | Home-screen icons, anything under 32 px |
-| `icon-fullbleed.svg` | `apple-touch-icon.png`, any manifest icon marked `"purpose": "maskable"` | The Dock or the `.icns` — it has no corners |
-| `favicon.svg` | Browser tab, `.ico`, the site header mark, anything under 32 px | Anything large; it is flat and will look bare |
+| `favicon.svg` | `favicon.ico` at 16/32/48, the header mark, anything under 32 px | Anything large; it is flat and will look bare |
+| `icon.svg` | Dock, Finder, `.icns`, `icon-192`, `icon-512`, the OG mark, anything 32 px and up that keeps its own corners | Home-screen icons, anything under 32 px |
+| `icon-fullbleed.svg` | `apple-touch-icon.png`, `icon-maskable-512.png`, any manifest entry marked `"purpose": "maskable"` | The Dock or the `.icns` — it has no corners |
 
 Supporting files: `png/` (built by `build-icons.sh`, every size from every source),
 `AppIcon.icns` (the app bundle), `menubar-glyph.svg` (reference only, never a site logo),
@@ -406,31 +412,63 @@ floating inside another rounded tile, with a shadow smeared along one edge. The 
 variant is the identical artwork scaled by `1024/824` about the centre with the squircle,
 rim and shadow removed, so the two files share every coordinate and cannot drift.
 
-### Rules
+**The manifest trap, which is separate and easy to miss.** Cutting the right PNGs is only
+half of it — a manifest entry that *declares* `"purpose": "maskable"` while pointing at the
+squircle PNG fails exactly the same way, and nothing on the page looks wrong until someone
+adds the site to a home screen. Ship a distinct `icon-maskable-512.png` from
+`icon-fullbleed.svg`, point the maskable entry at that file alone, and mark every other
+entry `"purpose": "any"` explicitly.
 
-- Never place `icon.svg` on an amber background. Amber on amber kills the only accent.
-- Never add a border or outline to it. It ships with its own rim and cast shadow, and it
-  has enough internal contrast to hold its own edge on light and dark alike.
-- Never re-corner it. The squircle is part of the mark.
-- Never recolour the ground toward graphite to "match the page". That was v1 and it
-  measured 37/255 mean luminance, which is a blank tile at 16 px in a Dock.
-- Rasterise each size **from the vector**, never by downscaling the 1024. And not with
-  ImageMagick's SVG renderer, which flattens the gradients into mud.
+### Check it mechanically, not by eye
+
+Neither failure above is visible in a browser. Both are one assertion away:
+
+- `apple-touch-icon.png` and `icon-maskable-512.png` must be **fully opaque** — alpha 1 in
+  every corner pixel.
+- `icon-512.png`, `icon-192.png` and every `.icns` member must have **alpha 0** in the
+  corner. That gutter is the squircle and it belongs there.
+
+Wire both into whatever cuts your assets. A rule in this document is a thing someone can
+misread; an assertion in the build is not.
 
 ### The one number to protect
 
-The gap between the two strikes is 98 units on the 1024 grid, which is 1.5 px at 16 px. If
-you redraw or crop the mark, keep that gap above about 1.4 px at your smallest render.
-Below it the two strikes fuse into one blob and the mark stops saying "double", which is
-the entire product. Worth an assertion in whatever script cuts your assets.
+The two strikes must stay separable at the smallest size anything renders at. Below about
+**1.4 px** of gap they fuse into one blob and the mark stops saying "double", which is the
+entire product.
+
+Two figures, and they measure different files. Keep them straight:
+
+| File | Gap in its own grid | At 16 px | Role |
+|---|---|---|---|
+| `favicon.svg` | 7.5 units on 64 | **1.88 px** | **Assert on this one.** It is the file that actually renders below 32 px |
+| `icon.svg` | 98 units on 1024 | 1.53 px, hypothetically | A design constraint on the master. `icon.svg` is never rendered at 16 px, so this is not a build check |
+
+A guard that measures `icon.svg` and reports 1.53 is measuring a size that never ships.
+Measure `favicon.svg`, and expect 1.88.
+
+### Rasterising
+
+Render every size **from the vector**, never by downscaling the 1024. Not with
+ImageMagick's SVG renderer, which flattens the gradients into mud. Headless Chromium or
+`rsvg-convert` both do it correctly; `build-icons.sh` will fall back through four options.
+
+### Rules
+
+- Never place `icon.svg` on an amber background. Amber on amber kills the only accent.
+- Never add a border or outline to it, and never re-corner it with `border-radius`. It
+  ships with its own rim and cast shadow, and at 106/255 mean luminance it holds its own
+  edge on light and dark alike.
+- Never recolour the ground toward graphite to "match the page". That was v1 and it
+  measured 37/255, which is a blank tile at 16 px in a Dock.
 
 ### Open Graph
 
-1200 × 630, `--ink-000` ground, cut from `icon.svg`. The icon at roughly 300 px on the left
-third, or the mark redrawn full-bleed across the left half with the deck running to the
-edges. Wordmark and one sentence on the right in `--ink-900`. Amber appears only on the two
-strikes — nowhere else in the image, per the restraint rule. No screenshot, no browser
-chrome, no drop shadow on the text.
+1200 × 630, `--ink-000` ground, mark cut from `icon.svg` at roughly 300 px on the left
+third. Wordmark and one sentence on the right in `--ink-900`. Amber appears only on the two
+strikes — nowhere else in the image, per the restraint rule. **No photograph behind it**:
+it breaks the restraint rule and it roughly quadruples the file, because flat artwork
+compresses and a photograph does not.
 
 ---
 
