@@ -1,0 +1,22 @@
+{
+  "category" : "idle",
+  "duration_ns" : 1500086242542,
+  "epoch_mach_ns" : 461547446917041,
+  "epoch_wall_iso" : "2026-08-13T19:38:57.552Z",
+  "expected_triggers" : 0,
+  "machine" : {
+    "chip" : "Apple M4 Max",
+    "model" : "Mac16,6",
+    "os" : "26.5.2"
+  },
+  "nominal_interval_ns" : 1256597,
+  "nominal_rate_hz" : 795.8,
+  "operator_notes" : "LIVE-USE ambient: 25 min, machine doing real work (swift builds, fans), on a hard desk. Measures the PRD's 'under 1 false trigger per 20 min in live use'.",
+  "report_interval_us" : 1250,
+  "sample_count" : 1193774,
+  "schema" : 1,
+  "session_id" : "idle__desk__20260813-213857__75bdf7",
+  "split" : "train",
+  "surface" : "desk",
+  "tool_version" : "tunk-capture 0.3.0"
+}
