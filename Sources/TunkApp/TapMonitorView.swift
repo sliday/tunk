@@ -28,6 +28,12 @@ final class MonitorStore {
     let trace = TraceModel()
     let numbers = NumbersModel()
 
+    /// Every poll this process has done, across every store. Read by
+    /// `tunk --cpu-probe` to prove the timer really stops when the panel
+    /// closes, rather than inferring it from a CPU figure that moves for other
+    /// reasons. Main thread only, which is where `pull()` runs.
+    static private(set) var totalPulls = 0
+
     private var timer: Timer?
     private weak var engine: Engine?
     private var frameIndex = 0
@@ -54,9 +60,12 @@ final class MonitorStore {
         timer = nil
     }
 
+    var isRunning: Bool { timer != nil }
+
     deinit { timer?.invalidate() }
 
     private func pull() {
+        Self.totalPulls += 1
         guard let engine else { return }
         let snap = engine.snapshot()
         trace.update(snap)
@@ -107,32 +116,46 @@ final class NumbersModel: ObservableObject {
     private func format(_ value: Double) -> String { String(format: "%.3f", value) }
 }
 
+/// Draws the monitor. It does not own the poll loop and does not start or stop
+/// it — `SettingsWindowController` does, on window visibility. See
+/// `PanelModel.monitor` for why the view's own lifecycle cannot be trusted.
 struct TapMonitorView: View {
     let engine: Engine
     var armed: Bool
-    /// Driven by the window, not by SwiftUI's view lifecycle. See
-    /// `PanelModel.isOnScreen` for why `onDisappear` cannot be trusted here.
-    var onScreen: Bool
-    @State private var store = MonitorStore()
+    let store: MonitorStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 TraceView(model: store.trace)
-                GatePill(model: store.numbers, armed: armed).padding(8)
+                if armed {
+                    GatePill(model: store.numbers, armed: armed).padding(8)
+                } else {
+                    // Without this the panel shows an empty trace and a column
+                    // of 0.000 readings, which reads as a broken chart rather
+                    // than as a switch being off. Say which it is.
+                    idleOverlay
+                }
             }
             MonitorNumbers(model: store.numbers)
+                .opacity(armed ? 1 : 0.4)
             legend
         }
-        .onAppear { sync() }
-        .onDisappear { store.stop() }
-        .onChange(of: onScreen) { _ in sync() }
     }
 
-    /// The only place the timer is started or stopped. Both calls are
-    /// idempotent, so a duplicate visibility notification costs nothing.
-    private func sync() {
-        onScreen ? store.start(engine: engine) : store.stop()
+    private var idleOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous)
+                .fill(.background.opacity(0.55))
+            VStack(spacing: 3) {
+                Text("Detection is off")
+                    .font(.system(size: 12, weight: .medium))
+                Text("Turn it on above to watch onsets land.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private var legend: some View {

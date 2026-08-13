@@ -47,42 +47,73 @@ enum Diagnostics {
         // listing all cost something that is not steady state.
         spin(for: 2.0)
 
-        let closedBefore = measure(seconds: seconds) { }
-        line(String(format: "1. panel never opened : %6.2f %%", closedBefore))
+        line("phase                     CPU%%   monitor polls/s")
+        let before = measure(seconds: seconds) { }
+        report("1. panel never opened", before, controller.debugState)
 
         let open = measure(seconds: seconds) {
             controller.present(startCalibration: false)
         }
-        line(String(format: "2. panel open         : %6.2f %%", open))
+        report("2. panel open        ", open, controller.debugState)
 
-        let closedAfter = measure(seconds: seconds) {
-            NSApp.windows.first { $0.title == "Tunk" }?.close()
+        let after = measure(seconds: seconds) {
+            controller.dismiss()
         }
-        line(String(format: "3. panel closed again : %6.2f %%", closedAfter))
+        report("3. panel closed again", after, controller.debugState)
 
-        // A stopped timer should put phase 3 back near phase 1. Allowing half
-        // the open-panel cost is generous and still catches the real leak,
-        // which left phase 3 indistinguishable from phase 2.
-        let leaked = closedAfter > closedBefore + max(0.5, (open - closedBefore) * 0.5)
+        // The poll rate is the real test. CPU alone is too noisy to judge on:
+        // it moves with what else the machine is doing, and the first render of
+        // a SwiftUI window costs more than steady state. A stopped timer polls
+        // zero times, and that is unambiguous.
         line("")
-        line(leaked
-             ? "LEAK: closing the panel did not stop the monitor."
-             : "OK: closing the panel returned CPU to its idle level.")
-        exit(leaked ? 1 : 0)
+        var failed = false
+        if open.pollsPerSecond < 20 {
+            failed = true
+            line("SUSPECT: the panel was open but barely polled "
+               + "(\(fmt(open.pollsPerSecond))/s). The probe may not have "
+               + "rendered the window, so phase 3 proves nothing.")
+        }
+        if after.pollsPerSecond > 1 {
+            failed = true
+            line("LEAK: the monitor is still polling \(fmt(after.pollsPerSecond)) times a second "
+               + "with the panel closed.")
+        }
+        if !failed {
+            line("OK: the monitor polls only while the panel is on screen "
+               + "(\(fmt(open.pollsPerSecond))/s open, \(fmt(after.pollsPerSecond))/s closed).")
+        }
+        exit(failed ? 1 : 0)
     }
 
-    /// Runs `setup`, then spins the main run loop for `seconds` and reports the
-    /// CPU this process burned over that window.
-    private static func measure(seconds: Double, setup: () -> Void) -> Double {
+    private struct Phase {
+        var cpuPercent: Double
+        var pollsPerSecond: Double
+    }
+
+    private static func report(_ label: String, _ p: Phase, _ state: String) {
+        line(String(format: "%@  %6.2f            %5.1f   %@",
+                    label, p.cpuPercent, p.pollsPerSecond, state))
+    }
+
+    private static func fmt(_ v: Double) -> String { String(format: "%.1f", v) }
+
+    /// Runs `setup`, then spins the main run loop for `seconds` and reports what
+    /// this process burned and how often the monitor polled over that window.
+    private static func measure(seconds: Double, setup: () -> Void) -> Phase {
         setup()
-        // Let the change take effect before the clock starts.
-        spin(for: 0.5)
+        // Let the change take effect, and let a newly shown window finish its
+        // first layout, before the clock starts.
+        spin(for: 1.5)
         let t0 = cpuSeconds()
+        let p0 = MonitorStore.totalPulls
         let w0 = Date()
         spin(for: seconds)
         let cpu = cpuSeconds() - t0
+        let pulls = MonitorStore.totalPulls - p0
         let wall = Date().timeIntervalSince(w0)
-        return wall > 0 ? (cpu / wall) * 100 : 0
+        guard wall > 0 else { return Phase(cpuPercent: 0, pollsPerSecond: 0) }
+        return Phase(cpuPercent: (cpu / wall) * 100,
+                     pollsPerSecond: Double(pulls) / wall)
     }
 
     /// User + system CPU seconds consumed by this process so far.

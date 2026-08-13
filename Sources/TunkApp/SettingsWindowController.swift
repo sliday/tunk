@@ -40,34 +40,43 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         engine.refreshShortcutCatalog()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
-        panel.isOnScreen = true
+        panel.monitor.start(engine: engine)
         if startCalibration { panel.showCalibration = true }
+    }
+
+    /// Closes the panel the way the user's red button does, for `--cpu-probe`.
+    func dismiss() { window.close() }
+
+    /// For `--cpu-probe`, so a phase that proves nothing says so.
+    var debugState: String {
+        "polling=\(panel.monitor.isRunning) visible=\(window.isVisible)"
     }
 
     // MARK: - visibility
 
-    // The tap monitor polls the engine 60 times a second. It must run only
-    // while the panel is actually visible, and the window is the only thing
-    // that knows: this window is kept alive between opens, so closing it orders
-    // it out without unmounting the SwiftUI view, and `onDisappear` never
-    // fires. Wiring the timer to the view's lifecycle left it running forever
-    // after the first open.
+    // The tap monitor polls the engine 60 times a second, and this is the only
+    // place it is stopped. The window has to do it: it is kept alive between
+    // opens, so closing it orders it out without unmounting the SwiftUI view,
+    // and once it is closed SwiftUI stops running updates for that hierarchy —
+    // so neither `onDisappear` nor an `onChange` on a visibility flag ever
+    // arrives. Both were tried and both left it polling. Measured with
+    // `tunk --cpu-probe`.
+    //
+    // Occlusion is deliberately not used as a trigger. `occlusionState` reports
+    // the panel as occluded even while it is on screen under the probe, so
+    // stopping on it would freeze the trace in front of a user who is watching
+    // it. Closing and miniaturising are unambiguous; being behind another
+    // window is not.
 
     func windowWillClose(_ notification: Notification) {
-        panel.isOnScreen = false
+        panel.monitor.stop()
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
-        panel.isOnScreen = false
+        panel.monitor.stop()
     }
 
     func windowDidDeminiaturize(_ notification: Notification) {
-        panel.isOnScreen = window.isVisible
-    }
-
-    /// Also covers the window being fully hidden behind another one, where the
-    /// trace is redrawing pixels nobody can see.
-    func windowDidChangeOcclusionState(_ notification: Notification) {
-        panel.isOnScreen = window.isVisible && window.occlusionState.contains(.visible)
+        panel.monitor.start(engine: engine)
     }
 }

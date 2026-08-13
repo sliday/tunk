@@ -6,15 +6,24 @@ import TunkEmit
 final class PanelModel: ObservableObject {
     @Published var showCalibration = false
 
-    /// Whether the panel is actually on screen.
+    /// The tap monitor's 60 Hz poll loop, owned here so the window controller
+    /// can start and stop it imperatively.
     ///
-    /// This drives the tap monitor's 60 Hz timer, and it is owned by the window
-    /// rather than by the view because SwiftUI's `onDisappear` does not fire for
-    /// a hosted view whose window is merely ordered out. The settings window is
-    /// deliberately kept alive between opens (`isReleasedWhenClosed = false`) so
-    /// reopening shows it settled, which means the view hierarchy stays mounted
-    /// and the monitor would otherwise poll forever after the first open.
-    @Published var isOnScreen = false
+    /// It is deliberately not driven from SwiftUI. Two measured reasons, both
+    /// from `tunk --cpu-probe`:
+    ///
+    ///  1. `onDisappear` never fires for a hosted view whose window is merely
+    ///     ordered out, and this window is kept alive between opens so that
+    ///     reopening shows it settled. That left the timer running forever
+    ///     after the first open — 59 polls a second with the panel closed.
+    ///  2. Passing visibility down as a `@Published` flag and reacting with
+    ///     `onChange` does not work either: once the window closes, SwiftUI
+    ///     stops running updates for that hierarchy, so the "now hidden" value
+    ///     is never delivered to the view that would act on it.
+    ///
+    /// Anything that must stop when the panel closes has to be stopped by the
+    /// thing that closed it.
+    let monitor = MonitorStore()
 }
 
 struct SettingsView: View {
@@ -154,7 +163,7 @@ struct SettingsView: View {
              caption: "Onsets as they land, with the gate window shaded. If a spike is grey "
                     + "the gate ate it on purpose — that is typing suppression working.") {
             TapMonitorView(engine: engine, armed: engine.status.isArmed,
-                           onScreen: panel.isOnScreen)
+                           store: panel.monitor)
             // A gesture the detector saw and deliberately did not act on. Without
             // this the app just looks broken to someone tapping three times.
             if let seen = engine.lastUnboundGesture,
