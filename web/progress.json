@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "title": "Tunk — gauntlet loop",
-  "generated_at": "2026-08-13T20:05:25Z",
+  "generated_at": "2026-08-13T20:18:04Z",
   "stale_after_s": 900,
   "cold_after_s": 7200,
   "primary_tap_count": "2",
@@ -540,6 +540,72 @@
                 "false_triggers_per_20min": {
                   "value": 0,
                   "n": 3
+                },
+                "latency_p50_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_p95_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_max_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 3,
+      "label": "acoustic transient confound added (peaks 0.080 g)",
+      "timestamp": "2026-08-13T20:18:04Z",
+      "status": "scored",
+      "headline": "incomplete — 4 session(s) graded across 1 surface(s)",
+      "biggest_gap": "desk: detection rate, all armed gestures has no data (no labelled groups for an armed tap count). Unmeasured is not passing.",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 4,
+            "tap_groups": {
+              "2": 0
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no labelled tap groups in this scope"
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 4
                 },
                 "latency_p50_ms": {
                   "value": null,

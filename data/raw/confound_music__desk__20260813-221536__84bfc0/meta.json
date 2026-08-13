@@ -1,0 +1,22 @@
+{
+ "category": "confound_music",
+ "duration_ns": 33038002208,
+ "epoch_mach_ns": 463746844724125,
+ "epoch_wall_iso": "2026-08-13T20:15:36.908Z",
+ "expected_triggers": 0,
+ "machine": {
+  "chip": "Apple M4 Max",
+  "model": "Mac16,6",
+  "os": "26.5.2"
+ },
+ "nominal_interval_ns": 1255808,
+ "nominal_rate_hz": 796.3,
+ "operator_notes": "PROBE, speaker-generated: sharp broadband click-pairs through the laptop speakers at volume 90. Acoustic energy only, no mechanical strike. Filed as confound_music because it is speaker-borne; it was briefly mislabelled confound_lid, which implied a lid nudge that never happened. Transients reach 0.080 g with irregular 40-240 ms spacing.",
+ "report_interval_us": 1250,
+ "sample_count": 26282,
+ "schema": 1,
+ "session_id": "confound_lid__desk__20260813-221536__84bfc0",
+ "split": "train",
+ "surface": "desk",
+ "tool_version": "tunk-capture 0.3.0"
+}
