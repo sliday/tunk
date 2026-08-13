@@ -21,8 +21,6 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkScore
 
-- Switch `ScoringPolicy.from(config:override:)` to read `config.armedTapCounts`
-  directly instead of `[config.tapCountToFire]`.
 - Emit `perSurfaceTapCount` as an array of `Aggregate` elements each carrying
   `label` (surface) plus an extra `tapCount` integer. This exact shape is the
   hook `web/ingest.py` keys on to pick up per-tap-count numbers automatically.
@@ -38,6 +36,16 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkCore / detector
 
+- **`DetectorConfig.calibratedInterTapNs` is dead.** Grepped across `Sources`,
+  `Tests`, `bin` and `web`: nothing writes it, nothing reads it, it only
+  round-trips through `Codable`. D7 leans on it — it is the stated answer to the
+  220 ms join window being a guess — but the learn-my-tap step collects onset
+  *strengths* only, never the intervals between them, and the detector reads
+  `maxInterTapNs` whatever is in the field. Either wire it (calibration records
+  the gaps between successive ungated onsets, a high percentile plus margin
+  becomes the value, the detector prefers it over `maxInterTapNs` and the
+  `<= confirmWindowNs` invariant still binds) or delete the field. Leaving it
+  implies a per-person window that nobody is measuring.
 - **Re-run the trigger-storm sweep at 220 ms.** The 0-triggers result was
   measured at 180 ms and does not carry automatically.
 - **Measure the single-tap prediction**: a knock train spaced wider than the join
@@ -82,11 +90,24 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkApp
 
-- Closing the settings window never stops the 60 Hz tap-monitor timer, so the app
-  burns ~10 % CPU forever after Settings is opened once. The source claimed a
-  measured 1.2 % with the panel closed; the critic measured 9–11 %.
-- The gate-window slider reaches 0 ms with no floor and no warning, which
-  silently disables the one mechanism that kills typing false positives.
+- The calibration review reports the threshold it derived, and the detector runs
+  that number multiplied by the sensitivity slider. The panel now names both and
+  computes its margin against the one in force, but the underlying question is
+  still open: should committing a calibration reset sensitivity to 1.00×, since
+  "1.0 = as calibrated" is what `DetectorConfig` says the slider means? Decide
+  with the owner rather than in a smoothing pass.
+
+### Resolved by the smoothing pass
+
+- ~~Closing the settings window never stops the 60 Hz tap-monitor timer.~~ Fixed
+  before this pass; verified against the built bundle rather than the source.
+  `Tunk.app --cpu-probe`, two runs: 1.14 % / 1.48 % of one core with the panel
+  never opened, 8.06 % / 9.34 % with it open, 1.37 % / 2.17 % after closing, and
+  **0.0 polls per second** in phase 3 both times. The poll counter is the real
+  proof; CPU alone moves for other reasons.
+- ~~The gate-window slider reaches 0 ms with no floor and no warning.~~ Fixed
+  before this pass. The slider floors at 60 ms and the panel prints what it
+  costs below 150 ms; `--dump-panel` renders that state as `panel-gatefloor-*`.
 
 ## Pass line
 

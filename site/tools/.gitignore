@@ -1,0 +1,5 @@
+# Build intermediates. The installed copies live in site/ and are committed.
+.stage/
+generated/
+icon-*.png
+og.png

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Rasterise design/icon.svg into the PNG set, the .iconset and AppIcon.icns.
+# Rasterise design/icon.svg into the PNG set, the .iconset and AppIcon.icns, plus the
+# menubar glyph and the favicon at the sizes they are actually consumed at.
 #
-# Every size is rendered from the vector rather than downscaled from 1024, so the
-# 16 and 32 px versions get real hinting off the gradients instead of a blurred
-# 1024. Run from anywhere; paths resolve against this file.
+# Every size is rendered from the vector rather than downscaled from 1024, so the 16 and
+# 32 px versions get real hinting off the gradients instead of a blurred 1024.
+# Run from anywhere; paths resolve against this file.
 #
 #   ./design/build-icons.sh
 #
@@ -36,21 +37,21 @@ if [ -z "$RENDERER" ]; then
 fi
 echo "renderer: $RENDERER"
 
-render() { # render <size> <destination>
-  local size="$1" dest="$2"
+render() { # render <source.svg> <size> <destination.png>
+  local src="$1" size="$2" dest="$3"
   case "$RENDERER" in
-    rsvg-convert) rsvg-convert -w "$size" -h "$size" -o "$dest" "$SRC" ;;
-    resvg)        resvg -w "$size" -h "$size" "$SRC" "$dest" ;;
-    inkscape)     inkscape "$SRC" --export-type=png --export-filename="$dest" \
+    rsvg-convert) rsvg-convert -w "$size" -h "$size" -o "$dest" "$src" ;;
+    resvg)        resvg -w "$size" -h "$size" "$src" "$dest" ;;
+    inkscape)     inkscape "$src" --export-type=png --export-filename="$dest" \
                     -w "$size" -h "$size" >/dev/null 2>&1 ;;
     chrome)
       local tmp; tmp="$(mktemp -d)"
-      cp "$SRC" "$tmp/icon.svg"
+      cp "$src" "$tmp/art.svg"
       cat > "$tmp/wrap.html" <<HTML
 <!doctype html><meta charset="utf-8">
 <style>html,body{margin:0;padding:0;background:transparent}
-img{display:block;width:${size}px;height:${size}px;image-rendering:auto}</style>
-<img src="icon.svg">
+img{display:block;width:${size}px;height:${size}px}</style>
+<img src="art.svg">
 HTML
       "$CHROME" --headless --disable-gpu --hide-scrollbars \
         --default-background-color=00000000 \
@@ -66,7 +67,7 @@ rm -rf "$OUT" "$ICONSET"
 mkdir -p "$OUT" "$ICONSET"
 
 for s in "${SIZES[@]}"; do
-  render "$s" "$OUT/icon-${s}.png"
+  render "$SRC" "$s" "$OUT/icon-${s}.png"
   echo "  png/icon-${s}.png"
 done
 
@@ -85,14 +86,20 @@ cp "$OUT/icon-1024.png" "$ICONSET/icon_512x512@2x.png"
 iconutil -c icns "$ICONSET" -o "$DIR/AppIcon.icns"
 echo "  AppIcon.icns"
 
-# Menubar glyph, at the sizes AppKit actually asks for.
+# Menubar glyph, at the sizes AppKit asks for.
 if [ -f "$DIR/menubar-glyph.svg" ]; then
-  GSRC="$SRC"; SRC="$DIR/menubar-glyph.svg"
   for s in 18 36 54; do
-    render "$s" "$OUT/menubar-${s}.png"
+    render "$DIR/menubar-glyph.svg" "$s" "$OUT/menubar-${s}.png"
     echo "  png/menubar-${s}.png"
   done
-  SRC="$GSRC"
+fi
+
+# Favicon, at the sizes the site cuts. 16 is the one that decides whether it works.
+if [ -f "$DIR/favicon.svg" ]; then
+  for s in 16 32 180 192 512; do
+    render "$DIR/favicon.svg" "$s" "$OUT/favicon-${s}.png"
+    echo "  png/favicon-${s}.png"
+  done
 fi
 
 echo

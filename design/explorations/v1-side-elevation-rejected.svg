@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Tunk v1 — side elevation, rejected</title>
+  <desc>Kept for the record. Rendered and looked at: the trails read as two candles on a
+  shelf, the shock arcs read as a speaker grille, and at 16 px the whole tile is a dark
+  rectangle with a warm smudge. Mean luminance measured 42/255 top half, 32/255 bottom.
+  Superseded by icon.svg v2. The failure was value structure, not concept.</desc>
+
+  <defs>
+    <clipPath id="sq">
+      <path d="M381.76 100 L642.24 100 C723.42 100 763.93 100 807.60 113.81 C855.28 137.55 886.45 168.72 910.19 216.40 C924 260.07 924 300.58 924 381.76 L924 642.24 C924 723.42 924 763.93 910.19 807.60 C886.45 855.28 855.28 886.45 807.60 910.19 C763.93 924 723.42 924 642.24 924 L381.76 924 C300.58 924 260.07 924 216.40 910.19 C168.72 886.45 137.55 855.28 113.81 807.60 C100 763.93 100 723.42 100 642.24 L100 381.76 C100 300.58 100 260.07 113.81 216.40 C137.55 168.72 168.72 137.55 216.40 113.81 C260.07 100 300.58 100 381.76 100 Z"/>
+    </clipPath>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#333944"/><stop offset="0.52" stop-color="#20242B"/><stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+    <linearGradient id="deckEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2F5F8"/><stop offset="1" stop-color="#B4BBC3"/>
+    </linearGradient>
+    <linearGradient id="deckBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#79808A"/><stop offset="1" stop-color="#333941"/>
+    </linearGradient>
+    <linearGradient id="tailR" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF9A1F" stop-opacity="0"/><stop offset="1" stop-color="#FFC24D" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="tailL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF9A1F" stop-opacity="0"/><stop offset="1" stop-color="#FF9A1F" stop-opacity="0.46"/>
+    </linearGradient>
+    <radialGradient id="headHot" cx="0.42" cy="0.34" r="0.82">
+      <stop offset="0" stop-color="#FFF3D6"/><stop offset="0.38" stop-color="#FFC64F"/><stop offset="1" stop-color="#F0700A"/>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#sq)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#body)"/>
+    <path d="M382 294 C380 380 375 466 361 544 L423 544 C409 466 404 380 402 294 Z" fill="url(#tailL)"/>
+    <path d="M619 154 C616 312 610 444 597 544 L667 544 C654 444 648 312 645 154 Z" fill="url(#tailR)"/>
+    <circle cx="392" cy="544" r="49" fill="#D65E08"/>
+    <circle cx="632" cy="544" r="52" fill="url(#headHot)"/>
+    <rect x="100" y="614" width="824" height="50" fill="url(#deckBody)"/>
+    <rect x="100" y="600" width="824" height="14" fill="url(#deckEdge)"/>
+    <g fill="none" stroke-linecap="round">
+      <path d="M244.6 735.3 A180 180 0 0 0 539.4 735.3" stroke="#FF9A1F" stroke-width="15" opacity="0.15"/>
+      <path d="M517.3 712.4 A140 140 0 0 0 746.7 712.4" stroke="#FFB020" stroke-width="17" opacity="0.34"/>
+      <path d="M468.2 746.8 A200 200 0 0 0 795.8 746.8" stroke="#FFB020" stroke-width="13" opacity="0.19"/>
+    </g>
+  </g>
+</svg>

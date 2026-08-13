@@ -37,8 +37,10 @@ struct SettingsView: View {
     /// bound by this; the panel is where a user could do it by accident.
     static let gateFloorMs: Double = 60
     /// Below this the panel explains the cost. The PRD's own starting range is
-    /// 150–200 ms.
-    static let gateCautionMs: Double = 150
+    /// 150–200 ms. Read from the migration's floor rather than restated, so the
+    /// value the panel warns about and the value an upgrade silently raises
+    /// cannot drift apart.
+    static let gateCautionMs = Double(SettingsMigration.minimumSafeGateNs) / 1_000_000
 
     @State private var showAdvanced: Bool
     /// Keyed by tap count: each row's Test button reports into its own row.

@@ -217,7 +217,21 @@ public final class TapDetector: TapDetecting {
                 armed = false
                 lastOnsetNs = sample.tNs
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
-                onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
+
+                // The chassis is in motion, not merely ringing. Lifting the
+                // machine or setting it down swings the gravity vector across
+                // the axes and holds it there, and the case rings the whole
+                // time — those rings are individually tap-sized, which is why
+                // amplitude alone cannot reject them. A real tap leaves the
+                // resting attitude where it found it.
+                let moving = effectiveConfig.motionGateG > 0
+                    && chain.bulkMotion > effectiveConfig.motionGateG
+                if moving {
+                    append(OnsetEvent(tNs: sample.tNs, strength: envelope, suppressedByGate: true))
+                    clearGroup()
+                } else {
+                    onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
+                }
             }
         } else if envelope <= threshold * tuning.releaseFraction,
                   let onset = lastOnsetNs,
@@ -339,8 +353,19 @@ public final class TapDetector: TapDetecting {
 
     private func publishPending() {
         guard let p = pending else { return }
-        append(OnsetEvent(tNs: p.tNs, strength: p.peak, suppressedByGate: p.suppressedByGate))
-        if p.joinedGroup, let i = group.indices.last, group[i].tNs == p.tNs {
+
+        // The ceiling can only be applied here. At the crossing all we have is
+        // the first sample over the line; the strike's true peak is not known
+        // until the ring has been tracked for `peakHoldNs`. So an onset can be
+        // accepted and then turn out to be too big to be a finger, and it has to
+        // be retractable — which it is, because a group does not fire until a
+        // whole confirm window after its last onset.
+        let tooLarge = effectiveConfig.onsetCeilingG.map { p.peak > $0 } ?? false
+        append(OnsetEvent(tNs: p.tNs, strength: p.peak,
+                          suppressedByGate: p.suppressedByGate || tooLarge))
+        if tooLarge {
+            clearGroup()
+        } else if p.joinedGroup, let i = group.indices.last, group[i].tNs == p.tNs {
             group[i].strength = p.peak
         }
         pending = nil

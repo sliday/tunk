@@ -8,8 +8,8 @@
 <meta name="description" content="Tunk is a macOS menubar app that turns a double-tap on your MacBook's body into a keyboard shortcut or a macOS Shortcut. It reads the built-in accelerometer at 796 Hz. Like Back Tap on iPhone, for a Mac. In development.">
 <link rel="canonical" href="https://tunk.dev/">
 
-<meta name="theme-color" content="#F6F7F8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101317" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F6F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0D10" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 
 <meta property="og:type" content="website">
@@ -29,7 +29,8 @@
 <meta name="twitter:image" content="https://tunk.dev/og.png">
 <meta name="twitter:image:alt" content="A hand double-tapping the aluminium palm rest of a MacBook, beside the Tunk wordmark.">
 
-<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32 48x48">
 <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
 <link rel="icon" href="/icon-512.png" type="image/png" sizes="512x512">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -164,7 +165,7 @@
 <header class="site-head">
   <div class="wrap head-row">
     <a class="brand" href="/" aria-label="Tunk, home">
-      <img class="brand__mark" src="img/icon.svg" width="32" height="32" alt="" aria-hidden="true">
+      <img class="brand__mark" src="favicon.svg" width="32" height="32" alt="" aria-hidden="true">
       <span class="brand__word">Tunk</span>
     </a>
     <nav class="head-nav" aria-label="Sections">
@@ -178,10 +179,13 @@
 <main id="main">
 
   <section class="hero wrap">
-    <p class="status" role="status">
-      <span class="status__dot" aria-hidden="true"></span>
-      In development. No download yet.
-    </p>
+    <div class="hero-meta">
+      <p class="eyebrow">macOS menubar utility</p>
+      <p class="status" role="status">
+        <span class="status__dot" aria-hidden="true"></span>
+        In development. No download yet.
+      </p>
+    </div>
 
     <h1>Back Tap, for your Mac.</h1>
 
@@ -193,30 +197,32 @@
     </p>
 
     <div class="cta-row">
-      <a class="db-btn db-btn--primary btn-lg" href="https://github.com/sliday/tunk">
+      <a class="btn btn--primary" href="https://github.com/sliday/tunk">
         Follow the build on GitHub
       </a>
-      <a class="db-btn db-btn--ghost btn-lg" href="#how">See how it works</a>
+      <a class="btn btn--quiet" href="#how">See how it works</a>
     </div>
     <p class="cta-note">The repository is private while the detector is being tuned. No mailing list yet.</p>
 
     <figure class="hero-fig">
-      <img src="img/hero.jpg" width="1536" height="1024" fetchpriority="high" decoding="async"
+      <img src="img/hero.jpg" srcset="img/hero.jpg 720w, img/hero@2x.jpg 1440w"
+           sizes="(min-width: 1160px) 1080px, 92vw"
+           width="1440" height="960" fetchpriority="high" decoding="async"
            alt="A hand reaching to the aluminium palm rest of an open MacBook on a wooden desk, two fingertips touching the bare metal beside the trackpad.">
       <figcaption>Tap the body, not a key. Tunk feels the knock through the aluminium.</figcaption>
     </figure>
   </section>
 
   <section class="wrap band" id="gesture">
-    <h2>Two taps, two actions</h2>
-    <p class="section-lede">
+    <h2 class="enter">Two taps, two actions</h2>
+    <p class="section-lede enter beat-2">
       A single tap and a double tap each bind to their own action, the way Back Tap gives
       Double&nbsp;Tap and Triple&nbsp;Tap separate rows. Pick a hotkey, pick a Shortcut, or leave
       one unbound.
     </p>
 
-    <ol class="gesture-list">
-      <li class="db-card gesture-card">
+    <ol class="gesture-list enter beat-2">
+      <li class="gesture-card">
         <span class="gesture-card__beats" aria-hidden="true">
           <span class="beat"></span>
         </span>
@@ -227,7 +233,7 @@
           Bind it if you want it, knowing that.
         </p>
       </li>
-      <li class="db-card gesture-card">
+      <li class="gesture-card gesture-card--key">
         <span class="gesture-card__beats" aria-hidden="true">
           <span class="beat"></span><span class="beat"></span>
         </span>
@@ -238,7 +244,7 @@
           world from triggering it.
         </p>
       </li>
-      <li class="db-card gesture-card gesture-card--muted">
+      <li class="gesture-card gesture-card--muted">
         <span class="gesture-card__beats" aria-hidden="true">
           <span class="beat"></span><span class="beat"></span><span class="beat"></span>
         </span>
@@ -251,11 +257,60 @@
     </ol>
   </section>
 
+
+  <section class="wrap band" id="fire">
+    <p class="eyebrow enter">What a tap can fire</p>
+    <h2 class="enter">A key combination, or anything you have built in Shortcuts</h2>
+    <p class="section-lede enter beat-2">
+      Tunk posts a real key event, so any app already listening for a global hotkey works
+      without knowing Tunk exists. Bind a Shortcut instead and a tap runs whatever that
+      Shortcut does.
+    </p>
+
+    <div class="fires enter beat-2">
+      <div class="fire">
+        <h3>A global hotkey</h3>
+        <p class="fire__demo">
+          <kbd class="db-kbd">&#8963;</kbd><kbd class="db-kbd">&#8997;</kbd><kbd class="db-kbd">&#8984;</kbd><kbd class="db-kbd">V</kbd>
+        </p>
+        <p>
+          You choose the combination. Pick a rare one, because Tunk posts it into whatever is
+          focused. Left and right modifiers are kept distinct, since an app bound to the
+          right-hand key ignores the left one.
+        </p>
+      </div>
+
+      <div class="fire">
+        <h3>A macOS Shortcut</h3>
+        <p class="fire__demo"><code>shortcuts run &#8220;Start dictation&#8221;</code></p>
+        <p>
+          Picked by name from your Shortcuts library. Tunk spawns it directly rather than going
+          through the <code>shortcuts://</code> URL scheme, which measured up to 345 ms on its own
+          and raises a modal dialog when a name does not resolve.
+        </p>
+      </div>
+
+      <div class="fire">
+        <h3>Nothing</h3>
+        <p class="fire__demo"><span class="fire__none">unbound</span></p>
+        <p>
+          The default for single tap. A gesture with no action bound is detected, counted in the
+          tap monitor, and then dropped.
+        </p>
+      </div>
+    </div>
+
+    <p class="fire__note">
+      Right&nbsp;Shift is refused as an emitted binding, with an explanation rather than silence.
+      The PRD reserves it as your manual VoiceInk key, and a synthesised one would collide.
+    </p>
+  </section>
+
   <section class="wrap band band--feature" id="dictation">
-    <div class="feature">
+    <div class="feature enter beat-2">
       <div class="feature__text">
-        <p class="eyebrow">The reason it exists</p>
-        <h2>Start dictation without reaching for a key</h2>
+        <p class="eyebrow enter">The reason it exists</p>
+        <h2 class="enter">Start dictation without reaching for a key</h2>
         <p>
           Tunk began as one problem: toggling dictation hands-free. Bind the double tap to
           <a href="https://tryvoiceink.com/">VoiceInk</a>'s Second Shortcut, set that shortcut to
@@ -272,21 +327,23 @@
         </p>
       </div>
       <figure class="feature__fig">
-        <img src="img/gesture.jpg" width="1536" height="1024" loading="lazy" decoding="async"
+        <img src="img/gesture.jpg" srcset="img/gesture.jpg 720w, img/gesture@2x.jpg 1440w"
+             sizes="(min-width: 56rem) 46vw, 92vw"
+             width="1440" height="806" loading="lazy" decoding="async"
              alt="Overhead close-up of two fingertips resting on the brushed aluminium palm rest of a laptop.">
       </figure>
     </div>
   </section>
 
   <section class="wrap band" id="how">
-    <p class="eyebrow">How it works</p>
-    <h2>Five steps, and one of them is the hard one</h2>
-    <p class="section-lede">
+    <p class="eyebrow enter">How it works</p>
+    <h2 class="enter">Five steps, and one of them is the hard one</h2>
+    <p class="section-lede enter beat-2">
       Tunk never touches the microphone or the camera. It reads one motion sensor, and everything
       else is signal processing.
     </p>
 
-    <ol class="steps">
+    <ol class="steps enter beat-2">
       <li>
         <h3>Read the sensor</h3>
         <p>
@@ -331,15 +388,17 @@
     </ol>
   </section>
 
+  <hr class="deck" aria-hidden="true">
+
   <section class="wrap band" id="noise">
-    <p class="eyebrow">The problem, drawn to scale</p>
-    <h2>What a laptop feels when nobody taps it</h2>
-    <p class="section-lede">
+    <p class="eyebrow enter">The problem, drawn to scale</p>
+    <h2 class="enter">What a laptop feels when nobody taps it</h2>
+    <p class="section-lede enter beat-2">
       Both traces below are real recordings from the dataset, drawn at the same vertical scale.
       Neither produced a trigger. The detector has to sit above this and still answer a fingertip.
     </p>
-    <figure class="trace-fig">
-      <img src="img/trace-real.svg" width="1200" height="472" loading="lazy" decoding="async"
+    <figure class="trace-fig enter beat-2">
+      <img src="img/trace-real.svg" width="1200" height="476" loading="lazy" decoding="async"
            alt="Two accelerometer traces on a shared scale. The upper one, 60 seconds of a MacBook running Swift builds on a desk, is mostly flat with occasional spikes reaching about 71 milli-g. The lower one, 90 seconds of bass-heavy music playing through the desk, stays almost perfectly flat at about 3 milli-g.">
       <figcaption>
         Plotted straight from <code>data/raw</code>. Vertical axis is deviation from the resting
@@ -350,16 +409,16 @@
   </section>
 
   <section class="wrap band" id="measured">
-    <p class="eyebrow">Honesty</p>
-    <h2>What has been measured, and what has not</h2>
-    <p class="section-lede">
+    <p class="eyebrow enter">Honesty</p>
+    <h2 class="enter">What has been measured, and what has not</h2>
+    <p class="section-lede enter beat-2">
       Tunk is a detector, and detectors invite made-up percentages. Everything in the left column
       came off real recordings on real hardware. Everything in the right column is unknown, and
       stays unlabelled until it is not.
     </p>
 
-    <div class="two-col">
-      <div class="db-card panel panel--yes">
+    <div class="two-col enter beat-2">
+      <div class="panel panel--yes">
         <h3><span class="tick" aria-hidden="true"></span>Measured</h3>
         <dl class="metrics">
           <div>
@@ -379,14 +438,14 @@
           </div>
           <div>
             <dt>Idle CPU</dt>
-            <dd class="num">about 2%</dd>
+            <dd class="num">&#8776; 2%</dd>
             <p>Continuous sampling on an otherwise idle machine.</p>
           </div>
         </dl>
         <p class="panel__foot">Measured on one machine: an M4 Max MacBook running macOS 26.5.</p>
       </div>
 
-      <div class="db-card panel panel--no">
+      <div class="panel panel--no">
         <h3><span class="cross" aria-hidden="true"></span>Not measured yet</h3>
         <ul class="unknowns">
           <li>Detection rate on deliberate taps. No percentage is published because no held-out tap set has been scored.</li>
@@ -396,6 +455,13 @@
           <li>Any MacBook other than the one it was built on.</li>
           <li>Battery cost over a full charge cycle.</li>
         </ul>
+        <figure class="panel__fig">
+          <img src="img/surface.jpg" srcset="img/surface.jpg 600w, img/surface@2x.jpg 1200w"
+               sizes="(min-width: 52rem) 46vw, 92vw"
+               width="1200" height="641" loading="lazy" decoding="async"
+               alt="A closed aluminium laptop resting on a rumpled linen bedspread in warm evening light.">
+          <figcaption>A cushion swallows a tap. Whether Tunk still hears one here is untested.</figcaption>
+        </figure>
         <p class="panel__foot">
           These are the numbers that decide whether Tunk ships. They will appear here when the
           harness produces them, pass or fail.
@@ -421,23 +487,23 @@
   </section>
 
   <section class="wrap band" id="requirements">
-    <h2>What it needs</h2>
-    <div class="reqs">
-      <div class="db-card req">
+    <h2 class="enter">What it needs</h2>
+    <div class="reqs enter beat-2">
+      <div class="req">
         <h3>An Apple Silicon MacBook</h3>
         <p>
           The sensor lives in the laptop. A Mac mini, Studio or Pro has nothing to tap. Built and
           measured on an M4 Max, macOS 26.5.
         </p>
       </div>
-      <div class="db-card req">
+      <div class="req">
         <h3>Two permissions</h3>
         <p>
           <b>Input Monitoring</b> to read the sensor and see keyboard and trackpad activity for the
           suppression gate. <b>Accessibility</b> to post the key event your tap is bound to.
         </p>
       </div>
-      <div class="db-card req">
+      <div class="req">
         <h3>Nothing else</h3>
         <p>
           Menubar only, no dock icon, no window beyond a small settings panel. No microphone, no
@@ -448,8 +514,8 @@
   </section>
 
   <section class="wrap band" id="faq">
-    <h2>Questions</h2>
-    <div class="faq">
+    <h2 class="enter">Questions</h2>
+    <div class="faq enter beat-2">
 
       <details class="faq__item">
         <summary><h3>What is Tunk?</h3></summary>
@@ -560,15 +626,17 @@
     </div>
   </section>
 
+  <hr class="deck" aria-hidden="true">
+
   <section class="wrap band closing">
-    <h2>It is not finished, and that is the point of this page</h2>
-    <p class="section-lede">
+    <h2 class="enter">It is not finished, and that is the point of this page</h2>
+    <p class="section-lede enter beat-2">
       The sensor works, the actions fire, the recordings are stacking up. What is left is the part
       that decides whether the thing is any good: proving the detector answers a real tap and
       ignores a real day. When those numbers exist, they go on this page, whatever they say.
     </p>
-    <div class="cta-row">
-      <a class="db-btn db-btn--primary btn-lg" href="https://github.com/sliday/tunk">
+    <div class="cta-row enter beat-2">
+      <a class="btn btn--primary" href="https://github.com/sliday/tunk">
         Follow the build on GitHub
       </a>
     </div>
@@ -589,5 +657,25 @@
   </div>
 </footer>
 
+
+<script>
+(function () {
+  var els = document.querySelectorAll('.enter');
+  if (!els.length || !('IntersectionObserver' in window)) return;
+  document.documentElement.setAttribute('data-anim', 'on');
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.querySelectorAll('.enter').forEach(function (n) { n.classList.add('in'); });
+      io.unobserve(e.target);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.05 });
+
+  document.querySelectorAll('section, footer').forEach(function (s) {
+    if (s.querySelector('.enter')) io.observe(s);
+  });
+})();
+</script>
 </body>
 </html>

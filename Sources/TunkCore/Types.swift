@@ -135,6 +135,56 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// deliberately, and read the harness's per-count false-trigger numbers first.
     public var armedTapCounts: Set<Int>
 
+    /// Upper bound on onset strength, in g. An onset stronger than this is not a
+    /// tap and is discarded.
+    ///
+    /// A deliberate tap has a *bounded* amplitude — a fingertip can only put so
+    /// much into a chassis. Picking the machine up, setting it down hard, or
+    /// closing the lid puts in far more. Without a ceiling the detector treats
+    /// "enormous" as "very confidently a tap", which is backwards, and moving the
+    /// laptop reads as a gesture.
+    ///
+    /// Nil disables the ceiling. Calibration should set it from the observed tap
+    /// distribution with generous headroom, since a hard tap on a soft surface
+    /// and a light tap on a hard one differ by a lot.
+    public var onsetCeilingG: Double?
+
+    /// How far the chassis's settled acceleration may drift, in g, before onsets
+    /// are suppressed as movement rather than taps.
+    ///
+    /// The guard the ceiling cannot provide. A ceiling rejects a strike harder
+    /// than a fingertip; it does nothing about a laptop being lifted, where the
+    /// individual rings are perfectly tap-sized. What separates those is that a
+    /// tap leaves the resting attitude where it found it and a lift does not.
+    ///
+    /// 0.030 g is measured, by sweeping the real detector over synthetic lifts
+    /// and taps. Triggers produced, ceiling disabled to isolate the gate:
+    ///
+    ///     gate      lift .35/.2s  lift .35/.6s  lift .6/1s   tap 0.9 g  tap 3 g
+    ///     0.020        0             0             0            0          0
+    ///     0.030        0             0             0            1          1
+    ///     0.050        0             1             1            1          1
+    ///
+    /// **It ships DISABLED (0) anyway**, because a second measurement killed it.
+    ///
+    /// The window is already narrow — at 0.020 the gate eats deliberate taps, at
+    /// 0.050 lifts get through, so 0.030 sits in a valley about 0.01 g wide.
+    /// Then the existing suite found the real problem:
+    /// `testALoudSurfaceDoesNotDeafenTheDetector` dropped from 10 deliberate
+    /// doubles landing to 6. On a surface that is genuinely alive — a lap, a
+    /// desk carrying a subwoofer — the settled magnitude wanders, the gate reads
+    /// that as movement, and it deafens the detector in exactly the conditions
+    /// the PRD lists as required.
+    ///
+    /// Trading a false trigger for a detector that ignores 40 % of taps on a lap
+    /// is a bad trade, so the number stays 0 until real recordings of a laptop
+    /// being moved exist to set it from. The `confound_handling` capture
+    /// category is for precisely this, and a gate scaled against the adaptive
+    /// noise floor rather than a fixed g value is the obvious next attempt.
+    ///
+    /// Zero disables the gate.
+    public var motionGateG: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -174,13 +224,17 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         maxInterTapNs: 220_000_000,
         confirmWindowNs: 220_000_000,
         refractoryNs: 600_000_000,
-        armedTapCounts: [2]
+        armedTapCounts: [2],
+        onsetCeilingG: 2.5,
+        motionGateG: 0
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
                 gateWindowNs: Int64, minInterTapNs: Int64, maxInterTapNs: Int64,
                 confirmWindowNs: Int64, refractoryNs: Int64,
                 armedTapCounts: Set<Int> = [2],
+                onsetCeilingG: Double? = 2.5,
+                motionGateG: Double = 0,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -191,6 +245,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.confirmWindowNs = confirmWindowNs
         self.refractoryNs = refractoryNs
         self.armedTapCounts = armedTapCounts
+        self.onsetCeilingG = onsetCeilingG
+        self.motionGateG = motionGateG
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -212,7 +268,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
-        case armedTapCounts, calibratedInterTapNs
+        case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
         case tapCountToFire   // legacy
     }
 
@@ -228,6 +284,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         confirmWindowNs = try c.decodeIfPresent(Int64.self, forKey: .confirmWindowNs) ?? d.confirmWindowNs
         refractoryNs = try c.decodeIfPresent(Int64.self, forKey: .refractoryNs) ?? d.refractoryNs
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
+        onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
+        motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -249,6 +307,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encode(refractoryNs, forKey: .refractoryNs)
         try c.encode(armedTapCounts, forKey: .armedTapCounts)
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
+        try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
+        try c.encode(motionGateG, forKey: .motionGateG)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)

@@ -1,0 +1,946 @@
+/* ============================================================================
+   Tunk — tunk.dev
+
+   Built from design/IDENTITY.md. Tokens, scale, radius, depth and motion are
+   taken from that file verbatim; where it repeats UI_STANDARD.md, both agree.
+
+   DAUB (vendor/daub.css) supplies the key caps in the "what a tap can fire"
+   section. Its tokens are remapped onto Tunk's palette below, so it wears our
+   colour instead of its own cream and terracotta. Everything else on the page
+   is specified by IDENTITY.md at a level DAUB does not reach: the concentric
+   radius arithmetic, one amber element per viewport, the glow on exactly one
+   control. See site/README.md.
+   ============================================================================ */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/inter-latin-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------------------------------------------------------------- tokens -- */
+
+:root {
+  color-scheme: light dark;
+
+  --ink-000:#0B0D10; --ink-100:#101216; --ink-200:#16191E; --ink-300:#20242B;
+  --ink-400:#2C313A; --ink-500:#3D434D; --ink-600:#5A616B; --ink-700:#868D96;
+  --ink-800:#9BA2AB; --ink-900:#E8EAED; --ink-950:#F4F6F8;
+
+  --alu-100:#F2F5F8; --alu-300:#B4BBC3; --alu-500:#79808A; --alu-700:#333941;
+
+  --amber-300:#FFD98A; --amber-400:#FFC24D; --amber-500:#FFB020;
+  --amber-600:#FF8A12; --amber-700:#F0700A;
+
+  --bg:var(--ink-950); --surface:#FFFFFF; --surface-2:#FFFFFF;
+  --text:var(--ink-200); --text-2:var(--ink-600); --text-3:var(--ink-700);
+  --accent:var(--amber-500); --accent-text:var(--amber-700);
+  --on-accent:#1A1206;
+  --hair:rgba(0,0,0,0.10);
+  --hair-soft:rgba(0,0,0,0.06);
+  --ok:#248A3D; --bad:#D70015;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.05);
+  --shadow-2: 0 1px 2px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-3: 0 2px 4px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.10),
+              0 32px 64px rgba(0,0,0,0.10);
+  --glow-amber: 0 0 0 1px rgba(255,176,32,0.35), 0 8px 32px rgba(255,138,18,0.25);
+  --raise: none;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+               "DejaVu Sans Mono", Consolas, monospace;
+
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 260ms;
+
+  --gutter: 20px;
+  --section: 64px;
+
+  /* DAUB token remap. Structure stays, colour becomes ours. */
+  --db-cream: var(--bg);
+  --db-cream-dark: var(--surface);
+  --db-white: var(--surface);
+  --db-ink: var(--text);
+  --db-charcoal: var(--text-2);
+  --db-warm-gray: var(--text-3);
+  --db-sand: var(--hair);
+  --db-terracotta: var(--accent);
+  --db-terracotta-text: var(--accent-text);
+  --db-clay: var(--amber-700);
+  --db-accent-hover: var(--amber-400);
+  --db-accent-pressed: var(--amber-700);
+  --db-accent-rgb: 255, 176, 32;
+  --db-sand-rgb: 0, 0, 0;
+  --db-shadow-rgb: 0, 0, 0;
+  --db-glow-rgb: 255, 255, 255;
+  --db-white-rgb: 255, 255, 255;
+  --db-on-accent: var(--on-accent);
+  --db-font-ui: var(--font-sans);
+  --db-font-body: var(--font-sans);
+  --db-font-heading: var(--font-sans);
+  --db-noise: 0;
+  --db-texture-opacity: 0;
+  --db-radius-1: var(--r-xs);
+  --db-radius-2: var(--r-sm);
+  --db-radius-3: var(--r-md);
+  --db-radius-4: var(--r-lg);
+  --db-shadow-1: var(--shadow-1);
+  --db-shadow-2: var(--shadow-2);
+  --db-shadow-3: var(--shadow-3);
+  --db-transition: 120ms var(--ease);
+  --db-focus-ring: 0 0 0 3px rgba(255, 176, 32, 0.40);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:var(--ink-000); --surface:var(--ink-200); --surface-2:var(--ink-300);
+    --text:var(--ink-900); --text-2:var(--ink-800); --text-3:var(--ink-600);
+    --accent:var(--amber-500); --accent-text:var(--amber-400);
+    --hair:rgba(255,255,255,0.10);
+    --hair-soft:rgba(255,255,255,0.06);
+    --ok:#30D158; --bad:#FF453A;
+
+    /* Black shadows do almost nothing on a dark ground, so a raised surface
+       also gets a top inner hairline. */
+    --shadow-1: 0 2px 10px rgba(0,0,0,0.40);
+    --shadow-2: 0 8px 32px rgba(0,0,0,0.45);
+    --shadow-3: 0 12px 32px rgba(0,0,0,0.50), 0 32px 64px rgba(0,0,0,0.40);
+    --raise: inset 0 1px 0 rgba(255,255,255,0.06);
+
+    --db-sand-rgb: 255, 255, 255;
+    --db-white-rgb: 22, 25, 30;
+  }
+}
+
+@media (min-width: 768px) {
+  :root { --gutter: 32px; --section: 128px; }
+}
+
+/* DAUB paints a full-viewport backdrop-filter for its temperature control.
+   Tunk's temperature is zero, so that layer only costs compositing. */
+html::after { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ----------------------------------------------------------------- base -- */
+
+* { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.625;
+  text-wrap: pretty;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+/* Display */
+h1 {
+  font-size: 40px;
+  line-height: 44px;
+  letter-spacing: -0.03em;
+}
+
+/* H1 in the scale, H2 in the document */
+h2 {
+  font-size: 32px;
+  line-height: 38px;
+  letter-spacing: -0.025em;
+}
+
+h3 {
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: -0.015em;
+}
+
+@media (min-width: 768px) {
+  h1 { font-size: 72px; line-height: 76px; }
+  h2 { font-size: 48px; line-height: 54px; }
+  h3 { font-size: 24px; line-height: 32px; }
+}
+
+p { margin: 0 0 16px; max-width: 68ch; }
+p:last-child { margin-bottom: 0; }
+
+a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { text-decoration-color: var(--accent); }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.12em 0.4em;
+  border-radius: var(--r-xs);
+  background: var(--hair-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-xs);
+}
+
+/* Any figure that could change gets tabular figures. */
+.num, .metrics dd, .status {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 20;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2), var(--raise);
+}
+.skip:focus { left: 12px; top: 12px; }
+
+/* --------------------------------------------------------------- layout -- */
+
+.wrap {
+  width: min(100% - (var(--gutter) * 2), 1120px);
+  margin-inline: auto;
+}
+
+.band { padding-block: var(--section); }
+
+.eyebrow {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 0 0 12px;
+}
+
+.section-lede {
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--text-2);
+  margin: 24px 0 0;
+}
+
+@media (min-width: 768px) {
+  .section-lede { margin-top: 32px; }
+}
+
+/* The one legitimate line on the page: a deck, the surface being struck.
+   Used twice, deliberately. Every other divider is a shadow or nothing. */
+.deck {
+  height: 3px;
+  border: 0;
+  margin: 0;
+  background: linear-gradient(90deg,
+              transparent 0%,
+              var(--alu-300) 12%,
+              var(--alu-100) 50%,
+              var(--alu-300) 88%,
+              transparent 100%);
+  opacity: 0.7;
+}
+
+/* --------------------------------------------------------------- header -- */
+
+.site-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: saturate(1.6) blur(14px);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+}
+
+.head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 15px; /* 0.5x the mark height */
+  text-decoration: none;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  padding: 6px 8px 6px 0;
+}
+
+.brand__mark {
+  width: 30px;
+  height: 30px;
+  /* The icon carries its own rim and cast shadow. Light pages get shadow-2,
+     and it never receives an outline. */
+  box-shadow: var(--shadow-2);
+  border-radius: 7px;
+  /* Align the mark's rule to the wordmark baseline, not box to box: the beats
+     carry mass above the rule, so geometric centring sits the word low. */
+  transform: translateY(-1px);
+}
+
+.head-nav {
+  display: flex;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.head-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding-inline: 12px;
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  transition: background-color 120ms var(--ease), color 120ms var(--ease);
+}
+.head-nav a:hover { background: var(--hair-soft); color: var(--text); }
+
+@media (max-width: 33rem) {
+  .head-nav a:first-child { display: none; }
+}
+
+/* ----------------------------------------------------------------- hero -- */
+
+.hero { padding-block: 48px var(--section); }
+@media (min-width: 768px) { .hero { padding-block: 80px var(--section); } }
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+.hero-meta .eyebrow { margin: 0; }
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px 6px 10px;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.005em;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-1), var(--raise);
+}
+
+/* Aluminium, not amber. The hero's single amber element is the CTA. */
+.status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--alu-500);
+  box-shadow: 0 0 0 3px var(--hair-soft);
+}
+
+.lede {
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--text-2);
+  max-width: 52ch;
+  margin: 24px 0 0;
+}
+
+@media (min-width: 768px) {
+  .lede { font-size: 20px; line-height: 31px; margin-top: 32px; }
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 120ms var(--ease),
+              background-color 120ms linear,
+              box-shadow 120ms var(--ease);
+}
+
+@media (min-width: 768px) { .btn { padding-inline: 24px; } }
+
+/* The one amber element in its viewport, and the only thing that glows. */
+.btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--glow-amber);
+}
+.btn--primary:hover { background: var(--amber-400); }
+.btn--primary:active { background: var(--amber-700); }
+
+.btn--quiet {
+  background: transparent;
+  color: var(--text-2);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+.btn--quiet:hover { background: var(--hair-soft); color: var(--text); }
+
+/* Same 0.96 as the app, so the site and the panel feel like one product. */
+.btn:active { transform: scale(0.96); }
+
+.cta-note {
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-3);
+}
+
+.hero-fig { margin: 48px 0 0; }
+@media (min-width: 768px) { .hero-fig { margin-top: 64px; } }
+
+.hero-fig img,
+.feature__fig img,
+.panel__fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-xl);
+  outline: 1px solid var(--hair);
+  outline-offset: -1px;
+  box-shadow: var(--shadow-3);
+}
+
+figcaption {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-3);
+  max-width: 68ch;
+}
+
+/* -------------------------------------------------------------- gesture -- */
+
+.gesture-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 16px;
+  margin: 32px 0 0;
+  padding: 0;
+}
+
+@media (min-width: 768px) { .gesture-list { gap: 24px; } }
+
+/* inner beat 10px round inside 24 padding wants 34, and 34 beats the scale */
+.gesture-card {
+  padding: 24px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--raise);
+}
+
+@media (min-width: 768px) { .gesture-card { padding: 32px; } }
+
+.gesture-card h3 { margin: 0 0 8px; }
+.gesture-card p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); }
+
+.gesture-card--muted { opacity: 0.6; }
+
+.gesture-card__beats {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 20px;
+  margin-bottom: 16px;
+}
+
+.beat {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--alu-500);
+}
+
+/* Amber lands on the double tap alone. It is the gesture the app is built
+   around, and one amber element per viewport is the rule. */
+.gesture-card--key .beat {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(255, 176, 32, 0.16);
+}
+
+/* --------------------------------------------------------- what it fires -- */
+
+.fires {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+
+@media (min-width: 768px) { .fires { gap: 24px; } }
+
+.fire {
+  padding: 24px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--raise);
+}
+
+@media (min-width: 768px) { .fire { padding: 32px; } }
+
+.fire h3 { margin: 0 0 16px; }
+.fire p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); }
+
+.fire__demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0 0 16px !important;
+}
+
+/* IDENTITY sets key caps in the mono face; DAUB ships them in its UI face. */
+.fire__demo .db-kbd {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-width: 28px;
+  height: 28px;
+}
+
+.fire__demo code { font-size: 13px; }
+
+.fire__none {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+
+.fire__note {
+  margin: 24px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-3);
+}
+
+/* -------------------------------------------------------------- feature -- */
+
+.feature {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .feature { grid-template-columns: 1fr 1fr; gap: 64px; }
+}
+
+.feature__text p { color: var(--text-2); }
+.feature__text h2 { margin-bottom: 24px; }
+.feature__text .eyebrow { margin-bottom: 12px; }
+
+.feature__text .note {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-3);
+  padding-top: 16px;
+  box-shadow: 0 -1px 0 var(--hair-soft);
+}
+
+.feature__fig { margin: 0; }
+
+/* ---------------------------------------------------------------- steps -- */
+
+.steps {
+  counter-reset: step;
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hair-soft);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-1), var(--raise);
+}
+
+.steps li {
+  counter-increment: step;
+  position: relative;
+  background: var(--surface);
+  padding: 24px 24px 24px 62px;
+}
+
+/* Graphite and aluminium. The amber in this viewport is spent elsewhere. */
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 24px;
+  top: 25px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.steps h3 { margin: 0 0 6px; }
+.steps p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); }
+
+@media (min-width: 768px) {
+  .steps { grid-template-columns: 1fr 1fr; }
+  .steps li { padding: 32px 32px 32px 70px; }
+  .steps li::before { left: 32px; top: 33px; }
+  .steps li:last-child { grid-column: 1 / -1; }
+}
+
+/* ---------------------------------------------------------------- trace -- */
+
+.trace-fig {
+  margin: 32px 0 0;
+  padding: 20px;
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1), var(--raise);
+  overflow-x: auto;
+}
+
+@media (min-width: 768px) { .trace-fig { padding: 28px; } }
+
+.trace-fig img {
+  display: block;
+  width: 100%;
+  min-width: 30rem;
+  height: auto;
+}
+
+.trace-fig figcaption { padding-top: 4px; }
+
+/* -------------------------------------------------------------- panels -- */
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 32px;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .two-col { grid-template-columns: 1fr 1fr; gap: 24px; }
+}
+
+/* Nests a --r-sm image inside 24 px of padding, so the outer is 34. */
+.panel {
+  padding: 24px;
+  border-radius: 34px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2), var(--raise);
+}
+
+.panel h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 24px;
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.tick, .cross {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex: none;
+  position: relative;
+}
+
+/* A metric that passed uses --ok, never the brand amber. */
+.tick { background: var(--ok); }
+.tick::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 4.5px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(42deg);
+}
+
+.cross { box-shadow: inset 0 0 0 1px var(--hair); }
+.cross::before, .cross::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 9px;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-3);
+}
+.cross::before { transform: rotate(45deg); }
+.cross::after { transform: rotate(-45deg); }
+
+.metrics { margin: 0; }
+
+.metrics > div { padding-block: 16px; }
+.metrics > div + div { box-shadow: 0 -1px 0 var(--hair-soft); }
+.metrics > div:first-child { padding-top: 0; }
+
+.metrics dt {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--text-3);
+}
+
+.metrics dd {
+  margin: 2px 0 6px;
+  font-family: var(--font-mono);
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 768px) {
+  .metrics dd { font-size: 40px; line-height: 46px; }
+}
+
+.metrics p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); }
+
+.unknowns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-2);
+}
+
+.unknowns li { padding: 12px 0 12px 22px; position: relative; }
+.unknowns li + li { box-shadow: 0 -1px 0 var(--hair-soft); }
+
+.unknowns li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22px;
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-3);
+}
+
+.panel__foot {
+  margin: 24px 0 0;
+  padding-top: 16px;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.005em;
+  color: var(--text-3);
+  box-shadow: 0 -1px 0 var(--hair-soft);
+}
+
+.panel__fig { margin: 24px 0 0; }
+.panel__fig img { border-radius: var(--r-sm); box-shadow: var(--shadow-1); }
+.panel__fig figcaption { font-size: 12px; line-height: 18px; }
+
+.method {
+  margin-top: 16px;
+  padding: 24px;
+  border-radius: var(--r-xl);
+  box-shadow: inset 0 0 0 1px var(--hair-soft);
+}
+
+@media (min-width: 768px) { .method { padding: 32px; margin-top: 24px; } }
+
+.method h3 { margin: 0 0 12px; }
+.method p { color: var(--text-2); font-size: 14px; line-height: 22px; }
+
+/* ----------------------------------------------------------- requirements */
+
+.reqs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+
+@media (min-width: 768px) { .reqs { gap: 24px; } }
+
+.req {
+  padding: 24px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--raise);
+}
+
+@media (min-width: 768px) { .req { padding: 32px; } }
+
+.req h3 { margin: 0 0 8px; }
+.req p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); }
+
+/* ------------------------------------------------------------------ faq -- */
+
+.faq {
+  margin-top: 32px;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-1), var(--raise);
+}
+
+.faq__item + .faq__item { box-shadow: 0 -1px 0 var(--hair-soft); }
+
+.faq__item summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 12px 20px;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color 120ms var(--ease);
+}
+.faq__item summary::-webkit-details-marker { display: none; }
+.faq__item summary:hover { background: var(--hair-soft); }
+
+.faq__item summary h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.faq__item summary::after {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border: solid var(--text-3);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 180ms var(--ease);
+}
+.faq__item[open] summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+
+.faq__item p {
+  margin: 0;
+  padding: 0 48px 20px 20px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-2);
+}
+
+/* --------------------------------------------------------------- footer -- */
+
+.site-foot { padding-block: 40px 56px; }
+
+.foot-row p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); }
+.foot-meta {
+  margin-top: 8px !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  color: var(--text-3) !important;
+}
+
+/* --------------------------------------------------------------- motion -- */
+
+/* M1, the double beat. Two chunks, 90 ms apart, split by meaning. The rule is
+   scoped to [data-anim] so that with JavaScript off nothing is ever hidden. */
+[data-anim="on"] .enter {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: transform var(--dur) var(--ease),
+              opacity var(--dur) var(--ease);
+}
+[data-anim="on"] .enter.beat-2 { transition-delay: 90ms; }
+[data-anim="on"] .enter.in { opacity: 1; transform: none; }
+
+/* DAUB ships a blanket `*, *::before, *::after { transition-duration: 0.01ms
+   !important }` under this query, which would flatten both the cross-fade
+   IDENTITY asks for and the press response it asks to keep. These rules load
+   after it and restate the intent. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  [data-anim="on"] .enter {
+    transition: opacity 120ms linear !important;
+    transform: none;
+  }
+  [data-anim="on"] .enter.beat-2 { transition-delay: 0ms !important; }
+
+  /* The 0.96 press stays. It answers the visitor's own input rather than
+     moving on its own, so suppressing it makes buttons feel dead. */
+  .btn {
+    transition: transform 120ms var(--ease),
+                background-color 120ms linear !important;
+  }
+
+  .faq__item summary::after { transition: none !important; }
+}
+
+/* --------------------------------------------------------------- print -- */
+
+@media print {
+  .site-head, .cta-row, .skip, .deck { display: none; }
+  body { background: #fff; color: #000; }
+  .band { padding-block: 24px; }
+  [data-anim="on"] .enter { opacity: 1; transform: none; }
+}

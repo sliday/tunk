@@ -1,0 +1,8 @@
+# tunk.dev
+# Everything here is public and safe to index, including by answer engines.
+# The plain-text summary written for language models lives at /llms.txt.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://tunk.dev/sitemap.xml

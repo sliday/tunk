@@ -86,6 +86,32 @@ public struct SlidingMax: Sendable, Equatable {
     }
 }
 
+/// One-pole low pass. Used to track where the accelerometer settles, so
+/// "the machine is being moved" can be told apart from "the case rang".
+public struct OnePoleLowPass: Sendable, Equatable {
+    public let alpha: Double
+    public private(set) var value: Double = 0
+    private var primed = false
+
+    public init(cutoffHz: Double, sampleRateHz: Double) {
+        let fs = max(sampleRateHz, 1.0)
+        let rc = 1.0 / (2.0 * Double.pi * max(cutoffHz, 0.0001))
+        let dt = 1.0 / fs
+        alpha = dt / (rc + dt)
+    }
+
+    public mutating func reset() { value = 0; primed = false }
+
+    @discardableResult
+    public mutating func process(_ x: Double) -> Double {
+        // Jump to the first sample instead of ramping from zero, or the tracker
+        // spends its warm-up reporting a huge false deviation from rest.
+        if !primed { value = x; primed = true; return value }
+        value += alpha * (x - value)
+        return value
+    }
+}
+
 /// Asymmetric envelope tracker used as the adaptive noise floor.
 ///
 /// Rises slowly (seconds) and falls faster (a fraction of a second), so a 10 ms
@@ -185,6 +211,14 @@ public struct DSPTuning: Sendable, Equatable {
     public var noiseFloorHoldNs: Int64
     /// Cap on the undrained onset log, so a live app that never drains cannot
     /// grow without bound.
+    /// Fast side of `bulkMotion`. A tap's energy sits above 100 Hz and lasts
+    /// ~30 ms, so 6 Hz attenuates it heavily; a lift is a sub-10 Hz ramp over
+    /// hundreds of ms and passes almost intact.
+    public var settleFastHz: Double
+    /// Slow side of `bulkMotion`: the resting attitude the fast side is compared
+    /// against. Slow enough to ignore a movement entirely while it happens.
+    public var settleSlowHz: Double
+
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
@@ -204,6 +238,8 @@ public struct DSPTuning: Sendable, Equatable {
         gapResetNs: 20_000_000,
         preGateNs: 25_000_000,
         noiseFloorHoldNs: 30_000_000,
+        settleFastHz: 6.0,
+        settleSlowHz: 0.3,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -214,6 +250,8 @@ public struct DSPTuning: Sendable, Equatable {
                 onsetDebounceNs: Int64, peakHoldNs: Int64, warmupSamples: Int,
                 gapResetNs: Int64, preGateNs: Int64,
                 noiseFloorHoldNs: Int64 = 30_000_000,
+                settleFastHz: Double = 6.0,
+                settleSlowHz: Double = 0.3,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
@@ -229,6 +267,8 @@ public struct DSPTuning: Sendable, Equatable {
         self.gapResetNs = gapResetNs
         self.preGateNs = preGateNs
         self.noiseFloorHoldNs = noiseFloorHoldNs
+        self.settleFastHz = settleFastHz
+        self.settleSlowHz = settleSlowHz
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }
@@ -259,9 +299,35 @@ public struct SignalChain: Sendable, Equatable {
     private var previousSquared: Double = 0
     private var peak: SlidingMax
     private var floorTracker: NoiseFloorTracker
+    private var settledMagnitude: OnePoleLowPass
+    private var fastMagnitude: OnePoleLowPass
+    private var magnitude: Double = 0
 
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
+
+    /// How far the chassis's bulk acceleration currently sits from rest, in g.
+    ///
+    /// The high-passed envelope above answers "did something ring". This answers
+    /// a different question the envelope cannot: "is the whole machine moving".
+    /// Picking a laptop up, setting it down, or opening the lid swings the
+    /// gravity vector across the axes and holds it there for hundreds of
+    /// milliseconds. A tap does not: the case rings and the resting attitude is
+    /// unchanged either side of it.
+    ///
+    /// Measured at rest on this machine, |a| sits at 0.9796 g, so deviation from
+    /// 1 g is the wrong reference — deviation from the SETTLED value is what
+    /// matters.
+    ///
+    /// Both sides are low-passed, and that is the whole trick. Comparing the RAW
+    /// magnitude against a settled value fails: a 0.9 g tap leaks straight into
+    /// the comparison and reads as movement, which stopped ordinary double-taps
+    /// from firing at all. A tap is ~30 ms of energy above 100 Hz; a lift is a
+    /// ramp below 10 Hz lasting hundreds of ms. So the fast side is cut at
+    /// `settleFastHz`, which a tap barely crosses and a lift passes intact, and
+    /// the slow side at `settleSlowHz` supplies the resting reference it is
+    /// measured against.
+    public var bulkMotion: Double { abs(fastMagnitude.value - settledMagnitude.value) }
 
     public init(tuning: DSPTuning) {
         hpX = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
@@ -271,6 +337,10 @@ public struct SignalChain: Sendable, Equatable {
         floorTracker = NoiseFloorTracker(riseTauSeconds: tuning.noiseRiseTauSeconds,
                                          fallTauSeconds: tuning.noiseFallTauSeconds,
                                          sampleRateHz: tuning.sampleRateHz)
+        settledMagnitude = OnePoleLowPass(cutoffHz: tuning.settleSlowHz,
+                                          sampleRateHz: tuning.sampleRateHz)
+        fastMagnitude = OnePoleLowPass(cutoffHz: tuning.settleFastHz,
+                                       sampleRateHz: tuning.sampleRateHz)
     }
 
     public mutating func reset() {
@@ -280,6 +350,9 @@ public struct SignalChain: Sendable, Equatable {
         previousSquared = 0
         peak.reset()
         floorTracker.reset()
+        settledMagnitude.reset()
+        fastMagnitude.reset()
+        magnitude = 0
         envelope = 0
     }
 
@@ -288,6 +361,12 @@ public struct SignalChain: Sendable, Equatable {
     /// caller decides how long that lasts; it must not be open-ended.
     @discardableResult
     public mutating func process(x: Double, y: Double, z: Double, holdNoiseFloor: Bool) -> Double {
+        // Raw magnitude first: the bulk-motion tracker must see gravity, which
+        // is exactly what the high pass exists to remove.
+        magnitude = (x * x + y * y + z * z).squareRoot()
+        settledMagnitude.process(magnitude)
+        fastMagnitude.process(magnitude)
+
         let ax = hpX.process(x)
         let ay = hpY.process(y)
         let az = hpZ.process(z)

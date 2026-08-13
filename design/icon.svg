@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <title>Tunk</title>
-  <desc>Two beats into the deck. Side elevation of an anodised surface struck twice: the left beat is older, its shock already spread wide and faint; the right beat has just landed and still carries its motion trail. No hand, no finger — only the physics.</desc>
+  <desc>Two strikes on the deck, seen from above. The tile is the surface, so no separate
+  line has to say "surface" — which is the element that cost v1 half its canvas. Two amber
+  impact points own the frame. One low-contrast ring, centred on the pair, is the shock the
+  plate carries; it is the first and only thing allowed to disappear below 128 px.</desc>
 
   <defs>
     <!-- Apple continuous-corner squircle: 824 body in a 1024 canvas, R = 184.32 -->
@@ -8,121 +11,91 @@
       <path d="M381.76 100 L642.24 100 C723.42 100 763.93 100 807.60 113.81 C855.28 137.55 886.45 168.72 910.19 216.40 C924 260.07 924 300.58 924 381.76 L924 642.24 C924 723.42 924 763.93 910.19 807.60 C886.45 855.28 855.28 886.45 807.60 910.19 C763.93 924 723.42 924 642.24 924 L381.76 924 C300.58 924 260.07 924 216.40 910.19 C168.72 886.45 137.55 855.28 113.81 807.60 C100 763.93 100 723.42 100 642.24 L100 381.76 C100 300.58 100 260.07 113.81 216.40 C137.55 168.72 168.72 137.55 216.40 113.81 C260.07 100 300.58 100 381.76 100 Z"/>
     </clipPath>
 
-    <!-- anodised graphite body, lit from the top -->
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#333944"/>
-      <stop offset="0.52" stop-color="#20242B"/>
-      <stop offset="1" stop-color="#101216"/>
+    <!-- space-grey anodised deck, lit from the upper left -->
+    <linearGradient id="deck" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#767D88"/>
+      <stop offset="0.5" stop-color="#545B65"/>
+      <stop offset="1" stop-color="#3A3F47"/>
     </linearGradient>
-    <radialGradient id="topLight" cx="0.5" cy="0.02" r="0.78">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.15"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="0.18" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.34" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="0.62" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+    <!-- brushed length. Averages to a flat tint below ~128 px, which is the point. -->
+    <pattern id="brush" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect y="0" width="6" height="1" fill="#FFFFFF" opacity="0.035"/>
+      <rect y="3" width="6" height="1" fill="#000000" opacity="0.035"/>
+    </pattern>
 
-    <!-- the deck, seen edge on -->
-    <linearGradient id="deckEdge" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F2F5F8"/>
-      <stop offset="1" stop-color="#B4BBC3"/>
-    </linearGradient>
-    <linearGradient id="deckBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#79808A"/>
-      <stop offset="1" stop-color="#333941"/>
-    </linearGradient>
-    <linearGradient id="deckFall" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#000000" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
-    </linearGradient>
-    <!-- brushed-metal length, faint and horizontal -->
-    <linearGradient id="deckSheen" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.32"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    <!-- the shock the plate carries, embossed rather than drawn -->
+    <linearGradient id="emboss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.13"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.15"/>
     </linearGradient>
 
-    <!-- impulse trails: transparent at the top so they never read as "!!" -->
-    <linearGradient id="tailR" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FF9A1F" stop-opacity="0"/>
-      <stop offset="0.55" stop-color="#FFB020" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#FFC24D" stop-opacity="0.92"/>
-    </linearGradient>
-    <linearGradient id="tailL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FF9A1F" stop-opacity="0"/>
-      <stop offset="1" stop-color="#FF9A1F" stop-opacity="0.46"/>
-    </linearGradient>
-
-    <radialGradient id="flare">
-      <stop offset="0" stop-color="#FFB020" stop-opacity="0.40"/>
-      <stop offset="0.45" stop-color="#FF8A12" stop-opacity="0.14"/>
+    <!-- object-bounding-box units, so one definition serves both craters -->
+    <radialGradient id="bloom">
+      <stop offset="0" stop-color="#FFB020" stop-opacity="0.30"/>
+      <stop offset="0.4" stop-color="#FF8A12" stop-opacity="0.12"/>
       <stop offset="1" stop-color="#FF8A12" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="flareOld">
-      <stop offset="0" stop-color="#FF9A1F" stop-opacity="0.17"/>
-      <stop offset="1" stop-color="#FF9A1F" stop-opacity="0"/>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.42"/>
+      <stop offset="0.8" stop-color="#000000" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="0.38" cy="0.30" r="0.80">
+      <stop offset="0" stop-color="#FFF4DC"/>
+      <stop offset="0.42" stop-color="#FFC24D"/>
+      <stop offset="0.82" stop-color="#FF8A12"/>
+      <stop offset="1" stop-color="#E8620A"/>
+    </radialGradient>
+    <radialGradient id="spec">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
 
-    <radialGradient id="headHot" cx="0.42" cy="0.34" r="0.82">
-      <stop offset="0" stop-color="#FFF3D6"/>
-      <stop offset="0.38" stop-color="#FFC64F"/>
-      <stop offset="1" stop-color="#F0700A"/>
-    </radialGradient>
-    <radialGradient id="headOld" cx="0.42" cy="0.34" r="0.82">
-      <stop offset="0" stop-color="#FFB63F"/>
-      <stop offset="1" stop-color="#D65E08"/>
-    </radialGradient>
-
-    <!-- inner bevel: bright along the top rim, fading around -->
     <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.26"/>
-      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.40"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.22"/>
     </linearGradient>
 
-    <radialGradient id="castShadow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#000000" stop-opacity="0.26"/>
-      <stop offset="0.6" stop-color="#000000" stop-opacity="0.10"/>
+    <radialGradient id="castShadow">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.28"/>
+      <stop offset="0.6" stop-color="#000000" stop-opacity="0.11"/>
       <stop offset="1" stop-color="#000000" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
-  <!-- cast shadow, outside the body -->
   <ellipse cx="512" cy="944" rx="352" ry="30" fill="url(#castShadow)"/>
 
   <g clip-path="url(#sq)">
-    <rect x="100" y="100" width="824" height="824" fill="url(#body)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#topLight)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#deck)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#brush)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#sweep)"/>
 
-    <!-- bloom, behind everything -->
-    <circle cx="392" cy="560" r="250" fill="url(#flareOld)"/>
-    <circle cx="632" cy="540" r="300" fill="url(#flare)"/>
+    <!-- one shock, concentric with the pair, not with either strike -->
+    <circle cx="512" cy="500" r="300" fill="none" stroke="url(#emboss)" stroke-width="24"/>
 
-    <!-- descending impulses -->
-    <path d="M382 294 C380 380 375 466 361 544 L423 544 C409 466 404 380 402 294 Z" fill="url(#tailL)"/>
-    <path d="M619 154 C616 312 610 444 597 544 L667 544 C654 444 648 312 645 154 Z" fill="url(#tailR)"/>
+    <!-- bloom -->
+    <circle cx="348" cy="500" r="300" fill="url(#bloom)"/>
+    <circle cx="676" cy="500" r="330" fill="url(#bloom)"/>
 
-    <!-- contact points -->
-    <circle cx="392" cy="544" r="49" fill="url(#headOld)"/>
-    <circle cx="632" cy="544" r="52" fill="url(#headHot)"/>
+    <!-- first strike -->
+    <circle cx="348" cy="500" r="144" fill="url(#halo)"/>
+    <circle cx="348" cy="500" r="118" fill="url(#core)"/>
+    <ellipse cx="308" cy="453" rx="44" ry="30" fill="url(#spec)" transform="rotate(-32 308 453)"/>
 
-    <!-- the deck -->
-    <rect x="100" y="614" width="824" height="50" fill="url(#deckBody)"/>
-    <rect x="100" y="664" width="824" height="96" fill="url(#deckFall)"/>
-    <rect x="100" y="600" width="824" height="14" fill="url(#deckEdge)"/>
-    <rect x="100" y="600" width="824" height="5" fill="url(#deckSheen)"/>
+    <!-- second strike -->
+    <circle cx="676" cy="500" r="138" fill="url(#halo)"/>
+    <circle cx="676" cy="500" r="112" fill="url(#core)"/>
+    <ellipse cx="638" cy="455" rx="42" ry="28" fill="url(#spec)" transform="rotate(-32 638 455)"/>
 
-    <!-- where the beats hit the metal -->
-    <ellipse cx="392" cy="607" rx="104" ry="8" fill="#FFB020" opacity="0.34"/>
-    <ellipse cx="632" cy="607" rx="132" ry="9" fill="#FFD98A" opacity="0.72"/>
-
-    <!-- shock going down into the case; older beat spread wide, fresh beat tight -->
-    <g fill="none" stroke-linecap="round">
-      <path d="M244.6 735.3 A180 180 0 0 0 539.4 735.3" stroke="#FF9A1F" stroke-width="15" opacity="0.15"/>
-      <path d="M195.4 769.8 A240 240 0 0 0 588.6 769.8" stroke="#FF9A1F" stroke-width="11" opacity="0.08"/>
-      <path d="M517.3 712.4 A140 140 0 0 0 746.7 712.4" stroke="#FFB020" stroke-width="17" opacity="0.34"/>
-      <path d="M468.2 746.8 A200 200 0 0 0 795.8 746.8" stroke="#FFB020" stroke-width="13" opacity="0.19"/>
-      <path d="M410.9 787.0 A270 270 0 0 0 853.1 787.0" stroke="#FFB020" stroke-width="10" opacity="0.10"/>
-    </g>
-
-    <!-- inner bevel, half clipped away so it lands inside the edge -->
     <path d="M381.76 100 L642.24 100 C723.42 100 763.93 100 807.60 113.81 C855.28 137.55 886.45 168.72 910.19 216.40 C924 260.07 924 300.58 924 381.76 L924 642.24 C924 723.42 924 763.93 910.19 807.60 C886.45 855.28 855.28 886.45 807.60 910.19 C763.93 924 723.42 924 642.24 924 L381.76 924 C300.58 924 260.07 924 216.40 910.19 C168.72 886.45 137.55 855.28 113.81 807.60 C100 763.93 100 723.42 100 642.24 L100 381.76 C100 300.58 100 260.07 113.81 216.40 C137.55 168.72 168.72 137.55 216.40 113.81 C260.07 100 300.58 100 381.76 100 Z"
           fill="none" stroke="url(#rim)" stroke-width="9"/>
   </g>

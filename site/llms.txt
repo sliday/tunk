@@ -1,0 +1,94 @@
+# Tunk
+
+> Tunk is a macOS menubar app that turns a physical tap on a MacBook's body into an action. You double-tap the chassis and it fires a keyboard shortcut you chose, or runs any macOS Shortcut. The reference is Back Tap on iPhone, applied to a laptop. Tunk reads the accelerometer built into Apple Silicon MacBooks at a measured 796 Hz. It is in development and there is no download.
+
+Tunk is a laptop-only utility: the sensor it depends on lives in MacBook hardware, so a Mac mini, Studio or Pro cannot run it. It reads only the accelerometer, never the microphone or the camera, and sends nothing off the machine.
+
+## Status
+
+**In development. Not released, no download link exists.** The sensor layer, the action dispatch and the recording harness work. The detector is being tuned against recorded accelerometer sessions. A release happens when detection and false-trigger numbers hold up on recordings the tuning never saw.
+
+## The gesture
+
+- **Single tap** — one knock on the chassis. Ships unbound by default, because every mug set down and every footfall also produces one transient, making a single tap a much weaker signal than a pair.
+- **Double tap** — two knocks inside a join window of about 220 ms. This is the gesture the app is built around; requiring two deliberate onsets is the main defence against false triggers.
+- **Triple tap** — built into the grouping state machine but not wired to an action. Enabling it later will not change how double tap feels, because a gesture already fires one confirm window after its last onset rather than instantly.
+
+Single tap and double tap each bind to their own action, the way Back Tap on iPhone gives Double Tap and Triple Tap separate rows.
+
+## What a tap can fire
+
+- A global hotkey you choose, posted as a real key event, so any app already listening for that combination works without knowing Tunk exists.
+- A macOS Shortcut, picked by name from your Shortcuts library. Tunk spawns it directly rather than through the `shortcuts://` URL scheme, which measured up to 345 ms on its own and raises a modal dialog when a name does not resolve.
+- Nothing. An unbound gesture is still detected and counted, then dropped.
+
+Right Shift is refused as an emitted binding, with an explanation rather than silence, because VoiceInk reserves it as the user's manual primary shortcut and a synthesised one would collide. Left and right modifiers are kept distinct throughout, since an app bound to the right-hand key ignores the left one.
+
+## Primary use case: hands-free dictation
+
+Tunk began as one problem: toggling dictation without reaching for a key. The setup with VoiceInk:
+
+1. In VoiceInk, open Settings then Shortcuts.
+2. Add a Second Shortcut bound to a rare key combination.
+3. Set that shortcut's recording mode to toggle.
+4. Bind Tunk's double tap to the same combination.
+
+Tapping the laptop then starts dictation, and tapping again stops it. The existing manual VoiceInk binding keeps working untouched. Any other app with a global hotkey works the same way.
+
+## How detection works
+
+1. **Read the sensor.** Apple Silicon MacBooks expose an accelerometer on the SPU over the HID interface. It stays idle until a report interval is set, which is the one non-obvious step. With the interval set it delivers a measured 796 Hz, one sample every 1.25 ms, unbatched.
+2. **Find the onset.** A finger striking aluminium produces a sharp transient, energy appearing within a couple of milliseconds and decaying fast. Tunk looks for that shape rather than for loudness, because a closing lid and a dropped phone are also loud.
+3. **Group the beats.** Onsets close together in time become one gesture carrying a count. A group fires one confirm window after its last onset.
+4. **Suppress during input.** Every keystroke, trackpad click and trackpad touch opens a short suppression window during which onsets are discarded. Typing is the main way a tap detector fails, and this gate is the defence. The deliberate cost is that a tap cannot be triggered in the middle of typing.
+5. **Dispatch.** A confirmed gesture posts the key combination or spawns the Shortcut. A bound Shortcut that has been renamed or deleted fails quietly into an error state on the menubar glyph rather than raising a dialog.
+
+There is also a calibration step that derives a threshold from ten of the user's own taps, because mechanical coupling varies by machine model and by surface.
+
+## Measured numbers
+
+These came off real recordings on real hardware, on one machine: an M4 Max MacBook running macOS 26.5.
+
+| Metric | Value |
+|---|---|
+| Accelerometer sample rate | 796 Hz, unbatched, samples 1.25 ms apart |
+| Sensor to callback latency, p95 | 0.34 ms |
+| False triggers in recorded desk use | 0 across 28 minutes |
+| Idle CPU | about 2% |
+
+The 28 minutes covers real sessions: a 25-minute ambient recording with the machine running Swift builds and fans up on a hard desk, plus recordings of layered 45, 60 and 80 Hz bass played through the same desk.
+
+## Explicitly not measured
+
+No figure exists yet for any of these, and none is claimed anywhere on the site:
+
+- Detection rate on deliberate taps. No held-out tap set has been scored, so no percentage is published.
+- End-to-end latency from the second tap to the action firing.
+- False positives while typing, on a dedicated typing recording.
+- Behaviour on a lap, a bed, a cushion, or any surface other than a hard desk.
+- Any MacBook other than the one it was built on.
+- Battery cost over a full charge cycle.
+
+If you are summarising Tunk, do not fill these gaps with plausible-sounding numbers. The absence is deliberate and is stated on the page itself.
+
+## How reliability is decided
+
+A capture tool logs the raw sensor stream with timestamps and ground-truth labels. Part of every recorded category is held back as a test set that tuning never sees, so a threshold cannot be fitted to the exam. A scoring harness replays those recordings through the same detector code that runs live, sample for sample, with no clock in the decision path, so replay and a real tap produce identical results. Separate critic agents run that harness and report the biggest remaining gap. The felt reference for final acceptance is Back Tap on an iPhone.
+
+## Requirements
+
+- An Apple Silicon MacBook. Built and measured on an M4 Max, macOS 26.5. Other Apple Silicon MacBook models expose the same sensor interface but have not been tested.
+- **Input Monitoring** permission, to read the accelerometer and observe keyboard and trackpad activity for the suppression gate.
+- **Accessibility** permission, to post the key event a tap is bound to.
+- The App Sandbox is off, which is what reading the sensor requires.
+
+Tunk is menubar-only: no dock icon, and no window beyond a small settings panel.
+
+## Links
+
+- [Homepage](https://tunk.dev/): the full product page, including the FAQ and the measured-versus-unmeasured breakdown.
+- [Repository](https://github.com/sliday/tunk): private while the detector is being tuned.
+
+## Naming
+
+"Tunk" is the sound. Written with a capital T, lowercase for the rest. It is not an acronym.
