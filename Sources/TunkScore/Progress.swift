@@ -84,7 +84,7 @@ enum ProgressFeed {
                                    options: ProgressOptions) -> [String: Any] {
         // Index the per-(surface × count) slices the report already built.
         var slices: [String: [Int: Aggregate]] = [:]
-        for a in report.perSurfaceTapCount {
+        for a in report.perSurfaceTapCount + report.pooledTapCount {
             guard let n = a.tapCount else { continue }
             slices[a.label, default: [:]][n] = a
         }

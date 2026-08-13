@@ -96,17 +96,18 @@ struct HotkeyRecorderView: View {
     }
 
     private func commit(_ spec: HotkeySpec) {
-        // Right Shift is the user's manual VoiceInk primary. Emitting it would
-        // fight the binding Tunk exists to leave alone, so it is refused here
-        // rather than silently accepted and mysteriously double-firing later.
-        if spec.collidesWithVoiceInkPrimary {
-            complaint = "Right Shift is your manual VoiceInk trigger. Tunk sending it too "
-                + "would toggle dictation twice. Pick a different combination."
-            return
-        }
-        if spec.isBareModifier {
-            complaint = "\(spec.symbolicDescription) works, but a lone modifier is easy to "
-                + "hit by accident. A rare combination is safer."
+        // Bare modifiers are allowed. The worry was that a synthesized one would
+        // be invisible to a listener watching flagsChanged; measured on this
+        // machine it is not — an emitted Right Shift arrives as
+        // flagsChanged keyCode=60 flags=0x20020004, with the right-hand device
+        // bit set. So this is advice, not a veto.
+        if spec.isTypingModifier {
+            complaint = "\(spec.symbolicDescription) is also a typing key, so a stray "
+                + "double-tap sends a real modifier. Harmless on its own, but a rare "
+                + "combination misfires less."
+        } else if spec.isBareModifier {
+            complaint = "\(spec.symbolicDescription) works. A lone modifier is easier to "
+                + "hit by accident than a combination."
         } else {
             complaint = nil
         }

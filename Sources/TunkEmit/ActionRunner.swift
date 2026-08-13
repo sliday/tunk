@@ -189,6 +189,11 @@ public final class ActionRunner: @unchecked Sendable {
         let listing = resolver.listing()
         var found: BrokenBinding?
         for binding in bindings.shortcutBindings {
+            // A row the user has not finished configuring is not a broken
+            // binding. The picker already says "Choose a Shortcut…"; telling
+            // them Tunk cannot find "" on top of that is noise, and it would put
+            // the menubar into an error state for a row nobody has armed.
+            guard !binding.name.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             guard let error = staleness(name: binding.name,
                                         wasListed: binding.wasListedWhenBound,
                                         listing: listing) else { continue }

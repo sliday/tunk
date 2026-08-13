@@ -63,9 +63,20 @@ final class ModifierHotkeyTests: XCTestCase {
 
     func testBareModifierAndCollisionAreRecognised() {
         XCTAssertTrue(HotkeySpec(keyCode: 60, modifiers: []).isBareModifier)
-        XCTAssertTrue(HotkeySpec(keyCode: 60, modifiers: []).collidesWithVoiceInkPrimary)
-        XCTAssertFalse(HotkeySpec(keyCode: 56, modifiers: []).collidesWithVoiceInkPrimary)
         XCTAssertFalse(HotkeySpec(keyCode: 41, modifiers: [.control]).isBareModifier)
+    }
+
+    /// Right Shift is bindable. It was refused for a while on the theory that a
+    /// synthesized bare modifier would be invisible to a listener; measured, it
+    /// arrives as flagsChanged keyCode=60 flags=0x20020004 with the right-hand
+    /// device bit set. Only the advice remains.
+    func testTypingModifiersAreFlaggedButNotRefused() {
+        XCTAssertTrue(HotkeySpec(keyCode: 60, modifiers: []).isTypingModifier)   // RShift
+        XCTAssertTrue(HotkeySpec(keyCode: 61, modifiers: []).isTypingModifier)   // ROpt
+        XCTAssertFalse(HotkeySpec(keyCode: 63, modifiers: []).isTypingModifier)  // Fn
+        XCTAssertFalse(HotkeySpec(keyCode: 60, modifiers: [.control]).isTypingModifier,
+                       "a combination is not something typing produces by accident")
+        XCTAssertFalse(HotkeySpec(keyCode: 41, modifiers: [.control]).isTypingModifier)
     }
 
     /// The recorder builds specs from NSEvent flags. A modifier key must not end

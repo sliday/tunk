@@ -208,10 +208,18 @@ public struct HotkeySpec: Sendable, Hashable, Codable, CustomStringConvertible {
         modifiers.isEmpty && KeyCodes.isModifier(keyCode)
     }
 
-    /// True when the shortcut involves the Right Shift key at all. That key is
-    /// reserved for the user's manual VoiceInk primary, so Tunk emitting it
-    /// would fight the very binding it is meant to leave alone.
-    public var collidesWithVoiceInkPrimary: Bool { keyCode == 60 }
+    /// A bare modifier that is also used constantly while typing, so a false
+    /// trigger sends a real modifier into whatever has focus. Shift, Control,
+    /// Option and Command qualify; Fn does not, and neither does any
+    /// combination, since holding two modifiers is not something typing does by
+    /// accident.
+    ///
+    /// This is worth telling the user about. It is not worth refusing: a stray
+    /// modifier with no key after it does nothing.
+    public var isTypingModifier: Bool {
+        guard isBareModifier, let role = KeyCodes.modifierRole(for: keyCode) else { return false }
+        return role.modifier != .function
+    }
 
     // MARK: - Suggested defaults
 

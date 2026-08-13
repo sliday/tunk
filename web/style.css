@@ -453,7 +453,11 @@ main > section > .section-note { padding-inline: 6px; }
 .delta--flat { background: var(--info-soft); color: var(--muted); }
 .delta--new { background: var(--none-soft); color: var(--none); }
 
-.metrics--passline { margin-top: 4px; }
+.metrics--passline { margin-top: 4px; table-layout: fixed; }
+.metrics--passline thead th { text-align: right; padding: 0 8px 6px; }
+.metrics--passline thead th:first-child { text-align: left; }
+.metrics--passline tbody th:first-child { width: 40%; }
+.metrics--passline tbody td { font-size: 0.8125rem; padding-inline: 8px; }
 .metrics--passline tbody th {
   padding: 9px 10px;
   text-align: left;
@@ -757,6 +761,7 @@ main > section > .section-note { padding-inline: 6px; }
 
 .fresh-stamps,
 .fresh-lag {
+  display: block;
   margin-top: 5px;
   font-size: 0.75rem;
   color: var(--muted);
@@ -1049,6 +1054,16 @@ abbr[title] { text-decoration: none; }
   font-weight: 620;
   color: var(--fail);
 }
+.trend-tap { flex: 1; }
+.trend-state {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.trend-state--fail { color: var(--fail); font-weight: 620; }
+.trend-state--pass { color: var(--pass); }
 .trend-details .trend-grid { margin-top: 6px; }
 .trend-details .trend { background: var(--surface); }
 

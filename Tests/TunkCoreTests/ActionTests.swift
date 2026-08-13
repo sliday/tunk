@@ -688,6 +688,17 @@ final class ActionRunnerTests: XCTestCase {
         XCTAssertTrue(spawner.names.isEmpty, "revalidation must never run a Shortcut")
     }
 
+    /// A row switched to "Run a Shortcut" but not yet pointed at one is
+    /// unfinished, not broken. Reporting it would put the menubar into an error
+    /// state for a row nobody armed, and would say `cannot find ""`.
+    func testRevalidateIgnoresARowWithNoShortcutChosenYet() {
+        let runner = makeRunner(ActionBindings([1: .shortcut(name: ""),
+                                                2: .shortcut(name: "   ")]),
+                                resolver: FakeResolver(names: ["Twitter"]))
+        XCTAssertNil(runner.revalidateShortcutBindings())
+        XCTAssertNil(runner.stats.brokenBinding)
+    }
+
     func testRevalidateClearsItselfWhenTheNameComesBack() {
         let resolver = FakeResolver(names: [])
         let runner = makeRunner(double: .shortcut(name: "Twitter", wasListedWhenBound: true),

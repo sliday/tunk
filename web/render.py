@@ -380,8 +380,11 @@ def surface_card(surface: str, round_obj: dict, prev_round: dict, taps: list,
     if cov.get("sessions") is not None:
         cov_bits.append(f'{cov["sessions"]} sessions')
     groups = cov.get("tap_groups") or {}
-    for tap in sorted(groups, key=S.tap_sort_key):
-        cov_bits.append(f'{groups[tap]} × {S.TAP_SHORT.get(tap, tap)} groups')
+    if groups:
+        pairs = " ".join(
+            f"{S.TAP_SHORT.get(t, t)} {groups[t]}" for t in sorted(groups, key=S.tap_sort_key)
+        )
+        cov_bits.append(f"tap groups {pairs}")
     if cov.get("typing_minutes") is not None:
         cov_bits.append(f'{cov["typing_minutes"]:g} min typing')
     if cov.get("confound_minutes") is not None:
@@ -476,8 +479,24 @@ def trend_block(surface: str, rounds: list, taps: list, primary: str,
                 f"· latest {e(fmt_value(key, series[-1]))}</p>"
                 f"</figure>"
             )
-        # A regressed tap count is never left folded away: shape and hatch on the
-        # summary carry it even when the reader never opens the section.
+        # A folded section still has to answer "is this one all right?", so the
+        # summary carries the latest verdict, and a regressed count is never
+        # folded away at all: shape and hatch on the summary carry it even when
+        # the reader never opens the section.
+        latest_metrics = metrics_at(rounds[-1], surface, tap)
+        latest_statuses = [metric_status(k, latest_metrics.get(k), tap, pass_line, overrides)
+                           for k in S.METRIC_KEYS]
+        latest = worst(latest_statuses)
+        n_bad = latest_statuses.count("fail")
+        n_missing = latest_statuses.count("none")
+        if n_bad:
+            state = f'{n_bad} below the line'
+        elif n_missing == len(latest_statuses):
+            state = "unmeasured"
+        elif n_missing:
+            state = f"{n_missing} unmeasured"
+        else:
+            state = "on the line"
         open_attr = " open" if (tap == primary or regressed) else ""
         summary_flag = (
             '<span class="trend-flag"><span aria-hidden="true">▼</span> regressed</span>'
@@ -486,7 +505,10 @@ def trend_block(surface: str, rounds: list, taps: list, primary: str,
         blocks.append(
             f'<details class="trend-details{" trend-details--regress" if regressed else ""}"'
             f"{open_attr}>"
-            f'<summary><span class="trend-tap">{e(S.TAP_LABEL[tap])}</span>{summary_flag}</summary>'
+            f'<summary><span class="trend-tap">{e(S.TAP_LABEL[tap])}</span>'
+            f'<span class="trend-state trend-state--{latest}">'
+            f'<span aria-hidden="true">{STATUS_GLYPH[latest]}</span> {e(state)}</span>'
+            f"{summary_flag}</summary>"
             f'<div class="trend-grid">{"".join(cells)}</div>'
             f"</details>"
         )
@@ -545,6 +567,25 @@ def round_log(rounds: list, pass_line: dict, overrides: dict) -> str:
 
 
 def pass_line_table(pass_line: dict, overrides: dict, taps: list) -> str:
+    # One line for every tap count unless a written decision says otherwise, so
+    # the table stays one column wide until an override actually exists.
+    if not overrides:
+        rows = []
+        for key in S.METRIC_KEYS:
+            rule = (pass_line or {}).get(key)
+            rows.append(
+                f'<tr><th scope="row">{e(S.METRIC_BY_KEY[key][1])}</th>'
+                f'<td class="metric-value">{e(rule_text(rule) if rule else "—")}</td></tr>'
+            )
+        return (
+            f'<table class="metrics metrics--passline">'
+            f'<caption class="sr-only">Pass line from FORMAT.md, the same for every '
+            f"tap count</caption>"
+            f'<thead><tr><th scope="col">Metric</th>'
+            f'<th scope="col">Pass, every tap count</th></tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>'
+        )
+
     rows = []
     for key in S.METRIC_KEYS:
         base = (pass_line or {}).get(key)
@@ -808,8 +849,9 @@ def render(data: dict, built_at: dt.datetime | None = None) -> str:
 
   <section id="passline" aria-labelledby="passline-h">
     <h2 id="passline-h">The pass line</h2>
-    <p class="section-note">From <code>FORMAT.md</code>. Not relaxed without data. A column
-      differs only where <code>pass_line_overrides</code> names a written decision.</p>
+    <p class="section-note">From <code>FORMAT.md</code>. Not relaxed without data. The same
+      line applies to every tap count; a per-count column appears only where
+      <code>pass_line_overrides</code> records a written decision.</p>
     {pass_line_table(pass_line, overrides, taps)}
   </section>
 </main>
@@ -847,6 +889,9 @@ def main(argv=None) -> int:
                     help="exit 1 if index.html no longer matches progress.json, write nothing")
     ap.add_argument("--validate", action="store_true",
                     help="validate progress.json against web/README.md and exit")
+    ap.add_argument("--built-at", metavar="ISO",
+                    help="pretend the page was built at this time. For previewing the "
+                         "stale and cold states without waiting for them.")
     args = ap.parse_args(argv)
 
     raw = json.loads(pathlib.Path(args.json).read_text(encoding="utf-8"))
@@ -877,7 +922,13 @@ def main(argv=None) -> int:
         print(f"{out} is up to date")
         return 0
 
-    page = render(data)
+    built_at = None
+    if args.built_at:
+        built_at = S.parse_iso(args.built_at)
+        if built_at is None:
+            print(f"--built-at {args.built_at!r} is not ISO-8601", file=sys.stderr)
+            return 1
+    page = render(data, built_at=built_at)
     out.write_text(page, encoding="utf-8")
     print(f"wrote {out} ({len(page):,} bytes) from {args.json}")
     return 0

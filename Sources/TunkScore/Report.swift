@@ -20,6 +20,10 @@ struct RunReport: Codable {
     /// This is what `web/ingest.py` and `--progress-json` turn into the page's
     /// per-tap-count columns.
     var perSurfaceTapCount: [Aggregate]
+    /// The same slices rolled up across surfaces. Kept out of `perSurfaceTapCount`
+    /// so a consumer that turns that array into surface cards does not grow a
+    /// "pooled" card it never asked for.
+    var pooledTapCount: [Aggregate]
     var perCategory: [Aggregate]
     var sessions: [SessionScore]
     var checks: [Check]
@@ -43,12 +47,14 @@ enum Reporter {
     /// Slice every scope by tap count. A count appears when it is armed, when
     /// something was labelled for it, or when something fired it — the three ways
     /// it can carry a number worth reading.
-    static func perSurfaceTapCount(_ scores: [SessionScore], policy: ScoringPolicy) -> [Aggregate] {
+    static func tapCountSlices(_ scores: [SessionScore], policy: ScoringPolicy)
+        -> (perSurface: [Aggregate], pooled: [Aggregate]) {
         var counts = Set(policy.armedCounts)
         for s in scores {
             for c in s.perCount where c.labelledGroups > 0 || c.triggers > 0 { counts.insert(c.count) }
         }
-        var out: [Aggregate] = []
+        var perSurface: [Aggregate] = []
+        var pooledOut: [Aggregate] = []
         for n in counts.sorted() {
             var pooled = Aggregate(label: "pooled")
             var bySurface: [String: Aggregate] = [:]
@@ -58,13 +64,13 @@ enum Reporter {
                     .addSlice(s, count: n, armed: policy.isArmed(n))
             }
             for surf in Surface.allCases {
-                if let a = bySurface[surf.rawValue] { out.append(a) }
+                if let a = bySurface[surf.rawValue] { perSurface.append(a) }
             }
             for (k, a) in bySurface.sorted(by: { $0.key < $1.key })
-            where Surface(rawValue: k) == nil { out.append(a) }
-            if !scores.isEmpty { out.append(pooled) }
+            where Surface(rawValue: k) == nil { perSurface.append(a) }
+            if !scores.isEmpty { pooledOut.append(pooled) }
         }
-        return out
+        return (perSurface, pooledOut)
     }
 
     static func build(dataRoot: URL, split: String, config: DetectorConfig,
@@ -81,6 +87,7 @@ enum Reporter {
         if scores.isEmpty {
             warn.append("No sessions found under \(dataRoot.path). Nothing was graded.")
         }
+        let slices = tapCountSlices(scores, policy: policy)
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime]
         return RunReport(
@@ -95,7 +102,8 @@ enum Reporter {
             armedCounts: policy.armedCounts,
             pooled: pooled,
             perSurface: Surface.allCases.compactMap { surfaces[$0.rawValue] },
-            perSurfaceTapCount: perSurfaceTapCount(scores, policy: policy),
+            perSurfaceTapCount: slices.perSurface,
+            pooledTapCount: slices.pooled,
             perCategory: categories.keys.sorted().map { categories[$0]! },
             sessions: scores,
             checks: checks,
