@@ -24,6 +24,11 @@ if let index = arguments.firstIndex(of: "--emit-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.emitProbe(iterations: n)
 }
+if let index = arguments.firstIndex(of: "--latency-probe") {
+    let n = index + 1 < arguments.count ? Int(arguments[index + 1]) ?? 30 : 30
+    app.setActivationPolicy(.accessory)
+    Diagnostics.latencyProbe(iterations: n)
+}
 if arguments.contains("--live-emit-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.liveEmitProbe()

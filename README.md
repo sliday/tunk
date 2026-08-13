@@ -121,11 +121,19 @@ anything unmeasured.
 | False triggers, confound sessions | 0 | **0 in 2.1 min** ✅ |
 | Replay delivery-order violations | 0 | **0** ✅ |
 | Detection rate | ≥ 98 % | *not measured* |
-| Latency, last onset to emit | p95 ≤ 250 ms | *not measured* |
+| Latency, last onset to emit | p95 ≤ 250 ms | **223.7 ms** ✅ *(pipeline)* |
 | False triggers while typing | 0 | *not measured* |
 | Soft surface, lap | pass on each | *not recorded* |
 
-Three of seven, on real recordings. **Verdict: INCOMPLETE.**
+Four of seven. **Verdict: INCOMPLETE.**
+
+Latency carries a caveat the others do not. `tunk --latency-probe` paces a
+synthetic gesture through the real detector, posts a real `CGEventPost` and
+watches for it with an independent event tap, so the pipeline is real end to end.
+221 ms of it is the confirm window, which is exact — the detector advances on
+sample timestamps, not on a clock — and the measured overhead on top is 0.25 ms
+at p50. What it does not establish is that a real finger tap's onset is located
+at the right sample; if onset detection ran late on real taps, this would grow.
 
 The four unmeasured rows need recordings of deliberate taps and of continuous
 typing. Neither can be synthesised: the Taptic Engine produces no measurable

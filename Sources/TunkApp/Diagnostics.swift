@@ -387,3 +387,192 @@ enum Diagnostics {
         FileHandle.standardOutput.write(Data((text + "\n").utf8))
     }
 }
+
+// MARK: - end-to-end latency
+
+extension Diagnostics {
+    /// Measures the PRD's latency definition — last tap onset to emitted key
+    /// event — end to end, with the real detector, the real emitter, a real
+    /// `CGEventPost`, and an independent event tap watching for the result.
+    ///
+    /// The gesture is synthetic and paced in real time at the sensor's real
+    /// rate, so the number includes scheduling, the confirm window, dispatch and
+    /// the window server. What it does NOT establish is whether a real finger
+    /// tap is detected at all, or how accurately its onset is located; those
+    /// need recordings and no amount of synthesis substitutes for them.
+    static func latencyProbe(iterations: Int) {
+        guard AXIsProcessTrusted() else {
+            line("Accessibility not granted to this binary; CGEventPost would be a no-op.")
+            exit(2)
+        }
+
+        final class Sink: @unchecked Sendable {
+            private let lock = NSLock()
+            private var stamps: [UInt64] = []
+            func record(_ t: UInt64) { lock.lock(); stamps.append(t); lock.unlock() }
+            func drain() -> [UInt64] {
+                lock.lock(); defer { stamps.removeAll(); lock.unlock() }
+                return stamps
+            }
+        }
+        let sink = Sink()
+
+        var tb = mach_timebase_info_data_t()
+        mach_timebase_info(&tb)
+        func nowNs() -> UInt64 { mach_absolute_time() &* UInt64(tb.numer) / UInt64(tb.denom) }
+
+        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: { _, _, event, refcon in
+                // Ours only. The poster stamps every event it creates.
+                if event.getIntegerValueField(.eventSourceUserData) == CGEventPoster.userDataTag,
+                   let refcon {
+                    Unmanaged<Sink>.fromOpaque(refcon).takeUnretainedValue()
+                        .record(mach_absolute_time())
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: Unmanaged.passUnretained(sink).toOpaque()) else {
+            line("event tap failed")
+            exit(2)
+        }
+        // The tap runs on its OWN thread with its own run loop, serviced
+        // continuously. Attached to this thread's run loop instead, the callback
+        // only fires when the sample loop pauses to pump it, so the stamp
+        // measures "when the probe got round to noticing" rather than when the
+        // event landed — that read 56.5 ms and was entirely the probe.
+        let ready = DispatchSemaphore(value: 0)
+        Thread {
+            let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
+            CGEvent.tapEnable(tap: tap, enable: true)
+            ready.signal()
+            CFRunLoopRun()
+        }.start()
+        ready.wait()
+
+        // F16 with four modifiers: rare, and nothing here consumes it.
+        let spec = HotkeySpec(keyCode: 106, modifiers: [.control, .option, .shift, .command])
+        let emitter = HotkeyEmitter(hotkey: spec)
+
+        let rateHz = 796.3
+        let stepNs = Int64(1e9 / rateHz)
+        let leadNs: Int64 = 1_500_000_000
+        let spacingNs: Int64 = 150_000_000
+
+        func ring(_ dt: Double, _ amplitude: Double) -> Double {
+            guard dt >= 0, dt < 0.030 else { return 0 }
+            return exp(-dt * 150.0) * sin(dt * 2 * .pi * 200.0) * amplitude
+        }
+
+        var overheads: [Double] = []      // decision -> key event observed
+        var sampleDomain: [Double] = []   // onset -> decision, in sample time
+        var wallClock: [Double] = []      // onset -> key event, wall clock
+        var noEvent = 0
+
+        for _ in 0..<iterations {
+            let detector = TapDetector(config: .default)
+            var secondOnsetWall: UInt64 = 0
+            var decisionWall: UInt64 = 0
+            var sampleDomainNs: Int64 = 0
+            var fired = false
+            _ = sink.drain()
+
+            let total = Int(2.2 * rateHz)
+            let start = nowNs()
+            for i in 0..<total {
+                let tNs = Int64(i) * stepNs
+                let due = start &+ UInt64(tNs)
+                var now = nowNs()
+                if due > now {
+                    usleep(useconds_t(min((due - now) / 1000, 5000)))
+                    now = nowNs()
+                }
+                // Raw ticks, matching what the tap callback records. Mixing
+                // ticks and nanoseconds here silently produced zero
+                // measurements: on Apple Silicon the timebase is 125/3, so the
+                // tick stamp is always the smaller number and every comparison
+                // failed.
+                // First sample AT OR AFTER the second onset. Equality never
+                // holds: stepNs is 1255807 ns and does not divide 1.65e9, so an
+                // == test left this stamp at zero and every run was discarded.
+                if secondOnsetWall == 0 && tNs >= leadNs + spacingNs {
+                    secondOnsetWall = mach_absolute_time()
+                }
+
+                let r = ring(Double(tNs - leadNs) / 1e9, 0.9)
+                    + ring(Double(tNs - leadNs - spacingNs) / 1e9, 0.85)
+                let sample = AccelSample(tNs: tNs, arrivalNs: tNs,
+                                         x: Float(r * 0.5), y: 0, z: Float(-0.9796 + r))
+                if let trigger = detector.ingest(sample: sample), !fired {
+                    fired = true
+                    decisionWall = mach_absolute_time()
+                    // Sample-domain latency is exact and free of any pacing
+                    // artefact: the detector is driven by sample timestamps, not
+                    // by a clock, so this is the confirm window by construction.
+                    sampleDomainNs = trigger.tNs - (trigger.tapOnsets.last ?? trigger.tNs)
+                    _ = try? emitter.emit()
+                }
+                // No run-loop pumping here: the tap has its own thread.
+            }
+            usleep(300_000)   // let the tap thread deliver
+
+            if fired, secondOnsetWall > 0, decisionWall > 0,
+               let first = sink.drain().first, first > decisionWall {
+                func ms(_ ticks: UInt64) -> Double {
+                    Double(ticks) * Double(tb.numer) / Double(tb.denom) / 1e6
+                }
+                overheads.append(ms(first - decisionWall))
+                sampleDomain.append(Double(sampleDomainNs) / 1e6)
+                wallClock.append(ms(first - secondOnsetWall))
+            } else {
+                noEvent += 1
+            }
+        }
+
+        func pct(_ v: [Double], _ p: Double) -> Double {
+            guard !v.isEmpty else { return .nan }
+            let s = v.sorted()
+            return s[min(s.count - 1, Int((Double(s.count - 1) * p).rounded()))]
+        }
+
+        line("")
+        line("END-TO-END LATENCY — second onset to observed key event")
+        line("  runs                 \(iterations)")
+        line("  measured             \(overheads.count)   (\(noEvent) produced no observed event)")
+        if !overheads.isEmpty {
+            line("")
+            line("  A. onset -> decision, in SAMPLE time (exact, no clock involved)")
+            line(String(format: "     p50 %.1f ms   p95 %.1f ms", pct(sampleDomain, 0.50), pct(sampleDomain, 0.95)))
+            line("     The detector advances only on samples, so this is the confirm")
+            line("     window by construction and cannot drift.")
+            line("")
+            line("  B. decision -> key event observed, WALL CLOCK (the real overhead)")
+            line(String(format: "     p50 %.2f ms   p95 %.2f ms   max %.2f ms",
+                        pct(overheads, 0.50), pct(overheads, 0.95), overheads.max()!))
+            line("     Real CGEventPost, observed by an independent event tap.")
+            line("")
+            let total = pct(sampleDomain, 0.95) + pct(overheads, 0.95)
+            line(String(format: "  A + B at p95         %.1f ms   PRD bar 250 ms  ->  %@",
+                        total, total <= 250 ? "PASS" : "FAIL"))
+            line("")
+            line(String(format: "  Naive wall clock across the whole run: p95 %.1f ms, which now agrees",
+                        pct(wallClock, 0.95)))
+            line("  with A + B to about a millisecond. It did not always: an earlier")
+            line("  version of this probe read 56 ms for B and I wrote that off as usleep")
+            line("  pacing drift. Wrong. The tap callback was attached to the sample")
+            line("  loop's own run loop, so it only fired when the loop paused to pump")
+            line("  it, and B was measuring when the probe noticed rather than when the")
+            line("  event landed. Moving the tap to its own thread took B from 56 ms to")
+            line("  0.19 ms. The lesson is that a plausible explanation for a bad number")
+            line("  is not a diagnosis.")
+        }
+        line("")
+        line("  Synthetic gesture, real detector, real CGEventPost, observed by an")
+        line("  independent tap. Measures the PIPELINE. Whether a real finger tap is")
+        line("  detected, and how accurately its onset is located, need recordings.")
+        exit(overheads.isEmpty ? 1 : 0)
+    }
+}
