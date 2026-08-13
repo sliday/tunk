@@ -576,3 +576,92 @@ extension Diagnostics {
         exit(overheads.isEmpty ? 1 : 0)
     }
 }
+
+// MARK: - haptic actuator probe
+
+extension Diagnostics {
+    /// Does the Taptic Engine put measurable energy into the chassis?
+    ///
+    /// Asked once before from a bare CLI and answered "no". That test was weak:
+    /// `NSHapticFeedbackManager` documents no behaviour outside an app context
+    /// and may have silently done nothing. This runs inside a real
+    /// `NSApplication` with the accelerometer open, fires each pattern, and
+    /// reports the envelope it actually produced against the resting floor.
+    ///
+    /// If it registers, it is a controllable mechanical stimulus, and detection
+    /// rate stops being un-measurable without a hand. If it does not, that is a
+    /// real answer too and closes the question properly this time.
+    static func hapticProbe() {
+        let source = AccelSource(reportIntervalUs: 1250)
+        let lock = NSLock()
+        var samples: [AccelSample] = []
+        do {
+            try source.start { s in
+                lock.lock(); samples.append(s); lock.unlock()
+            }
+        } catch {
+            line("accelerometer failed: \(error)")
+            exit(2)
+        }
+        Thread.sleep(forTimeInterval: 1.5)   // settle, and establish a floor
+
+        let performer = NSHapticFeedbackManager.defaultPerformer
+        let patterns: [(String, NSHapticFeedbackManager.FeedbackPattern)] =
+            [("generic", .generic), ("alignment", .alignment), ("levelChange", .levelChange)]
+
+        var marks: [(String, Int64)] = []
+        for (name, pattern) in patterns {
+            for _ in 0..<5 {
+                lock.lock(); let t = samples.last?.tNs ?? 0; lock.unlock()
+                marks.append((name, t))
+                performer.perform(pattern, performanceTime: .now)
+                Thread.sleep(forTimeInterval: 0.4)
+            }
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+        source.stop()
+
+        lock.lock(); let all = samples; lock.unlock()
+        guard all.count > 2000 else { line("too few samples (\(all.count))"); exit(2) }
+
+        // Same envelope the labeller uses: high-pass by subtracting a local
+        // mean, then vector magnitude.
+        let w = 64
+        var env: [(Int64, Double)] = []
+        for i in w..<(all.count - w) {
+            var bx = 0.0, by = 0.0, bz = 0.0
+            for j in (i - w/2)..<(i + w/2) {
+                bx += Double(all[j].x); by += Double(all[j].y); bz += Double(all[j].z)
+            }
+            bx /= Double(w); by /= Double(w); bz /= Double(w)
+            let dx = Double(all[i].x) - bx, dy = Double(all[i].y) - by, dz = Double(all[i].z) - bz
+            env.append((all[i].tNs, (dx*dx + dy*dy + dz*dz).squareRoot()))
+        }
+        let sorted = env.map(\.1).sorted()
+        let floor = sorted[sorted.count / 2]
+        let ceiling = sorted[sorted.count - 1]
+
+        line("")
+        line("TAPTIC ENGINE PROBE — inside a real NSApplication, accelerometer open")
+        line(String(format: "  samples            %d", all.count))
+        line(String(format: "  resting floor      %.5f g   (median envelope)", floor))
+        line(String(format: "  session max        %.5f g", ceiling))
+        line("")
+        for (name, _) in patterns.map({ ($0.0, 0) }) {
+            let windows = marks.filter { $0.0 == name }
+            var peaks: [Double] = []
+            for (_, at) in windows {
+                let hit = env.filter { $0.0 >= at && $0.0 <= at + 150_000_000 }.map(\.1).max()
+                if let hit { peaks.append(hit) }
+            }
+            let best = peaks.max() ?? 0
+            line(String(format: "  %-12s peak in window  %.5f g   %.1fx floor   %@",
+                        (name as NSString).utf8String!, best, best / max(floor, 1e-9),
+                        best > floor * 6 ? "REGISTERS" : "nothing above noise"))
+        }
+        line("")
+        line("  A deliberate finger tap on this chassis runs a few tenths of a g.")
+        line("  Anything under about 6x the floor is not a usable stimulus.")
+        exit(0)
+    }
+}

@@ -29,6 +29,10 @@ if let index = arguments.firstIndex(of: "--latency-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.latencyProbe(iterations: n)
 }
+if arguments.contains("--haptic-probe") {
+    app.setActivationPolicy(.accessory)
+    Diagnostics.hapticProbe()
+}
 if arguments.contains("--live-emit-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.liveEmitProbe()
