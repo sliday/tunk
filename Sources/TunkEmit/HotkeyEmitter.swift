@@ -49,8 +49,20 @@ public struct EmitStats: Sendable, Equatable {
     /// latency to this stamp. Nil until a key-down has actually been posted.
     public var lastKeyDownMachNs: Int64?
 
-    /// True if a key-down was posted whose key-up was not. Must never be true.
-    public var hasStuckKey: Bool { keyDownsPosted > keyUpsPosted }
+    /// Pairs that got as far as posting a key-down.
+    public var pairsCompleted: Int = 0
+    /// Pairs whose key-down went out and whose key-up did not. This is the
+    /// stuck-modifier failure, counted per emission.
+    ///
+    /// The aggregate `keyDownsPosted > keyUpsPosted` cannot see an interleaving:
+    /// three downs followed by three ups sums to balanced while the middle of it
+    /// held three keys at once. This counter and the serial post queue address
+    /// the two halves of that — one makes it visible, the other makes it
+    /// impossible.
+    public var unbalancedPairs: Int = 0
+
+    /// True if any key-down was posted whose key-up was not. Must never be true.
+    public var hasStuckKey: Bool { unbalancedPairs > 0 || keyDownsPosted > keyUpsPosted }
 
     /// Seconds since the last emission, for "fired 3 s ago". Nil if never fired.
     public func secondsSinceLastEmit(now: Date = Date()) -> TimeInterval? {
@@ -99,23 +111,46 @@ public final class HotkeyEmitter: @unchecked Sendable {
 
     private let poster: KeyEventPosting
     private let permission: AccessibilityPermissionChecking
+    private let secureInput: SecureInputChecking
     private let lock = NSLock()
     private var _hotkey: HotkeySpec
     private var _options: Options
     private var _stats = EmitStats()
 
-    /// Called after every emission attempt, on the calling thread, outside the
-    /// lock. The menubar uses it to refresh the "fired N s ago" line.
+    /// Held for the whole of one key pair, so two emissions can never interleave
+    /// into N key-downs before any key-up — each pair individually balanced,
+    /// the system's modifier state briefly not.
+    ///
+    /// A lock rather than a serial queue, and that is deliberate. Routing the
+    /// synchronous path through `queue.sync` also moved `CGEvent.post` onto a
+    /// different thread from the caller, and measured against a live
+    /// `CGEventTap` that left the modifier flags asserted in the session two
+    /// seconds after the pair went out — a real stuck modifier, caught by
+    /// `HotkeyEmitterLiveTapTests`. A lock serialises without moving the post.
+    private let postLock = NSLock()
+
+    /// Where `emitAsync` runs the pair. Only the asynchronous path hops threads;
+    /// it has to, because its caller is the 796 Hz sensor callback and the pair
+    /// deliberately holds the key down for 8 ms.
+    ///
+    /// `.userInteractive` because this is a keystroke the user is waiting on.
+    private let postQueue = DispatchQueue(label: "dev.tunk.emit.post", qos: .userInteractive)
+
+    /// Called after every emission attempt, outside the lock, on whichever
+    /// thread ran the emission — the post queue for `emitAsync`, the caller's
+    /// thread for `emit`. The menubar uses it to refresh the "fired N s ago" line.
     public var onEmit: (@Sendable (EmitStats) -> Void)?
 
     public init(hotkey: HotkeySpec = HotkeySpec.recommendedDefault,
                 options: Options = .default,
                 poster: KeyEventPosting = CGEventPoster(),
-                permission: AccessibilityPermissionChecking = SystemAccessibilityPermission()) {
+                permission: AccessibilityPermissionChecking = SystemAccessibilityPermission(),
+                secureInput: SecureInputChecking = SystemSecureInput()) {
         self._hotkey = hotkey
         self._options = options
         self.poster = poster
         self.permission = permission
+        self.secureInput = secureInput
     }
 
     // MARK: - Configuration
@@ -162,10 +197,41 @@ public final class HotkeyEmitter: @unchecked Sendable {
         return try emit(spec, options: opts)
     }
 
-    /// Emit a specific combination. Used by the settings "Test" button and by
-    /// the live acceptance harness.
+    /// Emit a specific combination, and wait for it. Used by the settings "Test"
+    /// button, by the live acceptance harness and by the tests.
+    ///
+    /// Blocks the calling thread for `keyDownHoldNs`. **Never call this from the
+    /// sensor callback** — use `emitAsync`. The hold is 8 ms and the callback
+    /// arrives every 1.26 ms, so blocking it drops about six samples per
+    /// emission and corrupts the very stream the gesture was detected in.
     @discardableResult
     public func emit(_ spec: HotkeySpec, options opts: Options? = nil) throws -> EmitStats {
+        // On the caller's own thread, holding the lock the async path also
+        // takes, so both entry points are ordered against each other and a pair
+        // can never interleave with another pair.
+        try perform(spec, options: opts)
+    }
+
+    /// Emit without waiting. Hands the pair to the post queue and returns in
+    /// microseconds; the caller learns the outcome through `onEmit` and `stats`.
+    ///
+    /// This is the detector's path. `Thread.sleep` inside the pair used to run
+    /// on whatever thread called `emit`, which in production is the 796 Hz HID
+    /// delivery callback — FORMAT.md's measured 0.34 ms p95 callback lag cannot
+    /// survive an 8 ms sleep in it.
+    public func emitAsync(_ spec: HotkeySpec? = nil, options opts: Options? = nil) {
+        let spec = spec ?? hotkey
+        postQueue.async { [weak self] in
+            _ = try? self?.perform(spec, options: opts)
+        }
+    }
+
+    /// Shared body, and the only holder of `postLock`. One pair at a time,
+    /// whichever entry point started it and whichever thread it runs on.
+    @discardableResult
+    private func perform(_ spec: HotkeySpec, options opts: Options?) throws -> EmitStats {
+        postLock.lock()
+        defer { postLock.unlock() }
         let opts = opts ?? options
         let flags = spec.eventFlags(includeDeviceSide: opts.includeDeviceSideFlags).rawValue
         let upFlags = spec.releaseFlags(includeDeviceSide: opts.includeDeviceSideFlags).rawValue
@@ -174,8 +240,8 @@ public final class HotkeyEmitter: @unchecked Sendable {
 
         do {
             // Everything that can throw happens here, before a single event is
-            // posted: permission, and both halves of the pair being buildable.
-            // Past this line the pair is committed.
+            // posted: permission, secure input, and both halves of the pair
+            // being buildable. Past this line the pair is committed.
             try preflight(spec: spec, options: opts)
 
             try postBalanced(down: down, up: up, holdNs: opts.keyDownHoldNs)
@@ -201,25 +267,53 @@ public final class HotkeyEmitter: @unchecked Sendable {
     /// every exit path: normal, thrown, or whatever someone adds later. Errors
     /// from either half are collected and rethrown only after the up has gone
     /// out, so no error path can skip it.
+    ///
+    /// Balance is recorded per pair, not only in totals. Aggregate counters
+    /// cannot see an interleaving — three downs then three ups sums to balanced
+    /// while the middle of it had three keys held at once. `postQueue` makes
+    /// that impossible, and `unbalancedPairs` makes it detectable if it ever
+    /// becomes possible again.
+    ///
+    /// The modifier release is the third thing this scope guarantees. The pair
+    /// asserts modifier flags on both halves deliberately, and nothing in the
+    /// pair ever drops them — measured, the window server then reports the chord
+    /// as held indefinitely, across processes, until some later event says
+    /// otherwise. So the release sits in the same `defer` as the up, after it,
+    /// and runs on every path the up runs on.
     private func postBalanced(down: EmittedKeyEvent, up: EmittedKeyEvent, holdNs: Int64) throws {
         var failures: [Error] = []
+        var downWentOut = false
+        var upWentOut = false
+        defer { recordPair(downPosted: downWentOut, upPosted: upWentOut) }
         do {
             defer {
                 do {
                     try poster.post(up)
+                    upWentOut = true
                     countUp()
                 } catch {
                     failures.append(error)
+                }
+                // After the up, unconditionally. A failed up is exactly when a
+                // modifier is most likely to be left asserted, so this must not
+                // be skipped because the up threw.
+                if up.flagsRaw != 0 {
+                    do { try poster.releaseModifiers() } catch { failures.append(error) }
                 }
             }
 
             do {
                 try poster.post(down)
+                downWentOut = true
                 countDown()
             } catch {
                 failures.append(error)
             }
 
+            // Sleeping here is safe *because of the queue*: `emitAsync` runs
+            // this on `postQueue`, not on the caller's thread. Anything that
+            // moves this call back onto a caller's thread puts the 8 ms sleep
+            // back into the sensor callback.
             if holdNs > 0 {
                 Thread.sleep(forTimeInterval: Double(holdNs) / 1_000_000_000)
             }
@@ -232,6 +326,15 @@ public final class HotkeyEmitter: @unchecked Sendable {
     // MARK: - Internals
 
     private func preflight(spec: HotkeySpec, options opts: Options) throws {
+        // Secure event input. Any password field anywhere on the system takes
+        // it, and while it is held `CGEvent.post` is silently dropped. The API
+        // returns void and cannot fail, so without this check a swallowed
+        // keystroke is recorded as a successful emission: the count goes up,
+        // the panel says "fired", and nothing happened. Checked before posting
+        // so the failure is honest rather than invisible.
+        if opts.requireAccessibility && secureInput.isSecureInputActive {
+            throw EmitError.secureInputActive
+        }
         if opts.requireAccessibility && !permission.isTrusted {
             throw EmitError.accessibilityNotTrusted
         }
@@ -250,6 +353,17 @@ public final class HotkeyEmitter: @unchecked Sendable {
         lock.lock()
         _stats.keyDownsPosted += 1
         _stats.lastKeyDownMachNs = now
+        lock.unlock()
+    }
+
+    /// One pair's own verdict, recorded whatever happened inside it. A down that
+    /// went out without its up is the stuck-modifier failure, and this is the
+    /// only place it can be seen as a single event rather than as a total.
+    private func recordPair(downPosted: Bool, upPosted: Bool) {
+        guard downPosted else { return }
+        lock.lock()
+        _stats.pairsCompleted += 1
+        if !upPosted { _stats.unbalancedPairs += 1 }
         lock.unlock()
     }
 

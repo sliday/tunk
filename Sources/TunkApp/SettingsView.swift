@@ -48,6 +48,7 @@ struct SettingsView: View {
         ScrollView(.vertical) {
             VStack(spacing: 14) {
                 if !engine.permissions.ready { permissionCard }
+                if !settings.migrationNotes.isEmpty { migrationCard }
                 statusCard
                 monitorCard
                 detectionCard
@@ -106,6 +107,46 @@ struct SettingsView: View {
             }
         }
         .frame(minHeight: Metrics.hitTarget)
+    }
+
+    // MARK: - migration
+
+    /// Settings changed on this launch because they were unsafe or incoherent.
+    /// Shown rather than applied quietly: rewriting someone's configuration
+    /// without telling them is not better than leaving it broken.
+    private var migrationCard: some View {
+        Card(title: "Settings updated",
+             caption: "These were saved by an earlier version of Tunk and no longer work the "
+                    + "way they did. Everything you chose — your hotkeys, Shortcuts and tap "
+                    + "bindings — is untouched.") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(settings.migrationNotes) { note in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(note.field)
+                                .font(.system(size: 12, weight: .medium))
+                            Text("\(note.was) → \(note.now)")
+                                .font(.system(size: 12))
+                                .monospacedDigit()
+                                .foregroundStyle(.orange)
+                        }
+                        Text(note.why)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Got it") { settings.dismissMigrationNotes() }
+                    .buttonStyle(TunkButtonStyle())
+            }
+            .frame(minHeight: Metrics.hitTarget)
+        }
+        .transition(.opacity)
+        .tunkAnimation(.tunkSnappy, value: settings.migrationNotes, reduceMotion: reduceMotion)
     }
 
     // MARK: - status

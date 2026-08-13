@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TunkCore
 import TunkEmit
 
 /// `tunk --dump-panel <dir>` renders the settings panel to PNGs, one per action
@@ -42,6 +43,8 @@ enum PanelDump {
             }
         }
 
+        renderMigrationCard(into: url)
+
         // One extra pass at the gate slider's floor, so the caution that only
         // appears at low values is inspectable rather than merely written.
         settings.setActionKind(.hotkey, for: 2)
@@ -50,6 +53,46 @@ enum PanelDump {
         for dark in [false, true] {
             let file = url.appendingPathComponent("panel-gatefloor-\(dark ? "dark" : "light").png")
             let view = SettingsView(settings: settings, engine: engine, panel: panel)
+            guard let data = render(view, dark: dark) else { continue }
+            try? data.write(to: file)
+            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
+        }
+    }
+
+    /// Seeds a throwaway suite with the settings an earlier build left behind,
+    /// then renders the panel that a user upgrading into this build would see.
+    ///
+    /// This is the only path that exercises the migration through `AppSettings`
+    /// rather than through `SettingsMigration` alone — the app target cannot be
+    /// imported by the tests, so without this the wiring is only inspected.
+    private static func renderMigrationCard(into url: URL) {
+        let suite = "dev.tunk.paneldump.migration." + UUID().uuidString
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+
+        // The owner's actual persisted values: a gate below the safe floor, a
+        // join window wider than the confirm window, and a confirm window from
+        // before the default moved.
+        var stale = DetectorConfig.default
+        stale.gateWindowNs = 110_000_000
+        stale.maxInterTapNs = 400_000_000
+        stale.confirmWindowNs = 180_000_000
+        guard let data = try? JSONEncoder().encode(stale) else { return }
+        defaults.set(data, forKey: "detectorConfig")
+
+        let settings = AppSettings(suiteName: suite)
+        guard !settings.migrationNotes.isEmpty else {
+            FileHandle.standardError.write(Data("migration produced no notes\n".utf8))
+            return
+        }
+        for note in settings.migrationNotes {
+            FileHandle.standardOutput.write(Data("migrated: \(note)\n".utf8))
+        }
+
+        let engine = Engine(settings: settings)
+        for dark in [false, true] {
+            let file = url.appendingPathComponent("panel-migration-\(dark ? "dark" : "light").png")
+            let view = SettingsView(settings: settings, engine: engine, panel: PanelModel())
             guard let data = render(view, dark: dark) else { continue }
             try? data.write(to: file)
             FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))

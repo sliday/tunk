@@ -19,6 +19,15 @@ if let index = arguments.firstIndex(of: "--cpu-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.cpuProbe(seconds: seconds)
 }
+if let index = arguments.firstIndex(of: "--emit-probe") {
+    let n = index + 1 < arguments.count ? Int(arguments[index + 1]) ?? 200 : 200
+    app.setActivationPolicy(.accessory)
+    Diagnostics.emitProbe(iterations: n)
+}
+if arguments.contains("--live-emit-probe") {
+    app.setActivationPolicy(.accessory)
+    Diagnostics.liveEmitProbe()
+}
 if arguments.contains("--config-trace") {
     app.setActivationPolicy(.accessory)
     Diagnostics.configTrace()

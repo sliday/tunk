@@ -6,6 +6,10 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
     /// Accessibility is not granted, so `CGEventPost` would be a no-op. Detected
     /// before any event is posted.
     case accessibilityNotTrusted
+    /// Another process holds secure event input, so the window server would
+    /// drop the keystroke. Detected before posting, because `CGEvent.post`
+    /// returns void and would otherwise report this as a success.
+    case secureInputActive
     /// `CGEvent(keyboardEventSource:virtualKey:keyDown:)` returned nil.
     case eventCreationFailed(keyCode: UInt16)
     /// The poster refused the event.
@@ -39,6 +43,8 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
         switch self {
         case .accessibilityNotTrusted:
             return "Tunk cannot post keystrokes: Accessibility permission is not granted."
+        case .secureInputActive:
+            return "another app has secure input on, so macOS would discard the keystroke."
         case .eventCreationFailed(let keyCode):
             return "the system refused to build a key event for key code \(keyCode)."
         case .postFailed(let detail):
@@ -73,6 +79,11 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
                    running Tunk from a terminal, grant the terminal instead. macOS caches this \
                    per binary, so the toggle must be re-flipped after you replace the app.
                    """
+        case .secureInputActive:
+            return "Click out of the password field that has focus. If nothing obvious has "
+                 + "one, a terminal or password manager may be holding secure input; quitting "
+                 + "it releases it. Tunk did not send anything, rather than reporting a "
+                 + "keystroke that macOS threw away."
         case .eventCreationFailed:
             return "Pick a different key in Settings → Shortcut."
         case .postFailed:

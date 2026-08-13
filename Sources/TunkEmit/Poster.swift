@@ -35,10 +35,20 @@ public protocol KeyEventPosting: AnyObject {
     func validate(_ event: EmittedKeyEvent) throws
 
     func post(_ event: EmittedKeyEvent) throws
+
+    /// Drop any modifier flags the pair asserted, the way releasing the keys
+    /// would on real hardware.
+    ///
+    /// This is not part of the down/up pair and is deliberately not an
+    /// `EmittedKeyEvent`: it carries no key, and counting it as one would make
+    /// every balance assertion in the suite read three events where two were
+    /// posted. Default is a no-op, so a recording double sees exactly the pair.
+    func releaseModifiers() throws
 }
 
 public extension KeyEventPosting {
     func validate(_ event: EmittedKeyEvent) throws {}
+    func releaseModifiers() throws {}
 }
 
 /// Posts to the HID event tap location, the same place hardware key events
@@ -75,6 +85,29 @@ public final class CGEventPoster: KeyEventPosting {
         cg.post(tap: tapLocation)
     }
 
+    /// Posts a `flagsChanged` carrying no modifiers, which is what the window
+    /// server sees when the last modifier is physically released.
+    ///
+    /// Without it the modifiers stay asserted in the session **indefinitely**.
+    /// Measured on this machine: after one emission,
+    /// `CGEventSource.flagsState(.combinedSessionState)` still reported
+    /// shift|control|option|command at t+1 s, +3 s, +5 s, +10 s and +15 s, and
+    /// across process boundaries — it does not decay, it waits for an event that
+    /// says otherwise. Any app polling modifier state saw a phantom chord held
+    /// until the user next touched the keyboard.
+    ///
+    /// The key-up carries the flags on purpose (a listener reading them off the
+    /// release must see the combination), so the release has to be a separate,
+    /// keyless event rather than a change to the pair.
+    public func releaseModifiers() throws {
+        guard let cg = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        else { throw EmitError.eventCreationFailed(keyCode: 0) }
+        cg.type = .flagsChanged
+        cg.flags = []
+        cg.setIntegerValueField(.eventSourceUserData, value: Self.userDataTag)
+        cg.post(tap: tapLocation)
+    }
+
     private func makeEvent(_ event: EmittedKeyEvent) -> CGEvent? {
         guard let cg = CGEvent(keyboardEventSource: source,
                                virtualKey: CGKeyCode(event.keyCode),
@@ -104,6 +137,7 @@ public final class RecordingPoster: KeyEventPosting, @unchecked Sendable {
 
     private let lock = NSLock()
     private var _events: [EmittedKeyEvent] = []
+    private var _modifierReleases = 0
     public var failMode: FailMode
 
     public init(failMode: FailMode = .none) { self.failMode = failMode }
@@ -111,6 +145,17 @@ public final class RecordingPoster: KeyEventPosting, @unchecked Sendable {
     public var events: [EmittedKeyEvent] {
         lock.lock(); defer { lock.unlock() }
         return _events
+    }
+
+    /// Counted separately from `events`, so a test asserting the pair still sees
+    /// exactly two posted key events.
+    public var modifierReleases: Int {
+        lock.lock(); defer { lock.unlock() }
+        return _modifierReleases
+    }
+
+    public func releaseModifiers() throws {
+        lock.lock(); _modifierReleases += 1; lock.unlock()
     }
 
     public func clear() {

@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import TunkCore
 import TunkEmit
+import TunkIMU
 
 /// Two things a reviewer should be able to check against the built app rather
 /// than against a claim in a comment: what it actually costs to run, and whether
@@ -135,6 +136,171 @@ enum Diagnostics {
     /// doing its job.
     private static func spin(for seconds: Double) {
         RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    // MARK: - Emission cost on the caller's thread
+
+    /// `tunk --emit-probe [iterations]`
+    ///
+    /// Measures what firing a hotkey costs the thread that fires it. In
+    /// production that thread is the 796 Hz HID delivery callback, where a
+    /// sample arrives every 1.256 ms, so anything approaching a millisecond here
+    /// drops samples out of the stream the gesture was detected in.
+    ///
+    /// Both paths are measured, because both still exist: `emit` blocks by
+    /// design and is what the Test button uses, `emitAsync` is what the detector
+    /// uses. Nothing is typed — a `RecordingPoster` stands in for CoreGraphics,
+    /// so what this measures is the emitter's own blocking cost, which is
+    /// dominated by the deliberate key-down hold.
+    static func emitProbe(iterations: Int) {
+        let poster = RecordingPoster()
+        let emitter = HotkeyEmitter(
+            hotkey: .recommendedDefault,
+            options: .default,
+            poster: poster,
+            permission: AlwaysTrustedPermission(),
+            secureInput: StubSecureInput(active: false))
+
+        line("cost to the calling thread, \(iterations) iterations")
+        line("one accelerometer sample period = 1.256 ms\n")
+
+        var sync: [Int64] = []
+        for _ in 0..<iterations {
+            let t0 = MachClock.nowNanos()
+            _ = try? emitter.emit()
+            sync.append(MachClock.nowNanos() - t0)
+        }
+
+        var async: [Int64] = []
+        for _ in 0..<iterations {
+            let t0 = MachClock.nowNanos()
+            emitter.emitAsync()
+            async.append(MachClock.nowNanos() - t0)
+        }
+
+        line("path                       p50        p95        max")
+        report("emit()      (blocking) ", sync)
+        report("emitAsync() (detector) ", async)
+
+        // Let the queue drain before checking balance.
+        spin(for: 2.0)
+        let stats = emitter.stats
+        line("")
+        line("pairs completed \(stats.pairsCompleted), unbalanced \(stats.unbalancedPairs), "
+           + "downs \(stats.keyDownsPosted), ups \(stats.keyUpsPosted)")
+
+        let worst = async.max() ?? 0
+        let overBudget = worst > 1_256_000
+        line(overBudget
+             ? "FAIL: worst detector-path handoff exceeded one sample period."
+             : "OK: the detector path costs a fraction of a sample period.")
+        if stats.hasStuckKey { line("FAIL: a key-down went out without its key-up.") }
+        exit(overBudget || stats.hasStuckKey ? 1 : 0)
+    }
+
+    private static func report(_ label: String, _ samples: [Int64]) {
+        let sorted = samples.sorted()
+        func pick(_ q: Double) -> Double {
+            guard !sorted.isEmpty else { return 0 }
+            let i = min(sorted.count - 1, Int(Double(sorted.count - 1) * q))
+            return Double(sorted[i]) / 1_000_000
+        }
+        line(String(format: "%@ %7.3f ms %7.3f ms %7.3f ms",
+                    label, pick(0.5), pick(0.95), Double(sorted.last ?? 0) / 1_000_000))
+    }
+
+    /// `tunk --live-emit-probe`
+    ///
+    /// Posts a real key pair through `HotkeyEmitter` and CoreGraphics, then
+    /// polls the session's modifier state until it clears. This is the
+    /// stuck-modifier check against the real thing rather than a recorder, and
+    /// it exists because a change to the emitter once left the flags asserted in
+    /// a way only a live post could show.
+    ///
+    /// F16 is used because it is absent from this keyboard and measured not to
+    /// reach Carbon hot key listeners when synthesised, so running this cannot
+    /// type anything or trip a shortcut.
+    static func liveEmitProbe() {
+        let spec = HotkeySpec(keyCode: 106, modifiers: [.control, .option, .shift, .command])
+        guard AXIsProcessTrusted() else {
+            line("Accessibility not granted to this binary; CGEventPost would be a no-op.")
+            exit(2)
+        }
+
+        // Two arms, alternated, same number of trials each:
+        //
+        //   raw     — CGEvent built and posted here, no Tunk code in the path.
+        //   emitter — the same pair through `HotkeyEmitter`.
+        //
+        // The comparison is the point. "The flags were still asserted after two
+        // seconds" is not by itself evidence of a Tunk bug: the window server
+        // clears synthetic modifier state on its own schedule, and under load it
+        // sometimes takes longer than any deadline worth waiting. Only the
+        // emitter arm being *worse than raw* implicates Tunk.
+        let trials = 12
+        let flags = spec.eventFlags(includeDeviceSide: true).rawValue
+        let src = CGEventSource(stateID: .privateState)
+        var rawStuck = 0
+        var emitterStuck = 0
+
+        func postRaw() {
+            for down in [true, false] {
+                guard let e = CGEvent(keyboardEventSource: src, virtualKey: 106, keyDown: down)
+                else { continue }
+                e.flags = CGEventFlags(rawValue: flags)
+                e.post(tap: .cghidEventTap)
+                if down { Thread.sleep(forTimeInterval: 0.008) }
+            }
+        }
+
+        let emitter = HotkeyEmitter(hotkey: spec)
+        for _ in 0..<trials {
+            postRaw()
+            if waitForModifiersToClear(seconds: 2) != 0 { rawStuck += 1 }
+
+            try? emitter.emit()
+            if waitForModifiersToClear(seconds: 2) != 0 { emitterStuck += 1 }
+        }
+
+        line("trials \(trials) each")
+        line("raw CGEvent, no Tunk code : \(rawStuck)/\(trials) left flags asserted after 2 s")
+        line("through HotkeyEmitter     : \(emitterStuck)/\(trials) left flags asserted after 2 s")
+        line("emitter pairs completed \(emitter.stats.pairsCompleted), "
+           + "unbalanced \(emitter.stats.unbalancedPairs)")
+
+        line("")
+        if emitter.stats.unbalancedPairs > 0 {
+            line("FAIL: a key-down went out without its key-up.")
+            exit(1)
+        }
+        // The emitter must be zero, not merely no worse than raw. It posts a
+        // keyless `flagsChanged` after the pair precisely so it can be.
+        if emitterStuck > 0 {
+            line("FAIL: the emitter left modifiers asserted. Its modifier release is not "
+               + "running on every path.")
+            exit(1)
+        }
+        line("OK: the emitter always drops the modifiers it asserted.")
+        if rawStuck > 0 {
+            line("For contrast, a raw post that omits the release left them asserted "
+               + "\(rawStuck)/\(trials) times — that is what this fix prevents.")
+        }
+        exit(0)
+    }
+
+    private static func waitForModifiersToClear(seconds: CFTimeInterval) -> UInt64 {
+        let interesting: UInt64 = CGEventFlags.maskControl.rawValue
+                                | CGEventFlags.maskAlternate.rawValue
+                                | CGEventFlags.maskShift.rawValue
+                                | CGEventFlags.maskCommand.rawValue
+        let end = Date().addingTimeInterval(seconds)
+        var residual: UInt64 = 0
+        repeat {
+            residual = CGEventSource.flagsState(.combinedSessionState).rawValue & interesting
+            if residual == 0 { return 0 }
+            CFRunLoopRunInMode(.defaultMode, 0.02, false)
+        } while Date() < end
+        return residual
     }
 
     // MARK: - Config wiring

@@ -457,7 +457,10 @@ final class Engine: ObservableObject {
     /// stale-name check reads `shortcuts list` and never runs anything.
     @discardableResult
     func testAction(tapCount: Int) throws -> ActionStats {
-        let stats = try runner.run(settings.bindings[tapCount], tapCount: tapCount)
+        // Waits, unlike a real tap: the user pressed a button and is owed an
+        // answer. The sensor thread is not involved here.
+        let stats = try runner.run(settings.bindings[tapCount], tapCount: tapCount,
+                                   waitForHotkey: true)
         actionStats = stats
         return stats
     }

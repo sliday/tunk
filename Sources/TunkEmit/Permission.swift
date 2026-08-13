@@ -1,4 +1,5 @@
 import ApplicationServices
+import Carbon.HIToolbox
 import Foundation
 
 /// Injection seam for the Accessibility check, so tests can drive both branches
@@ -36,4 +37,30 @@ public final class SystemAccessibilityPermission: AccessibilityPermissionCheckin
 public final class AlwaysTrustedPermission: AccessibilityPermissionChecking, @unchecked Sendable {
     public let isTrusted: Bool
     public init(isTrusted: Bool = true) { self.isTrusted = isTrusted }
+}
+
+/// Injection seam for the secure-event-input check.
+public protocol SecureInputChecking: AnyObject, Sendable {
+    var isSecureInputActive: Bool { get }
+}
+
+/// The real check.
+///
+/// While any process holds secure event input — every password field does, plus
+/// some terminals and password managers — the window server drops synthetic key
+/// events. `CGEvent.post` returns void and cannot report it, so an emission that
+/// went nowhere is indistinguishable from one that worked unless this is asked
+/// first. It is cheap: a Carbon call that reads a global flag.
+///
+/// It says nothing about *who* holds it. Naming the process needs a private
+/// SkyLight call, and a wrong name would be worse than none.
+public final class SystemSecureInput: SecureInputChecking, @unchecked Sendable {
+    public init() {}
+    public var isSecureInputActive: Bool { IsSecureEventInputEnabled() }
+}
+
+/// Fixed answer. Tests use it; nothing in the app should.
+public final class StubSecureInput: SecureInputChecking, @unchecked Sendable {
+    public let isSecureInputActive: Bool
+    public init(active: Bool = false) { self.isSecureInputActive = active }
 }

@@ -379,6 +379,26 @@ final class ActionRunnerTests: XCTestCase {
         Trigger(tNs: 0, tapOnsets: Array(repeating: Int64(0), count: taps), score: 1)
     }
 
+    /// The detector's hotkey path is asynchronous by design — it hands the pair
+    /// to the emitter's post queue so the 796 Hz sensor callback is not held for
+    /// the 8 ms key-down. So a test that asserts on posted events has to wait
+    /// for them rather than read them straight after `run`.
+    private func waitForEvents(_ poster: RecordingPoster, count: Int,
+                               timeout: TimeInterval = 10,
+                               file: StaticString = #filePath, line: UInt = #line) {
+        let exp = expectation(description: "\(count) events posted")
+        DispatchQueue.global().async {
+            let end = Date().addingTimeInterval(timeout)
+            while Date() < end {
+                if poster.events.count >= count { exp.fulfill(); return }
+                usleep(2000)
+            }
+        }
+        wait(for: [exp], timeout: timeout + 1)
+        XCTAssertEqual(poster.events.count, count,
+                       "expected \(count) posted events", file: file, line: line)
+    }
+
     // MARK: the hotkey path is unchanged
 
     func testHotkeyPathStillPostsExactlyOneDownThenOneUp() throws {
@@ -386,12 +406,14 @@ final class ActionRunnerTests: XCTestCase {
         let runner = makeRunner(double: .hotkey(spec), poster: poster)
 
         let stats = try runner.run(tapCount: 2)
+        waitForEvents(poster, count: 2)
 
         XCTAssertEqual(poster.events.map(\.phase), [.down, .up])
-        XCTAssertEqual(stats.emit.emitCount, 1)
-        XCTAssertEqual(stats.emit.keyDownsPosted, 1)
-        XCTAssertEqual(stats.emit.keyUpsPosted, 1)
-        XCTAssertFalse(stats.hasStuckKey)
+        XCTAssertEqual(runner.stats.emit.emitCount, 1)
+        XCTAssertEqual(runner.stats.emit.keyDownsPosted, 1)
+        XCTAssertEqual(runner.stats.emit.keyUpsPosted, 1)
+        XCTAssertEqual(runner.stats.emit.unbalancedPairs, 0)
+        XCTAssertFalse(runner.stats.hasStuckKey)
         XCTAssertEqual(stats.runCount, 1)
         XCTAssertEqual(stats.lastTapCount, 2)
         XCTAssertNil(stats.lastErrorText)
@@ -402,6 +424,7 @@ final class ActionRunnerTests: XCTestCase {
         let runner = makeRunner(double: .hotkey(spec), poster: poster)
 
         for _ in 0..<100 { try runner.run(tapCount: 2) }
+        waitForEvents(poster, count: 200)
 
         let phases = poster.events.map(\.phase)
         XCTAssertEqual(phases.count, 200)
@@ -418,7 +441,9 @@ final class ActionRunnerTests: XCTestCase {
         let poster = RecordingPoster(failMode: .onPost(.down))
         let runner = makeRunner(double: .hotkey(spec), poster: poster)
 
-        XCTAssertThrowsError(try runner.run(tapCount: 2))
+        // The waiting path, which is what the Test button uses: it is the only
+        // one that can throw, and the funnel it exercises is the same one.
+        XCTAssertThrowsError(try runner.run(.hotkey(spec), tapCount: 2, waitForHotkey: true))
 
         XCTAssertEqual(poster.events.map(\.phase), [.up])
         XCTAssertFalse(runner.stats.hasStuckKey)
@@ -430,7 +455,8 @@ final class ActionRunnerTests: XCTestCase {
         let poster = RecordingPoster()
         let runner = makeRunner(double: .hotkey(spec), poster: poster, trusted: false)
 
-        XCTAssertThrowsError(try runner.run(tapCount: 2)) { error in
+        XCTAssertThrowsError(try runner.run(.hotkey(spec), tapCount: 2,
+                                            waitForHotkey: true)) { error in
             guard case EmitError.accessibilityNotTrusted = error else {
                 return XCTFail("wrong error: \(error)")
             }
@@ -463,6 +489,7 @@ final class ActionRunnerTests: XCTestCase {
                                 poster: poster, spawner: spawner)
 
         try runner.run(tapCount: 2)
+        waitForEvents(poster, count: 2)
         XCTAssertEqual(poster.events.map(\.phase), [.down, .up])
         XCTAssertTrue(spawner.names.isEmpty)
 
@@ -500,7 +527,7 @@ final class ActionRunnerTests: XCTestCase {
                                 poster: poster, spawner: spawner)
 
         try runner.run(for: trigger(taps: 2))
-        XCTAssertEqual(poster.events.count, 2)
+        waitForEvents(poster, count: 2)
 
         try runner.run(for: trigger(taps: 1))
         XCTAssertEqual(spawner.names, ["Twitter"])
@@ -560,7 +587,7 @@ final class ActionRunnerTests: XCTestCase {
     func testDispatchLatencyExcludesTheKeyDownHold() throws {
         let runner = makeRunner(double: .hotkey(spec), hold: 20_000_000)
         let t0 = EmitClock.nowNanos()
-        let stats = try runner.run(tapCount: 2)
+        let stats = try runner.run(.hotkey(spec), tapCount: 2, waitForHotkey: true)
         let wall = EmitClock.nowNanos() - t0
 
         XCTAssertGreaterThanOrEqual(wall, 15_000_000, "the key really was held")
@@ -806,8 +833,10 @@ final class ActionRunnerTests: XCTestCase {
             _ = try? runner.run(tapCount: i.isMultiple(of: 2) ? 2 : 1)
         }
 
+        waitForEvents(poster, count: 60)
         let stats = runner.stats
         XCTAssertEqual(stats.runCount, 60)
+        XCTAssertEqual(stats.emit.unbalancedPairs, 0)
         XCTAssertEqual(stats.emit.keyDownsPosted, 30)
         XCTAssertEqual(stats.emit.keyUpsPosted, 30)
         XCTAssertFalse(stats.hasStuckKey)
@@ -826,6 +855,488 @@ final class ActionRunnerTests: XCTestCase {
                 usleep(2000)
             }
         }
+    }
+}
+
+// MARK: - Not blocking the sensor thread, and not interleaving pairs
+
+/// The emitter posts a pair with an 8 ms key-down hold. In production the caller
+/// is the 796 Hz HID delivery callback, where a sample arrives every 1.26 ms, so
+/// whether that hold runs on the caller's thread decides whether firing corrupts
+/// the stream the gesture was detected in.
+final class EmitterBlockingTests: XCTestCase {
+
+    private let spec = HotkeySpec(keyCode: 41, modifiers: [.control, .option, .command])
+    private static let hold: Int64 = 8_000_000
+
+    private func makeEmitter(_ poster: RecordingPoster,
+                             hold: Int64 = EmitterBlockingTests.hold) -> HotkeyEmitter {
+        HotkeyEmitter(hotkey: spec,
+                      options: .init(includeDeviceSideFlags: true,
+                                     keyDownHoldNs: hold,
+                                     requireAccessibility: true),
+                      poster: poster,
+                      permission: AlwaysTrustedPermission(),
+                      secureInput: StubSecureInput(active: false))
+    }
+
+    /// The measurement. `emit` is allowed to block — the Test button wants an
+    /// answer — and `emitAsync` is not, because the detector calls it.
+    func testAsyncEmitDoesNotBlockTheCallerButSyncEmitDoes() {
+        let emitter = makeEmitter(RecordingPoster())
+
+        let syncStart = EmitClock.nowNanos()
+        _ = try? emitter.emit()
+        let syncCost = EmitClock.nowNanos() - syncStart
+
+        let asyncStart = EmitClock.nowNanos()
+        emitter.emitAsync()
+        let asyncCost = EmitClock.nowNanos() - asyncStart
+
+        XCTAssertGreaterThan(syncCost, Self.hold / 2,
+                             "emit() should still hold the key, on its own caller's thread")
+        // One sensor sample period is 1.256 ms. Handing the pair to a queue has
+        // to cost a small fraction of that, not a multiple of it.
+        XCTAssertLessThan(asyncCost, 500_000,
+                          "emitAsync blocked for \(Double(asyncCost) / 1_000_000) ms; the sensor "
+                          + "callback has 1.256 ms between samples")
+    }
+
+    /// Worst case over many calls, which is what a dropped-sample budget cares
+    /// about. A single fast call proves nothing.
+    func testAsyncEmitWorstCaseStaysUnderOneSamplePeriod() {
+        let emitter = makeEmitter(RecordingPoster())
+        var worst: Int64 = 0
+        for _ in 0..<200 {
+            let t0 = EmitClock.nowNanos()
+            emitter.emitAsync()
+            worst = max(worst, EmitClock.nowNanos() - t0)
+        }
+        XCTAssertLessThan(worst, 1_256_000,
+                          "worst handoff was \(Double(worst) / 1_000_000) ms, which is longer "
+                          + "than the 1.256 ms between accelerometer samples")
+    }
+
+    /// Whichever way it is started, the pair must come out whole.
+    func testAsyncEmitStillPostsABalancedPair() {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster)
+
+        emitter.emitAsync()
+        let done = expectation(description: "pair posted")
+        pollUntil(done) { poster.events.count == 2 }
+        wait(for: [done], timeout: 2)
+
+        XCTAssertEqual(poster.events.map(\.phase), [.down, .up])
+        XCTAssertFalse(emitter.stats.hasStuckKey)
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 0)
+        XCTAssertEqual(emitter.stats.pairsCompleted, 1)
+    }
+
+    /// The interleaving the aggregate counters could not see. Fifty concurrent
+    /// emissions must produce fifty strict down/up pairs, never a run of downs.
+    func testConcurrentEmissionsNeverInterleaveTwoPairs() {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster, hold: 0)
+
+        DispatchQueue.concurrentPerform(iterations: 50) { _ in
+            _ = try? emitter.emit()
+        }
+
+        let phases = poster.events.map(\.phase)
+        XCTAssertEqual(phases.count, 100)
+        for i in stride(from: 0, to: phases.count, by: 2) {
+            XCTAssertEqual(phases[i], .down, "a second key went down before the first came up")
+            XCTAssertEqual(phases[i + 1], .up)
+        }
+        XCTAssertEqual(emitter.stats.pairsCompleted, 50)
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 0)
+        XCTAssertFalse(emitter.stats.hasStuckKey)
+    }
+
+    func testMixedSyncAndAsyncEmissionsStayOrdered() {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster, hold: 0)
+
+        DispatchQueue.concurrentPerform(iterations: 40) { i in
+            if i.isMultiple(of: 2) { emitter.emitAsync() } else { _ = try? emitter.emit() }
+        }
+        let done = expectation(description: "all pairs posted")
+        pollUntil(done) { poster.events.count == 80 }
+        wait(for: [done], timeout: 5)
+
+        let phases = poster.events.map(\.phase)
+        for i in stride(from: 0, to: phases.count, by: 2) {
+            XCTAssertEqual(phases[i], .down)
+            XCTAssertEqual(phases[i + 1], .up)
+        }
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 0)
+    }
+
+    /// Per-emission detection. A failing key-up is the one shape that really
+    /// strands a key, and it has to be visible as one bad pair rather than only
+    /// as a difference between two totals.
+    func testAFailedKeyUpIsCountedAsOneUnbalancedPair() {
+        let poster = RecordingPoster(failMode: .onPost(.up))
+        let emitter = makeEmitter(poster, hold: 0)
+
+        XCTAssertThrowsError(try emitter.emit())
+
+        XCTAssertEqual(emitter.stats.pairsCompleted, 1)
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 1)
+        XCTAssertTrue(emitter.stats.hasStuckKey)
+    }
+
+    /// A pair that never posted its down is not an unbalanced pair — nothing was
+    /// left held. Counting it would cry wolf on every permission failure.
+    func testAPairThatNeverStartedIsNotCountedAsUnbalanced() {
+        let poster = RecordingPoster(failMode: .onPost(.down))
+        let emitter = makeEmitter(poster, hold: 0)
+
+        XCTAssertThrowsError(try emitter.emit())
+
+        XCTAssertEqual(emitter.stats.pairsCompleted, 0)
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 0)
+        XCTAssertFalse(emitter.stats.hasStuckKey)
+        XCTAssertEqual(poster.events.map(\.phase), [.up], "the up still goes out")
+    }
+
+    /// `ActionRunner` is what the detector actually calls, so the no-blocking
+    /// claim has to hold through it too.
+    func testActionRunnerHotkeyPathDoesNotBlockTheDetector() throws {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster)
+        let runner = ActionRunner(bindings: ActionBindings([2: .hotkey(spec)]),
+                                  emitter: emitter,
+                                  spawner: FakeSpawner(.silent),
+                                  resolver: FakeResolver())
+
+        var worst: Int64 = 0
+        for _ in 0..<50 {
+            let t0 = EmitClock.nowNanos()
+            try runner.run(tapCount: 2)
+            worst = max(worst, EmitClock.nowNanos() - t0)
+        }
+
+        XCTAssertLessThan(worst, 1_256_000,
+                          "worst run() was \(Double(worst) / 1_000_000) ms against a 1.256 ms "
+                          + "sample period")
+        let done = expectation(description: "all pairs posted")
+        pollUntil(done) { poster.events.count == 100 }
+        wait(for: [done], timeout: 10)
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 0)
+    }
+
+    private func pollUntil(_ exp: XCTestExpectation,
+                           timeout: TimeInterval = 10,
+                           _ condition: @escaping @Sendable () -> Bool) {
+        DispatchQueue.global().async {
+            let end = Date().addingTimeInterval(timeout)
+            while Date() < end {
+                if condition() { exp.fulfill(); return }
+                usleep(2000)
+            }
+        }
+    }
+}
+
+// MARK: - Dropping the modifiers the pair asserted
+
+/// The pair stamps modifier flags on both halves on purpose, and nothing in the
+/// pair ever drops them. Measured against the live window server: after one
+/// emission the chord was still reported as held at t+15 s and across process
+/// boundaries — it does not decay, it waits for an event that says otherwise.
+/// So the emitter posts a keyless `flagsChanged` after the up.
+final class ModifierReleaseTests: XCTestCase {
+
+    private let chord = HotkeySpec(keyCode: 41, modifiers: [.control, .option, .command])
+
+    private func makeEmitter(_ poster: RecordingPoster,
+                             hold: Int64 = 0,
+                             trusted: Bool = true) -> HotkeyEmitter {
+        HotkeyEmitter(hotkey: chord,
+                      options: .init(includeDeviceSideFlags: true,
+                                     keyDownHoldNs: hold,
+                                     requireAccessibility: true),
+                      poster: poster,
+                      permission: AlwaysTrustedPermission(isTrusted: trusted),
+                      secureInput: StubSecureInput(active: false))
+    }
+
+    func testTheModifiersAreReleasedAfterAChord() throws {
+        let poster = RecordingPoster()
+        try makeEmitter(poster).emit()
+
+        XCTAssertEqual(poster.modifierReleases, 1)
+        XCTAssertEqual(poster.events.map(\.phase), [.down, .up],
+                       "the release must not count as a third key event")
+    }
+
+    /// The release is not part of the pair, so it must not disturb any balance
+    /// assertion — including the ones in other suites that predate it.
+    func testTheReleaseDoesNotChangeTheEventCount() throws {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster)
+        for _ in 0..<20 { try emitter.emit() }
+
+        XCTAssertEqual(poster.events.count, 40)
+        XCTAssertEqual(poster.modifierReleases, 20)
+        XCTAssertEqual(emitter.stats.unbalancedPairs, 0)
+    }
+
+    /// The path that matters most. A failed key-up is exactly when a modifier is
+    /// most likely to be left asserted, so the release must still go out.
+    func testTheReleaseStillRunsWhenTheKeyUpFails() {
+        let poster = RecordingPoster(failMode: .onPost(.up))
+        let emitter = makeEmitter(poster)
+
+        XCTAssertThrowsError(try emitter.emit())
+
+        XCTAssertEqual(poster.modifierReleases, 1,
+                       "a failed up is the case this exists for")
+        XCTAssertTrue(emitter.stats.hasStuckKey, "and it is still reported as unbalanced")
+    }
+
+    func testTheReleaseStillRunsWhenTheKeyDownFails() {
+        let poster = RecordingPoster(failMode: .onPost(.down))
+        let emitter = makeEmitter(poster)
+
+        XCTAssertThrowsError(try emitter.emit())
+        XCTAssertEqual(poster.modifierReleases, 1)
+    }
+
+    /// Nothing was posted at all, so there is nothing to release.
+    func testNothingIsReleasedWhenTheEmissionNeverStarted() {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster, trusted: false)
+
+        XCTAssertThrowsError(try emitter.emit())
+        XCTAssertEqual(poster.modifierReleases, 0)
+        XCTAssertTrue(poster.events.isEmpty)
+    }
+
+    /// A shortcut with no modifiers asserts none, so it has none to drop.
+    func testAKeyWithNoModifiersPostsNoRelease() throws {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster)
+        try emitter.emit(HotkeySpec(keyCode: 41, modifiers: []))
+
+        XCTAssertEqual(poster.events.map(\.phase), [.down, .up])
+        XCTAssertEqual(poster.modifierReleases, 0)
+    }
+
+    func testTheAsyncPathReleasesToo() {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster)
+        emitter.emitAsync()
+
+        let done = expectation(description: "released")
+        DispatchQueue.global().async {
+            let end = Date().addingTimeInterval(5)
+            while Date() < end {
+                if poster.modifierReleases == 1 { done.fulfill(); return }
+                usleep(2000)
+            }
+        }
+        wait(for: [done], timeout: 6)
+        XCTAssertEqual(poster.events.map(\.phase), [.down, .up])
+    }
+}
+
+// MARK: - Secure input
+
+/// `CGEvent.post` returns void and cannot fail. While another process holds
+/// secure event input — any password field does — the window server drops the
+/// event. Without a check, that is recorded as a successful emission.
+final class SecureInputTests: XCTestCase {
+
+    private let spec = HotkeySpec(keyCode: 41, modifiers: [.control, .option, .command])
+
+    private func makeEmitter(_ poster: RecordingPoster, secureInput active: Bool) -> HotkeyEmitter {
+        HotkeyEmitter(hotkey: spec,
+                      options: .init(includeDeviceSideFlags: true,
+                                     keyDownHoldNs: 0,
+                                     requireAccessibility: true),
+                      poster: poster,
+                      permission: AlwaysTrustedPermission(),
+                      secureInput: StubSecureInput(active: active))
+    }
+
+    func testSecureInputBlocksTheEmissionInsteadOfFakingSuccess() {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster, secureInput: true)
+
+        XCTAssertThrowsError(try emitter.emit()) { error in
+            guard case EmitError.secureInputActive = error else {
+                return XCTFail("wrong error: \(error)")
+            }
+        }
+
+        XCTAssertTrue(poster.events.isEmpty, "nothing may be posted while it would be dropped")
+        XCTAssertEqual(emitter.stats.emitCount, 0,
+                       "the count that means 'it fired' must not move when it did not")
+        XCTAssertEqual(emitter.stats.failureCount, 1)
+        XCTAssertFalse(emitter.stats.hasStuckKey)
+    }
+
+    func testSecureInputErrorTellsTheUserWhatToDo() {
+        let text = EmitError.secureInputActive.description
+        XCTAssertTrue(text.contains("secure input"), text)
+        let fix = try? XCTUnwrap(EmitError.secureInputActive.recoverySuggestion)
+        XCTAssertTrue(fix?.contains("password field") == true, fix ?? "")
+        XCTAssertTrue(fix?.contains("did not send") == true,
+                      "it must say nothing was sent, not imply something was")
+    }
+
+    func testPreflightCatchesSecureInputBeforeAnyTap() {
+        let emitter = makeEmitter(RecordingPoster(), secureInput: true)
+        XCTAssertThrowsError(try emitter.preflight())
+
+        let clear = makeEmitter(RecordingPoster(), secureInput: false)
+        XCTAssertNoThrow(try clear.preflight())
+    }
+
+    func testNormalEmissionIsUnaffectedWhenSecureInputIsOff() throws {
+        let poster = RecordingPoster()
+        let emitter = makeEmitter(poster, secureInput: false)
+        try emitter.emit()
+        XCTAssertEqual(poster.events.map(\.phase), [.down, .up])
+        XCTAssertEqual(emitter.stats.emitCount, 1)
+    }
+
+    /// The async path cannot throw back to the detector, so the failure has to
+    /// reach the panel through the runner instead of vanishing.
+    func testSecureInputFailureOnTheAsyncPathReachesTheRunner() {
+        let emitter = makeEmitter(RecordingPoster(), secureInput: true)
+        let runner = ActionRunner(bindings: ActionBindings([2: .hotkey(spec)]),
+                                  emitter: emitter,
+                                  spawner: FakeSpawner(.silent),
+                                  resolver: FakeResolver())
+
+        XCTAssertNoThrow(try runner.run(tapCount: 2))
+
+        let reported = expectation(description: "surfaced")
+        DispatchQueue.global().async {
+            let end = Date().addingTimeInterval(2)
+            while Date() < end {
+                if runner.stats.lastErrorText?.contains("secure input") == true {
+                    reported.fulfill(); return
+                }
+                usleep(2000)
+            }
+        }
+        wait(for: [reported], timeout: 3)
+        XCTAssertEqual(runner.stats.emit.emitCount, 0)
+    }
+}
+
+// MARK: - Settings migration
+
+final class SettingsMigrationTests: XCTestCase {
+
+    /// The owner's actual persisted values, from the lead's report: a gate below
+    /// the safe floor, a join window wider than the confirm window, and a
+    /// confirm window from before the default moved to 220 ms.
+    private var ownersStoredConfig: DetectorConfig {
+        var c = DetectorConfig.default
+        c.gateWindowNs = 110_000_000
+        c.maxInterTapNs = 400_000_000
+        c.confirmWindowNs = 180_000_000
+        return c
+    }
+
+    func testTheOwnersConfigIsMadeSafeAndCoherent() {
+        let result = SettingsMigration.migrate(ownersStoredConfig)
+
+        XCTAssertTrue(result.changed)
+        XCTAssertGreaterThanOrEqual(result.config.gateWindowNs,
+                                    SettingsMigration.minimumSafeGateNs,
+                                    "the gate must end up covering typing")
+        XCTAssertLessThanOrEqual(result.config.maxInterTapNs, result.config.confirmWindowNs,
+                                 "the invariant must hold afterwards")
+        XCTAssertTrue(result.config.isCoherent)
+    }
+
+    /// The join window is widened by raising the confirm window rather than by
+    /// clamping the spacing down to an old, shorter one.
+    func testAWideJoinWindowIsKeptByRaisingTheConfirmWindow() {
+        let result = SettingsMigration.migrate(ownersStoredConfig)
+        XCTAssertEqual(result.config.confirmWindowNs, DetectorConfig.default.confirmWindowNs)
+        XCTAssertEqual(result.config.maxInterTapNs, DetectorConfig.default.confirmWindowNs,
+                       "clamped to the new window, not down to the old 180 ms")
+    }
+
+    func testEveryChangeIsExplained() throws {
+        let notes = SettingsMigration.migrate(ownersStoredConfig).notes
+        XCTAssertFalse(notes.isEmpty)
+        for note in notes {
+            XCTAssertFalse(note.field.isEmpty)
+            XCTAssertFalse(note.was.isEmpty, "\(note.field) must say what it was")
+            XCTAssertFalse(note.now.isEmpty, "\(note.field) must say what it is now")
+            XCTAssertFalse(note.why.isEmpty, "\(note.field) must say why")
+        }
+        let gate = try XCTUnwrap(notes.first { $0.field == "Gate window" })
+        XCTAssertEqual(gate.was, "110 ms")
+        XCTAssertEqual(gate.now, "180 ms")
+        XCTAssertTrue(gate.why.contains("typing"), gate.why)
+    }
+
+    /// These strings go in front of a user. A raw field name like
+    /// `maxInterTapNs` leaking into the panel is a defect, not a detail.
+    func testNotesAreWrittenForAUserNotForTheSource() {
+        for note in SettingsMigration.migrate(ownersStoredConfig).notes {
+            XCTAssertFalse(note.field.contains("Ns"),
+                           "\"\(note.field)\" is a code identifier, not a label")
+            XCTAssertEqual(note.field, note.field.prefix(1).uppercased() + note.field.dropFirst(),
+                           "\"\(note.field)\" should read as a label")
+            let first = try? XCTUnwrap(note.why.first)
+            XCTAssertEqual(String(first ?? " "), String(first ?? " ").uppercased(),
+                           "\"\(note.why)\" should start as a sentence")
+            XCTAssertTrue(note.why.hasSuffix("."), "\"\(note.why)\" should end as a sentence")
+        }
+    }
+
+    /// The rule that keeps this from being a reset button.
+    func testASafeCoherentConfigIsLeftCompletelyAlone() {
+        let mine = {
+            var c = DetectorConfig.default
+            c.sensitivity = 1.4                     // deliberately chosen
+            c.gateWindowNs = 200_000_000            // safe
+            c.calibratedThreshold = 0.37            // learned from real taps
+            return c
+        }()
+
+        let result = SettingsMigration.migrate(mine)
+
+        XCTAssertFalse(result.changed, "nothing was unsafe or incoherent")
+        XCTAssertEqual(result.config, mine)
+        XCTAssertTrue(result.notes.isEmpty)
+    }
+
+    /// Calibration is the user's own measurement of their own hand. A migration
+    /// that threw it away would cost them the "learn my tap" step.
+    func testCalibrationAndSensitivitySurviveAMigration() {
+        var stored = ownersStoredConfig
+        stored.calibratedThreshold = 0.42
+        stored.sensitivity = 1.25
+
+        let result = SettingsMigration.migrate(stored)
+
+        XCTAssertEqual(result.config.calibratedThreshold, 0.42)
+        XCTAssertEqual(result.config.sensitivity, 1.25)
+    }
+
+    func testAGateAtTheFloorIsNotTouched() {
+        var stored = DetectorConfig.default
+        stored.gateWindowNs = SettingsMigration.minimumSafeGateNs
+        XCTAssertFalse(SettingsMigration.migrate(stored).changed)
+    }
+
+    func testMigrationIsIdempotent() {
+        let once = SettingsMigration.migrate(ownersStoredConfig)
+        let twice = SettingsMigration.migrate(once.config)
+        XCTAssertFalse(twice.changed, "a migrated config must not migrate again")
+        XCTAssertEqual(twice.config, once.config)
     }
 }
 

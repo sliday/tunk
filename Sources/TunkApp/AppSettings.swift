@@ -141,13 +141,33 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var launchAtLoginError: String?
 
+    /// What the migration changed on this launch, for the panel to show. Empty
+    /// on a fresh install and on any launch where nothing needed changing.
+    ///
+    /// Deliberately not persisted: it describes one migration, the panel shows
+    /// it once, and the user dismisses it. A note that outlived the launch that
+    /// produced it would nag about a change already made.
+    @Published private(set) var migrationNotes: [SettingsMigration.Note] = []
+
+    func dismissMigrationNotes() { migrationNotes = [] }
+
     /// - Parameter suiteName: the defaults suite to read and write. Only
     ///   `--dump-panel` passes anything else, so a diagnostic render cannot
     ///   touch the settings the operator is actually running with.
     init(suiteName: String = AppSettings.suiteName) {
         let d = UserDefaults(suiteName: suiteName) ?? .standard
         defaults = d
-        config = AppSettings.load(DetectorConfig.self, key: Key.config, from: d) ?? .default
+        let stored = AppSettings.load(DetectorConfig.self, key: Key.config, from: d)
+        // Only a stored config is migrated. A fresh install already has the
+        // current defaults and has nothing to be told about.
+        if let stored {
+            let result = SettingsMigration.migrate(stored)
+            config = result.config
+            migrationNotes = result.notes
+        } else {
+            config = .default
+            migrationNotes = []
+        }
         // The rules live in `ActionBindings.restored`, in TunkEmit, where they
         // are under test; this reads the three keys and hands them over.
         let loaded = ActionBindings.restored(bindingsData: d.data(forKey: Key.bindings),
@@ -173,6 +193,12 @@ final class AppSettings: ObservableObject {
         // were linked, or hand-edited since, must not leave a bound action
         // silently disarmed.
         armDetectorForBoundCounts()
+
+        // Write the migrated config back straight away. `config`'s `didSet` does
+        // not run during init, so without this the old values would be re-read
+        // and re-migrated on every launch, and the panel would keep announcing
+        // a change it already made.
+        if !migrationNotes.isEmpty { persist(config, key: Key.config) }
     }
 
     func resetDetectionToDefaults() {

@@ -120,6 +120,21 @@ public final class ActionRunner: @unchecked Sendable {
         self.emitter = emitter
         self.spawner = spawner
         self.resolver = resolver
+
+        // The async hotkey path cannot throw back to the detector, so its
+        // failures arrive here instead. Without this a keystroke swallowed by
+        // secure input would raise the emitter's failure count and never reach
+        // the panel — the same "reported success for something unverified" the
+        // secure-input check exists to stop.
+        emitter.onEmit = { [weak self] emitStats in
+            guard let self, let text = emitStats.lastErrorText else { return }
+            self.lock.lock()
+            _stats.lastErrorText = text
+            var snapshot = _stats
+            self.lock.unlock()
+            snapshot.emit = emitStats
+            self.onChange?(snapshot)
+        }
     }
 
     // MARK: - Configuration
@@ -243,10 +258,20 @@ public final class ActionRunner: @unchecked Sendable {
     /// Run a specific action once. Used by each panel row's Test button, which
     /// tests the row it belongs to.
     @discardableResult
-    public func run(_ action: TunkAction, tapCount: Int? = nil) throws -> ActionStats {
+    public func run(_ action: TunkAction, tapCount: Int? = nil,
+                    waitForHotkey: Bool = false) throws -> ActionStats {
         let t0 = EmitClock.nowNanos()
         switch action {
         case .hotkey(let spec):
+            // `waitForHotkey` is the Test button, which wants to tell the user
+            // what happened. The detector never waits: the pair holds the key
+            // down for 8 ms and the sensor callback arrives every 1.26 ms, so
+            // blocking on it would drop about six samples per emission.
+            guard waitForHotkey else {
+                emitter.emitAsync(spec)
+                return record(action: action, tapCount: tapCount,
+                              dispatchNs: EmitClock.nowNanos() - t0, error: nil)
+            }
             do {
                 _ = try emitter.emit(spec)
             } catch {
