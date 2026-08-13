@@ -1,0 +1,22 @@
+{
+  "category" : "idle",
+  "duration_ns" : 60044735584,
+  "epoch_mach_ns" : 461133920381041,
+  "epoch_wall_iso" : "2026-08-13T19:32:04.020Z",
+  "expected_triggers" : 0,
+  "machine" : {
+    "chip" : "Apple M4 Max",
+    "model" : "Mac16,6",
+    "os" : "26.5.2"
+  },
+  "nominal_interval_ns" : 1255650,
+  "nominal_rate_hz" : 796.4,
+  "operator_notes" : "lead-recorded baseline, machine untouched, app not running",
+  "report_interval_us" : 1250,
+  "sample_count" : 47787,
+  "schema" : 1,
+  "session_id" : "idle__desk__20260813-213204__7da427",
+  "split" : "train",
+  "surface" : "desk",
+  "tool_version" : "tunk-capture 0.3.0"
+}
