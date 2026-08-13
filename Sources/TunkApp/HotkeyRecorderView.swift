@@ -50,22 +50,68 @@ struct HotkeyRecorderView: View {
         complaint = nil
         recording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
-            guard event.type == .keyDown else { return nil }
-            if event.keyCode == 53 {                       // Escape
-                endRecording()
-                return nil
+            switch event.type {
+            case .keyDown:
+                if event.keyCode == 53 {                   // Escape
+                    endRecording()
+                    return nil
+                }
+                let spec = HotkeySpec(keyCode: event.keyCode, eventModifiers: event.modifierFlags)
+                guard spec.hasModifier else {
+                    complaint = "Pick something with at least one modifier — a bare key would "
+                        + "fire while you type."
+                    return nil
+                }
+                commit(spec)
+
+            case .flagsChanged:
+                // A modifier on its own is a legitimate shortcut; VoiceInk takes
+                // one. Press it and it lands on the press, not on the release,
+                // so the panel reacts the moment the key goes down.
+                guard KeyCodes.isModifier(event.keyCode) else { return nil }
+                guard isPress(event) else { return nil }
+                commit(HotkeySpec(keyCode: event.keyCode, eventModifiers: event.modifierFlags))
+
+            default:
+                break
             }
-            let spec = HotkeySpec(keyCode: event.keyCode, eventModifiers: event.modifierFlags)
-            guard spec.hasModifier else {
-                complaint = "Pick something with at least one modifier — a bare key would "
-                    + "fire while you type."
-                return nil
-            }
-            binding = spec
-            complaint = nil
-            endRecording()
             return nil
         }
+    }
+
+    /// `flagsChanged` fires on both press and release. The event carries the
+    /// post-change state, so the key is going down exactly when its own flag is
+    /// still asserted afterwards.
+    private func isPress(_ event: NSEvent) -> Bool {
+        guard let role = KeyCodes.modifierRole(for: event.keyCode) else { return false }
+        let raw = event.modifierFlags.rawValue
+        switch role.modifier {
+        case .control:  return raw & NSEvent.ModifierFlags.control.rawValue != 0
+        case .option:   return raw & NSEvent.ModifierFlags.option.rawValue != 0
+        case .shift:    return raw & NSEvent.ModifierFlags.shift.rawValue != 0
+        case .command:  return raw & NSEvent.ModifierFlags.command.rawValue != 0
+        case .function: return raw & NSEvent.ModifierFlags.function.rawValue != 0
+        default:        return false
+        }
+    }
+
+    private func commit(_ spec: HotkeySpec) {
+        // Right Shift is the user's manual VoiceInk primary. Emitting it would
+        // fight the binding Tunk exists to leave alone, so it is refused here
+        // rather than silently accepted and mysteriously double-firing later.
+        if spec.collidesWithVoiceInkPrimary {
+            complaint = "Right Shift is your manual VoiceInk trigger. Tunk sending it too "
+                + "would toggle dictation twice. Pick a different combination."
+            return
+        }
+        if spec.isBareModifier {
+            complaint = "\(spec.symbolicDescription) works, but a lone modifier is easy to "
+                + "hit by accident. A rare combination is safer."
+        } else {
+            complaint = nil
+        }
+        binding = spec
+        endRecording()
     }
 
     private func endRecording() {

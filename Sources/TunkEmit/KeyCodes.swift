@@ -65,7 +65,40 @@ public enum KeyCodes {
         (124, "Right", ["rightarrow", "\u{2192}"]),
         (125, "Down", ["downarrow", "\u{2193}"]),
         (126, "Up", ["uparrow", "\u{2191}"]),
+
+        // Modifier keys. A shortcut may be a modifier on its own — VoiceInk
+        // accepts "a dedicated modifier" — so these need to be nameable and
+        // parsable like any other key. Side matters: macOS reports left and
+        // right separately and a listener bound to Right Shift ignores Left.
+        (54, "RCmd", ["rightcmd", "rightcommand", "rcommand"]),
+        (55, "LCmd", ["leftcmd", "leftcommand", "lcommand"]),
+        (56, "LShift", ["leftshift", "lshft"]),
+        (57, "CapsLock", ["caps", "\u{21EA}"]),
+        (58, "LOpt", ["leftopt", "leftoption", "leftalt", "lalt"]),
+        (59, "LCtrl", ["leftctrl", "leftcontrol", "lcontrol"]),
+        (60, "RShift", ["rightshift", "rshft"]),
+        (61, "ROpt", ["rightopt", "rightoption", "rightalt", "ralt"]),
+        (62, "RCtrl", ["rightctrl", "rightcontrol", "rcontrol"]),
+        (63, "Fn", ["function", "globe", "\u{1F310}"]),
     ]
+
+    /// `(code, which modifier it asserts, is it the right-hand one)`.
+    /// Empty for every non-modifier key.
+    static let modifierKeys: [UInt16: (modifier: HotkeyModifiers, isRight: Bool)] = [
+        54: (.command, true),  55: (.command, false),
+        56: (.shift,   false), 60: (.shift,   true),
+        58: (.option,  false), 61: (.option,  true),
+        59: (.control, false), 62: (.control, true),
+        63: (.function, false),
+    ]
+
+    /// Whether this key code is itself a modifier, and which one it asserts.
+    public static func modifierRole(for code: UInt16) -> (modifier: HotkeyModifiers, isRight: Bool)? {
+        modifierKeys[code]
+    }
+
+    /// Whether this key code is a modifier key rather than a character key.
+    public static func isModifier(_ code: UInt16) -> Bool { modifierKeys[code] != nil }
 
     static let nameForCode: [UInt16: String] = {
         var out: [UInt16: String] = [:]

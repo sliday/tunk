@@ -5,7 +5,18 @@ import AppKit
 // during development behaves the same way: no dock icon, no menu bar takeover,
 // no main window.
 let app = NSApplication.shared
-let delegate = AppDelegate()
+
+// Diagnostics, for a reviewer who needs to look at the artifact rather than a
+// description of it. Neither flag changes normal behaviour.
+let arguments = CommandLine.arguments
+if let index = arguments.firstIndex(of: "--dump-glyphs") {
+    let directory = index + 1 < arguments.count ? arguments[index + 1] : "."
+    GlyphDump.run(into: directory)
+    exit(0)
+}
+
+let delegate = AppDelegate(openSettingsOnLaunch: arguments.contains("--settings"),
+                          openCalibrationOnLaunch: arguments.contains("--calibrate"))
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()

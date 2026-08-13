@@ -154,8 +154,9 @@ public final class HotkeyEmitter: @unchecked Sendable {
     public func emit(_ spec: HotkeySpec, options opts: Options? = nil) throws -> EmitStats {
         let opts = opts ?? options
         let flags = spec.eventFlags(includeDeviceSide: opts.includeDeviceSideFlags).rawValue
+        let upFlags = spec.releaseFlags(includeDeviceSide: opts.includeDeviceSideFlags).rawValue
         let down = EmittedKeyEvent(phase: .down, keyCode: spec.keyCode, flagsRaw: flags)
-        let up = EmittedKeyEvent(phase: .up, keyCode: spec.keyCode, flagsRaw: flags)
+        let up = EmittedKeyEvent(phase: .up, keyCode: spec.keyCode, flagsRaw: upFlags)
 
         do {
             // Everything that can throw happens here, before a single event is

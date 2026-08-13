@@ -11,11 +11,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     init(settings: AppSettings, engine: Engine) {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 452, height: 680),
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false)
         super.init()
 
+        // Vertically resizable, fixed width: the panel is a single column and
+        // stretching it sideways would only strand the readouts.
+        window.contentMinSize = NSSize(width: 452, height: 380)
+        window.contentMaxSize = NSSize(width: 452, height: 4000)
         window.title = "Tunk"
         window.isReleasedWhenClosed = false
         window.delegate = self

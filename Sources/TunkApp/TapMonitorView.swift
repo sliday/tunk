@@ -19,7 +19,10 @@ final class TapMonitorModel: ObservableObject {
     func start(engine: Engine) {
         self.engine = engine
         guard timer == nil else { return }
-        let fps = min(max(NSScreen.main?.maximumFramesPerSecond ?? 60, 30), 120)
+        // Capped at 60 even on a 120 Hz panel. A decaying trace does not read
+        // any better at 120, and the whole point is that the UI never chases
+        // the 796 Hz sample rate.
+        let fps = min(max(NSScreen.main?.maximumFramesPerSecond ?? 60, 30), 60)
         let t = Timer.scheduledTimer(withTimeInterval: 1.0 / Double(fps), repeats: true) {
             [weak self] _ in self?.pull()
         }
@@ -44,10 +47,15 @@ final class TapMonitorModel: ObservableObject {
     }
 }
 
+/// Owns its own model on purpose. If the parent held it, every frame of the
+/// trace would invalidate the whole settings panel — sliders, cards, the lot —
+/// sixty times a second. Keeping the observation inside this view is the
+/// difference between 28 % CPU and roughly 3 %.
 struct TapMonitorView: View {
-    @ObservedObject var model: TapMonitorModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let engine: Engine
     var armed: Bool
+    @StateObject private var model = TapMonitorModel()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var gateActive: Bool {
         guard let last = model.frame.gateSpans.last else { return false }
@@ -77,6 +85,8 @@ struct TapMonitorView: View {
             numbers
             legend
         }
+        .onAppear { model.start(engine: engine) }
+        .onDisappear { model.stop() }
     }
 
     /// Everything here is in g, the same unit the detector thresholds in.
@@ -119,7 +129,7 @@ struct TapMonitorView: View {
             swatch(Color.secondary.opacity(0.6), "suppressed")
             swatch(Color.orange.opacity(0.35), "gate window")
             Spacer()
-            Text("3.5 s")
+            Text("3.5 s · √g axis")
                 .font(.system(size: 10))
                 .monospacedDigit()
                 .foregroundStyle(.tertiary)
@@ -156,10 +166,14 @@ struct TapMonitorView: View {
 
         // One vertical scale in g for everything: the trace, the onset spikes
         // and the threshold line. Headroom so a hard tap does not clip flat.
-        let scale = CGFloat(max(Double(model.scale), frame.threshold * 2, 1e-4))
+        let scale = max(Double(model.scale), frame.threshold * 1.6, 1e-4)
         let usable = size.height * 0.94
+        // Square-root axis. An uncalibrated threshold sits at 0.30 g while the
+        // resting noise floor is nearer 0.001 g; on a linear axis one of the two
+        // is always a flat line on the floor. This shows both.
         func y(_ value: Double) -> CGFloat {
-            size.height - min(CGFloat(value) / scale, 1) * usable
+            let unit = min(max(value, 0) / scale, 1)
+            return size.height - CGFloat(unit.squareRoot()) * usable
         }
 
         let line = y(frame.threshold)

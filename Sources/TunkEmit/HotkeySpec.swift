@@ -138,11 +138,14 @@ public struct HotkeySpec: Sendable, Hashable, Codable, CustomStringConvertible {
     /// Left-side device-dependent modifier bits (`NX_DEVICEL*KEYMASK`). Hardware
     /// events always carry them; well-written listeners mask them off, sloppy
     /// ones compare against them. Mimicking hardware is the safer default.
-    static let deviceSideBits: [(HotkeyModifiers, UInt64)] = [
-        (.control, 0x0000_0001),  // NX_DEVICELCTLKEYMASK
-        (.shift,   0x0000_0002),  // NX_DEVICELSHIFTKEYMASK
-        (.command, 0x0000_0008),  // NX_DEVICELCMDKEYMASK
-        (.option,  0x0000_0020),  // NX_DEVICELALTKEYMASK
+    /// `(modifier, left bit, right bit)` from `IOLLEvent.h`. A listener bound to
+    /// Right Shift checks the right bit specifically and ignores the left one,
+    /// so emitting the wrong side is the same as emitting nothing.
+    static let deviceSideBits: [(mod: HotkeyModifiers, left: UInt64, right: UInt64)] = [
+        (.control, 0x0000_0001, 0x0000_2000),  // NX_DEVICE{L,R}CTLKEYMASK
+        (.shift,   0x0000_0002, 0x0000_0004),  // NX_DEVICE{L,R}SHIFTKEYMASK
+        (.command, 0x0000_0008, 0x0000_0010),  // NX_DEVICE{L,R}CMDKEYMASK
+        (.option,  0x0000_0020, 0x0000_0040),  // NX_DEVICE{L,R}ALTKEYMASK
     ]
 
     static let deviceIndependentBits: [(HotkeyModifiers, CGEventFlags)] = [
@@ -154,16 +157,61 @@ public struct HotkeySpec: Sendable, Hashable, Codable, CustomStringConvertible {
     ]
 
     /// The flags to stamp on both the key-down and the key-up.
+    ///
+    /// When the key is itself a modifier (a bare `RShift`, say), that modifier's
+    /// own flag has to be asserted too — pressing Right Shift raises the shift
+    /// flag, it does not leave it clear.
     public func eventFlags(includeDeviceSide: Bool = true) -> CGEventFlags {
+        var held = modifiers
+        let role = KeyCodes.modifierRole(for: keyCode)
+        if let role { held.insert(role.modifier) }
+
         var raw: UInt64 = 0
-        for (mod, flag) in Self.deviceIndependentBits where modifiers.contains(mod) {
+        for (mod, flag) in Self.deviceIndependentBits where held.contains(mod) {
             raw |= flag.rawValue
         }
         if includeDeviceSide {
-            for (mod, bit) in Self.deviceSideBits where modifiers.contains(mod) { raw |= bit }
+            for row in Self.deviceSideBits where held.contains(row.mod) {
+                // The key itself picks its own side; every other held modifier
+                // is emitted left, matching how a keyboard usually reports them.
+                let useRight = (role?.modifier == row.mod) && (role?.isRight ?? false)
+                raw |= useRight ? row.right : row.left
+            }
         }
         return CGEventFlags(rawValue: raw)
     }
+
+    /// The flags for the release half. Identical to `eventFlags` for an ordinary
+    /// key, but when the key is itself a modifier its own bits must drop — a
+    /// release that still asserts shift is precisely a stuck modifier.
+    public func releaseFlags(includeDeviceSide: Bool = true) -> CGEventFlags {
+        let down = eventFlags(includeDeviceSide: includeDeviceSide).rawValue
+        guard let role = KeyCodes.modifierRole(for: keyCode) else {
+            return CGEventFlags(rawValue: down)
+        }
+        var clear: UInt64 = 0
+        for (mod, flag) in Self.deviceIndependentBits where mod == role.modifier {
+            clear |= flag.rawValue
+        }
+        for row in Self.deviceSideBits where row.mod == role.modifier {
+            clear |= role.isRight ? row.right : row.left
+        }
+        // Only drop the bit if nothing else held asserts the same modifier.
+        if modifiers.contains(role.modifier) { return CGEventFlags(rawValue: down) }
+        return CGEventFlags(rawValue: down & ~clear)
+    }
+
+    /// True when this shortcut is a modifier pressed on its own, with nothing
+    /// else held. Those need a `flagsChanged` event rather than a key-down, and
+    /// they are the fragile case the PRD warns about.
+    public var isBareModifier: Bool {
+        modifiers.isEmpty && KeyCodes.isModifier(keyCode)
+    }
+
+    /// True when the shortcut involves the Right Shift key at all. That key is
+    /// reserved for the user's manual VoiceInk primary, so Tunk emitting it
+    /// would fight the very binding it is meant to leave alone.
+    public var collidesWithVoiceInkPrimary: Bool { keyCode == 60 }
 
     // MARK: - Suggested defaults
 
@@ -177,6 +225,17 @@ public struct HotkeySpec: Sendable, Hashable, Codable, CustomStringConvertible {
 
 /// The three defaults Tunk offers, with the reason each is safe. The settings
 /// panel shows `title` and `why`; the README quotes both.
+///
+/// All three were checked end to end on this machine: a signed LSUIElement app
+/// bundle registered each one with `RegisterEventHotKey` (the Carbon API behind
+/// VoiceInk's shortcut layer) and received every one of them within ~10 ms of
+/// `HotkeyEmitter.emit()`. See the report for the probe.
+///
+/// Measured and worth knowing: F13–F20 do **not** work this way. A Carbon hot
+/// key registered on F16 never fired for a synthetic event, with any modifier
+/// set and any `CGEventSourceStateID`, even though a CGEventTap and an NSEvent
+/// global monitor both saw the same event. Do not offer a function-row key as a
+/// default, however rare it looks.
 public struct SuggestedHotkeys: Sendable {
     public let spec: HotkeySpec
     public let why: String
@@ -193,26 +252,29 @@ public struct SuggestedHotkeys: Sendable {
         SuggestedHotkeys(
             spec: HotkeySpec(keyCode: 41, modifiers: [.control, .option, .command]),   // ;
             why: """
-                 Ctrl+Opt+Cmd+; — macOS ships no system shortcut on the semicolon key at \
-                 all, and no stock app binds it with three modifiers. Semicolon is present \
-                 on every Mac keyboard layout Tunk can run on, so the user can also type it \
-                 into VoiceInk's shortcut recorder. Reachable one-handed on the right side.
+                 Ctrl+Opt+Cmd+; — macOS ships no system shortcut on the semicolon key, and \
+                 no stock app binds it with three modifiers. Semicolon sits on every Mac \
+                 keyboard, so the user can also press it while recording the Second Shortcut \
+                 in VoiceInk. Reachable one-handed on the right side. Verified received by a \
+                 Carbon hot key listener.
                  """),
         SuggestedHotkeys(
             spec: HotkeySpec(keyCode: 42, modifiers: [.control, .option, .command]),   // \
             why: """
                  Ctrl+Opt+Cmd+\\ — backslash has no macOS system binding. A few editors use \
-                 Cmd+\\ for split panes, but none of them add Ctrl and Opt on top. Use this \
-                 one if the semicolon combination is already taken by a text expander.
+                 Cmd+\\ for split panes, but none of them add Ctrl and Opt on top. Take this \
+                 one if a text expander already owns the semicolon combination. Verified \
+                 received by a Carbon hot key listener.
                  """),
         SuggestedHotkeys(
             spec: HotkeySpec(keyCode: 39, modifiers: [.control, .option, .shift, .command]), // '
             why: """
-                 Ctrl+Shift+Opt+Cmd+' — all four modifiers, the so-called hyper key. macOS \
+                 Ctrl+Opt+Shift+Cmd+' — all four modifiers, the so-called hyper key. macOS \
                  reserves nothing on four-modifier chords and apps almost never bind them, \
-                 so this is the safest of the three. The catch: it is awkward to press by \
-                 hand while recording it in VoiceInk, and Karabiner users who already \
-                 remap Caps Lock to hyper may collide.
+                 so collision risk is the lowest of the three. Two catches: it is awkward to \
+                 press by hand while recording it in VoiceInk, and Karabiner users who \
+                 already remap Caps Lock to hyper may collide. Verified received by a Carbon \
+                 hot key listener.
                  """),
     ]
 }

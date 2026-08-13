@@ -11,7 +11,6 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var engine: Engine
     @ObservedObject var panel: PanelModel
-    @StateObject private var monitor = TapMonitorModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showAdvanced = false
     @State private var emitTestResult: String?
@@ -31,8 +30,6 @@ struct SettingsView: View {
         }
         .frame(width: 452)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { monitor.start(engine: engine) }
-        .onDisappear { monitor.stop() }
         .sheet(isPresented: $panel.showCalibration) {
             CalibrationView(engine: engine) { panel.showCalibration = false }
         }
@@ -136,7 +133,7 @@ struct SettingsView: View {
         Card(title: "Tap monitor",
              caption: "Onsets as they land, with the gate window shaded. If a spike is grey "
                     + "the gate ate it on purpose — that is typing suppression working.") {
-            TapMonitorView(model: monitor, armed: engine.status.isArmed)
+            TapMonitorView(engine: engine, armed: engine.status.isArmed)
         }
     }
 

@@ -72,9 +72,11 @@ final class Engine: ObservableObject {
     private let epochNs: Int64 = MachClock.nowNanos()
     func nowNs() -> Int64 { MachClock.nowNanos() - epochNs }
 
-    // Monitor ring. 4.27 s at 240 Hz.
-    private static let bucketNs: Int64 = 1_000_000_000 / 240
-    private static let bucketCount = 1024
+    // Monitor ring: 4.27 s at 120 Hz, which is one bucket per drawn frame at
+    // the fastest display this runs on. Finer buckets would cost redraw time
+    // and show nothing extra.
+    private static let bucketNs: Int64 = 1_000_000_000 / 120
+    private static let bucketCount = 512
     private var ring = ContiguousArray<Float>(repeating: 0, count: Engine.bucketCount)
     private var ringBucket: Int64 = 0
     private var onsetLog: [OnsetEvent] = []

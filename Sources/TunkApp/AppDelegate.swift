@@ -15,6 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: SettingsWindowController?
     private var cancellables = Set<AnyCancellable>()
     private var flashWork: DispatchWorkItem?
+    private let openSettingsOnLaunch: Bool
+    private let openCalibrationOnLaunch: Bool
+
+    init(openSettingsOnLaunch: Bool = false, openCalibrationOnLaunch: Bool = false) {
+        self.openSettingsOnLaunch = openSettingsOnLaunch
+        self.openCalibrationOnLaunch = openCalibrationOnLaunch
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)   // belt and braces alongside LSUIElement
@@ -53,6 +61,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 + "size \(Int(slot.width))x\(Int(slot.height)), "
                 + "detection \(self.settings.enabled ? "on" : "off")\n"
             FileHandle.standardError.write(Data(line.utf8))
+            if self.openSettingsOnLaunch || self.openCalibrationOnLaunch {
+                self.showSettings(startCalibration: self.openCalibrationOnLaunch)
+            }
         }
     }
 

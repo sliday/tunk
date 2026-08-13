@@ -41,38 +41,52 @@ enum MenuBarGlyph {
         }
     }
 
+    /// Two beats over a surface, with the shock spreading out of the second one.
+    ///
+    /// The baseline matters: a dot under bare arcs is Wi-Fi, and a dot inside
+    /// arcs is AirDrop. Grounding the marks on a line says "something struck a
+    /// surface", and two of them say the gesture is a double.
+    /// A knock, with the shock spreading downward into the machine.
+    ///
+    /// Arcs above a dot are Wi-Fi. Arcs around a dot are AirDrop. Arcs below a
+    /// dot are neither, and they say the right thing: something hit the top of
+    /// the case and the energy went into it.
     private static func draw(_ state: State) {
         let cx: CGFloat = size.width / 2
-        let cy: CGFloat = 6.4 + opticalBaseline
-        let alpha: CGFloat = (state == .idle) ? 0.42 : 1.0
+        let cy: CGFloat = 12.6 + opticalBaseline
+        let alpha: CGFloat = (state == .idle) ? 0.45 : 1.0
 
-        NSColor.black.withAlphaComponent(alpha).setFill()
-        NSColor.black.withAlphaComponent(alpha).setStroke()
-
-        let dotRadius: CGFloat = state == .firing ? 3.3 : 2.5
-        let dot = NSBezierPath(ovalIn: CGRect(x: cx - dotRadius, y: cy - dotRadius,
-                                              width: dotRadius * 2, height: dotRadius * 2))
-        if state == .idle {
-            dot.lineWidth = 1.5
-            NSBezierPath(ovalIn: CGRect(x: cx - dotRadius + 0.75, y: cy - dotRadius + 0.75,
-                                        width: (dotRadius - 0.75) * 2,
-                                        height: (dotRadius - 0.75) * 2)).stroke()
-        } else {
-            dot.fill()
-        }
-
-        arc(cx: cx, cy: cy, radius: 5.4, width: state == .firing ? 1.9 : 1.6, alpha: alpha)
-        arc(cx: cx, cy: cy, radius: 8.2, width: state == .firing ? 1.7 : 1.35,
-            alpha: alpha * (state == .firing ? 1.0 : 0.75))
+        let grow: CGFloat = state == .firing ? 1.14 : 1.0
+        dot(x: cx, y: cy, radius: 2.2 * grow, filled: state != .idle, alpha: alpha)
+        arc(cx: cx, cy: cy, radius: 5.0 * grow,
+            width: state == .firing ? 1.75 : 1.55, alpha: alpha)
+        arc(cx: cx, cy: cy, radius: 8.0 * grow,
+            width: state == .firing ? 1.5 : 1.3,
+            alpha: alpha * (state == .firing ? 1.0 : 0.7))
 
         if state == .lost || state == .blocked { strikeThrough() }
+    }
+
+    private static func dot(x: CGFloat, y: CGFloat, radius: CGFloat,
+                            filled: Bool, alpha: CGFloat) {
+        let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+        NSColor.black.withAlphaComponent(alpha).set()
+        if filled {
+            NSBezierPath(ovalIn: rect).fill()
+        } else {
+            let path = NSBezierPath(ovalIn: rect.insetBy(dx: 0.6, dy: 0.6))
+            path.lineWidth = 1.2
+            path.stroke()
+        }
     }
 
     private static func arc(cx: CGFloat, cy: CGFloat, radius: CGFloat,
                             width: CGFloat, alpha: CGFloat) {
         let path = NSBezierPath()
+        // The lower half: the shock going down into the case, not a signal
+        // going up into the air.
         path.appendArc(withCenter: CGPoint(x: cx, y: cy), radius: radius,
-                       startAngle: 38, endAngle: 142)
+                       startAngle: 218, endAngle: 322)
         path.lineWidth = width
         path.lineCapStyle = .round
         NSColor.black.withAlphaComponent(alpha).setStroke()

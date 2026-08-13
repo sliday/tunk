@@ -118,6 +118,19 @@ final class HotkeySpecTests: XCTestCase {
         }
         XCTAssertEqual(HotkeySpec.recommendedDefault.description, "Ctrl+Opt+Cmd+;")
     }
+
+    /// Measured: a Carbon hot key on F16 never fires for a synthesised event,
+    /// with any modifier set or event source state, while punctuation keys do.
+    /// So every default must be a single printable key the user can also press
+    /// while recording the shortcut in VoiceInk.
+    func testSuggestedDefaultsAvoidTheFunctionRow() {
+        for s in HotkeySpec.suggested {
+            let name = KeyCodes.name(for: s.spec.keyCode)
+            XCTAssertEqual(name.count, 1,
+                           "\(name) is not a plain printable key; F-row keys do not reach "
+                           + "Carbon hot key listeners when synthesised")
+        }
+    }
 }
 
 final class HotkeyEmitterBalanceTests: XCTestCase {
@@ -401,8 +414,10 @@ private final class EventTapProbe {
 
 final class HotkeyEmitterLiveTapTests: XCTestCase {
 
-    /// F16: absent from this machine's keyboard and bound by nothing, so a stray
-    /// delivery to the frontmost app cannot type or trigger anything.
+    /// F16: absent from this machine's keyboard, and measured not to reach
+    /// Carbon hot key listeners when synthesised, so running these tests cannot
+    /// type anything or trip anyone's shortcut. That same measurement is why
+    /// F13–F20 must never be offered as a Tunk default.
     private let probeKey: UInt16 = 106
 
     private func makeProbe() throws -> EventTapProbe {

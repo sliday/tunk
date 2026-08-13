@@ -21,8 +21,13 @@ extension HotkeySpec {
         if eventModifiers.contains(.option) { mods.insert(.option) }
         if eventModifiers.contains(.shift) { mods.insert(.shift) }
         if eventModifiers.contains(.command) { mods.insert(.command) }
+        // When the key is itself a modifier, its own flag is already raised by
+        // pressing it. Keeping it in `modifiers` too would print "Shift+RShift".
+        if let role = KeyCodes.modifierRole(for: keyCode) { mods.remove(role.modifier) }
         self.init(keyCode: keyCode, modifiers: mods)
     }
 
-    var hasModifier: Bool { !modifiers.isEmpty }
+    /// A shortcut is safe to bind when something holds it apart from ordinary
+    /// typing: either a held modifier, or the key being a modifier itself.
+    var hasModifier: Bool { !modifiers.isEmpty || KeyCodes.isModifier(keyCode) }
 }

@@ -79,8 +79,15 @@ public final class CGEventPoster: KeyEventPosting {
         guard let cg = CGEvent(keyboardEventSource: source,
                                virtualKey: CGKeyCode(event.keyCode),
                                keyDown: event.phase == .down) else { return nil }
+        // A modifier does not produce key-down / key-up. Pressing Right Shift
+        // raises a flagsChanged, and a listener bound to it watches for exactly
+        // that; a synthesized key-down with keycode 60 would be ignored.
+        if KeyCodes.isModifier(event.keyCode) {
+            cg.type = .flagsChanged
+        }
         // Flags go on both halves: a listener that reads them off the key-up
-        // (VoiceInk's toggle mode does) must see the same combination.
+        // (VoiceInk's toggle mode does) must see the same combination. The
+        // caller clears the key's own bit on the release half.
         cg.flags = event.flags
         cg.setIntegerValueField(.eventSourceUserData, value: Self.userDataTag)
         return cg
