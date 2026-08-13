@@ -149,6 +149,12 @@ public final class HotkeyEmitter: @unchecked Sendable {
         try preflight(spec: spec, options: opts)
     }
 
+    /// Same check for a combination that is not the configured one. Needed once
+    /// more than one hotkey can be bound at a time (one per tap count).
+    public func preflight(_ spec: HotkeySpec) throws {
+        try preflight(spec: spec, options: options)
+    }
+
     /// Emit the configured hotkey.
     @discardableResult
     public func emit() throws -> EmitStats {

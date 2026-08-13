@@ -27,15 +27,17 @@ enum PassLine {
         var out: [Check] = []
 
         out.append(Check(
-            name: "detection rate, double-taps",
+            name: "detection rate, all armed gestures",
             scope: scope,
             requirement: "≥ 98 %",
-            actual: agg.doubleGroups == 0 ? "no labelled double-tap groups"
+            actual: agg.armedGroups == 0 ? "no labelled groups for an armed tap count"
                 : String(format: "%.2f %% (%d/%d)", (agg.detectionRate ?? 0) * 100,
-                         agg.detectedGroups, agg.doubleGroups),
-            status: agg.doubleGroups == 0 ? .noData
+                         agg.detectedGroups, agg.armedGroups),
+            status: agg.armedGroups == 0 ? .noData
                 : ((agg.detectionRate ?? 0) + 1e-9 >= detectionRateFloor ? .pass : .fail)
         ))
+
+        out.append(contentsOf: perCountChecks(for: agg, scope: scope))
 
         out.append(Check(
             name: "false triggers, typing sessions",
@@ -81,6 +83,68 @@ enum PassLine {
             actual: "\(agg.deliveryOrderViolations)",
             status: agg.sessions == 0 ? .noData : (agg.deliveryOrderViolations == 0 ? .pass : .fail)
         ))
+
+        return out
+    }
+
+    /// Per-tap-count rows. Under the Back Tap model each armed count is its own
+    /// gesture with its own bound action, so each gets its own detection rate and
+    /// its own false-trigger rate. The 1-tap row is the one that decides whether
+    /// single-tap ships, so it is never folded into the pooled number.
+    static func perCountChecks(for agg: Aggregate, scope: String) -> [Check] {
+        var out: [Check] = []
+        let interesting = agg.perCount
+            .filter { $0.armed || $0.labelledGroups > 0 || $0.triggers > 0 }
+            .sorted { $0.count < $1.count }
+
+        for c in interesting where c.armed {
+            out.append(Check(
+                name: "detection rate, \(c.count)-tap",
+                scope: scope,
+                requirement: "≥ 98 %",
+                actual: c.labelledGroups == 0 ? "no labelled \(c.count)-tap groups"
+                    : String(format: "%.2f %% (%d/%d)", (c.detectionRate ?? 0) * 100,
+                             c.detectedGroups, c.labelledGroups),
+                status: c.labelledGroups == 0 ? .noData
+                    : ((c.detectionRate ?? 0) + 1e-9 >= detectionRateFloor ? .pass : .fail)
+            ))
+        }
+
+        for c in interesting {
+            let rate = agg.falseTriggersPer20Min(count: c.count)
+            if c.armed {
+                out.append(Check(
+                    name: "false triggers per 20 min, \(c.count)-tap",
+                    scope: scope,
+                    requirement: "< 1",
+                    actual: rate.map { String(format: "%.2f (%d in %.1f min)", $0, c.falseTriggers,
+                                              agg.durationSeconds / 60) } ?? "no duration",
+                    status: agg.durationSeconds <= 0 ? .noData
+                        : ((rate ?? 0) < falsePositivesPer20MinCeiling ? .pass : .fail)
+                ))
+            } else {
+                // Not armed: the count must never fire at all, so the bar is zero
+                // triggers, not a rate.
+                out.append(Check(
+                    name: "triggers on un-armed \(c.count)-tap",
+                    scope: scope,
+                    requirement: "= 0",
+                    actual: "\(c.triggers) trigger(s) fired \(c.count) tap(s)",
+                    status: c.triggers == 0 ? .pass : .fail
+                ))
+            }
+        }
+
+        // A labelled gesture the detector is not armed for is a trap, not a target.
+        if agg.mustNotFireGroups > 0 {
+            out.append(Check(
+                name: "labelled must-not-fire gestures that fired",
+                scope: scope,
+                requirement: "= 0",
+                actual: "\(agg.mustNotFireViolations) of \(agg.mustNotFireGroups) group(s)",
+                status: agg.mustNotFireViolations == 0 ? .pass : .fail
+            ))
+        }
 
         return out
     }

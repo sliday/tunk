@@ -10,12 +10,15 @@ func runRecord(_ args: Args) throws -> Never {
     let surface = try parseSurface(args.str("surface"))
     let (root, split) = try resolveSplit(outPath: args.str("out") ?? "data/raw",
                                          explicit: args.str("split"))
-    let duration = args.dbl("duration")
+    let duration = try args.number("duration")
+    if let duration, duration <= 0 {
+        throw CLIError.badArgument("--duration must be greater than 0, got \(duration)")
+    }
 
     var opts = SessionRecorder.Options(root: root, category: category, surface: surface, split: split)
     opts.notes = args.str("notes") ?? ""
-    opts.expectedTriggers = args.int("expect") ?? 0
-    opts.reportIntervalUs = Int64(args.int("report-interval-us") ?? 1250)
+    opts.expectedTriggers = try args.count("expect") ?? 0
+    opts.reportIntervalUs = Int64(try args.count("report-interval-us") ?? 1250)
     opts.requireInput = !args.has("allow-no-input")
     opts.captureTouches = !args.has("no-touch")
 
@@ -87,17 +90,21 @@ private func startStdinMarkReader() {
 
 /// Opens the sensor and the event tap for a few seconds and reports what arrived.
 /// Run this before an hour of recording, not after.
-func runDoctor(_ args: Args) -> Never {
-    let seconds = args.dbl("seconds") ?? 6.0
+func runDoctor(_ args: Args) throws -> Never {
+    let seconds = try args.number("seconds") ?? 6.0
+    guard seconds > 0 else { throw CLIError.badArgument("--seconds must be greater than 0") }
+    let reportIntervalUs = Int64(try args.count("report-interval-us") ?? 1250)
     let cue = Cue(beepEnabled: !args.has("no-audio"), speechEnabled: !args.has("no-speech"))
     return Runtime.run {
-        let ok = doctorCheck(seconds: seconds, cue: cue, captureTouches: !args.has("no-touch"))
+        let ok = doctorCheck(seconds: seconds, cue: cue, captureTouches: !args.has("no-touch"),
+                             reportIntervalUs: reportIntervalUs)
         Runtime.exitNow(ok ? 0 : 2)
     }
 }
 
 @discardableResult
-func doctorCheck(seconds: Double, cue: Cue, captureTouches: Bool) -> Bool {
+func doctorCheck(seconds: Double, cue: Cue, captureTouches: Bool,
+                 reportIntervalUs: Int64 = 1250) -> Bool {
     Console.banner("RIG CHECK")
     let epoch = MachClock.nowNanos()
     var byKind = [String: Int]()
@@ -114,32 +121,61 @@ func doctorCheck(seconds: Double, cue: Cue, captureTouches: Bool) -> Bool {
         Console.err(InputPermission.failureAdvice())
     }
 
-    let source = AccelSource(reportIntervalUs: 1250)
+    // Speak the instruction before opening the sensor. Speech blocks for seconds,
+    // and anything sampled during it lands outside the window we are timing.
+    if tapOK {
+        Console.line("  Type a few keys and tap the trackpad now.")
+        cue.say("Rig check. Type a few keys and tap the trackpad.")
+    }
+
+    let source = AccelSource(reportIntervalUs: reportIntervalUs)
     var samples = 0
+    var firstNs: Int64 = 0
+    var lastNs: Int64 = 0
     let sLock = NSLock()
     var accelOK = true
     do {
-        try source.start(epochMachNs: epoch) { _ in
-            sLock.lock(); samples += 1; sLock.unlock()
+        try source.start(epochMachNs: epoch) { s in
+            sLock.lock()
+            if samples == 0 { firstNs = s.tNs }
+            lastNs = s.tNs
+            samples += 1
+            sLock.unlock()
         }
     } catch {
         accelOK = false
         Console.err("accelerometer: FAILED — \(error)")
     }
 
-    if tapOK {
-        Console.line("  Type a few keys and tap the trackpad now.")
-        cue.say("Rig check. Type a few keys and tap the trackpad.")
-    }
     _ = Runtime.countdown(seconds, label: "listening", recorder: nil)
 
     tap.stop()
     source.stop()
 
-    sLock.lock(); let n = samples; sLock.unlock()
-    let hz = n > 1 ? Double(n) / seconds : 0
+    sLock.lock()
+    let n = samples
+    let spanS = Double(lastNs - firstNs) / 1e9
+    sLock.unlock()
+    // Rate over the span the samples actually cover, not over the requested
+    // window. Dividing by --seconds double-counted anything the sensor delivered
+    // while the prompt was still being spoken and reported roughly twice the
+    // true rate, which is worse than reporting nothing.
+    let hz = (n > 1 && spanS > 0) ? Double(n - 1) / spanS : 0
+    let requestedHz = 1e9 / Double(reportIntervalUs * 1_000)
+    let loss = requestedHz > 0 ? 1 - hz / requestedHz : 1
+    if accelOK, n > 1, loss > 0.02 {
+        accelOK = false
+    }
     Console.line("")
-    Console.line(String(format: "  accelerometer  %@  %d samples, %.0f Hz", accelOK ? "OK  " : "FAIL", n, hz))
+    Console.line(String(format: "  accelerometer  %@  %d samples over %.2f s, %.1f Hz (asked for %.1f Hz)",
+                        accelOK ? "OK  " : "FAIL", n, spanS, hz, requestedHz))
+    if n > 1, loss > 0.02 {
+        Console.line(String(format: "                 %.1f%% of samples are missing. Check for thermal or power",
+                            loss * 100))
+        Console.line("                 throttling, and close anything heavy before recording.")
+    } else if n <= 1 {
+        Console.line("                 the sensor delivered nothing. ReportInterval was not accepted.")
+    }
     lock.lock()
     let total = byKind.values.reduce(0, +)
     let detail = byKind.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
@@ -221,32 +257,97 @@ func runGuide(_ args: Args) throws -> Never {
     let surface = try parseSurface(args.str("surface"))
     let (root, split) = try resolveSplit(outPath: args.str("out") ?? "data/raw",
                                          explicit: args.str("split"))
-    let taps = args.int("taps") ?? 20
-    let restSec = args.dbl("rest-sec") ?? 12
-    let minRest = args.dbl("min-rest") ?? 2.5
-    let maxRest = args.dbl("max-rest") ?? 4.5
-    let reportIntervalUs = Int64(args.int("report-interval-us") ?? 1250)
+    let taps = try args.count("taps") ?? 20
+    let restSec = try args.number("rest-sec") ?? 12
+    let minRest = try args.number("min-rest") ?? 2.5
+    let maxRest = try args.number("max-rest") ?? 4.5
+    guard minRest > 0, maxRest >= minRest else {
+        throw CLIError.badArgument("--min-rest must be > 0 and --max-rest must be >= --min-rest")
+    }
+    guard taps >= 0 else { throw CLIError.badArgument("--taps must be 0 or more") }
+    let reportIntervalUs = Int64(try args.count("report-interval-us") ?? 1250)
     let captureTouches = !args.has("no-touch")
     let allowNoInput = args.has("allow-no-input")
 
+    // --duration is a uniform override for every timed phase in this run. It is
+    // refused alongside the per-phase flags rather than silently losing to one of
+    // them, because "which one won" is not something the operator can see.
+    let uniform = try args.number("duration")
+    let perPhase = ["typing-sec", "trackpad-sec", "confound-sec"].filter { args.has($0) }
+    if uniform != nil, !perPhase.isEmpty {
+        throw CLIError.badArgument(
+            "--duration sets every timed phase at once, so it conflicts with "
+            + perPhase.map { "--\($0)" }.joined(separator: " and ")
+            + ".\n  Pass --duration on its own, or pass only the per-phase flags.")
+    }
+    if let uniform, uniform <= 0 {
+        throw CLIError.badArgument("--duration must be greater than 0, got \(uniform)")
+    }
+
     var phases = guidePhases(taps: taps,
-                             typingSec: args.dbl("typing-sec") ?? 180,
-                             trackpadSec: args.dbl("trackpad-sec") ?? 90,
-                             confoundSec: args.dbl("confound-sec") ?? 60,
+                             typingSec: uniform ?? (try args.number("typing-sec")) ?? 180,
+                             trackpadSec: uniform ?? (try args.number("trackpad-sec")) ?? 90,
+                             confoundSec: uniform ?? (try args.number("confound-sec")) ?? 60,
                              surface: surface)
-    let only = Set(args.list("only"))
-    let skip = Set(args.list("skip"))
+    let only = try parseCategoryList(args, "only")
+    let skip = try parseCategoryList(args, "skip")
+    if let clash = only.intersection(skip).sorted().first {
+        throw CLIError.badArgument("'\(clash)' is in both --only and --skip")
+    }
     if !only.isEmpty { phases = phases.filter { only.contains($0.category.rawValue) } }
     if !skip.isEmpty { phases = phases.filter { !skip.contains($0.category.rawValue) } }
     guard !phases.isEmpty else { throw CLIError.badArgument("--only / --skip left no phases to record") }
 
+    // A length or count flag that no selected phase reads is the same silent
+    // failure as an unknown flag: the operator asked for something and got the
+    // default. Say so before recording, not after.
+    let hasTapPhase = phases.contains { $0.taps > 0 }
+    let hasTimedPhase = phases.contains { $0.taps == 0 }
+    let selected = phases.map { $0.category.rawValue }.joined(separator: ", ")
+    if args.has("taps"), !hasTapPhase {
+        throw CLIError.badArgument(
+            "--taps only applies to tap_palmrest / tap_deck / tap_bottom, and none are selected"
+            + " (\(selected)).\n  Drop --taps, or add a tap phase to --only.")
+    }
+    if uniform != nil, !hasTimedPhase {
+        throw CLIError.badArgument(
+            "--duration sets the length of a timed phase, and every selected phase is a prompted"
+            + " tap phase (\(selected)).\n  Use --taps <n> to set how many double-taps are prompted.")
+    }
+    for (flag, cats) in [("typing-sec", ["typing"]), ("trackpad-sec", ["trackpad"])] {
+        if args.has(flag), !phases.contains(where: { cats.contains($0.category.rawValue) }) {
+            throw CLIError.badArgument(
+                "--\(flag) only applies to the \(cats.joined()) phase, which is not selected"
+                + " (\(selected)).")
+        }
+    }
+    if args.has("confound-sec"),
+       !phases.contains(where: { $0.category.isConfound || $0.category == .idle }) {
+        throw CLIError.badArgument(
+            "--confound-sec only applies to the confound and idle phases, none of which are"
+            + " selected (\(selected)).")
+    }
+
     let cue = Cue(beepEnabled: !args.has("no-audio"), speechEnabled: !args.has("no-speech"),
-                  volume: Float(args.dbl("volume") ?? 0.35))
+                  volume: Float(try args.number("volume") ?? 0.35))
 
     return Runtime.run {
         Console.banner("TUNK GUIDED CAPTURE  —  surface: \(surface.rawValue)")
         Console.line("  \(phases.count) phases into \(root.path) (split=\(split.rawValue))")
         Console.line("  Ctrl-C at any point keeps everything recorded so far.")
+        Console.line("")
+        // Print the plan before anything records. The operator can then see that
+        // "one phase" really is one phase, in the time it takes to read four lines.
+        var estimate = 0.0
+        for (i, p) in phases.enumerated() {
+            let what = p.taps > 0
+                ? String(format: "%d prompted double-taps (~%.0fs)", p.taps,
+                         Double(p.taps) * (minRest + maxRest) / 2)
+                : String(format: "%.0f s", p.seconds)
+            estimate += restSec + (p.taps > 0 ? Double(p.taps) * (minRest + maxRest) / 2 : p.seconds)
+            Console.line("    \(i + 1). \(p.category.rawValue.padding(toLength: 20, withPad: " ", startingAt: 0))\(what)")
+        }
+        Console.line(String(format: "  about %.0f min of recording, plus prompts.", estimate / 60))
         Console.line("")
         Console.line("  WEAR HEADPHONES, or the beep and my voice shake the chassis")
         Console.line("  and end up in the accelerometer stream.")

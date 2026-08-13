@@ -110,14 +110,38 @@ H="--out data/holdout --split test"
 ./bin/tunk-capture guide --surface desk $H --confound-sec 120 --only confound_music
 ```
 
+## Before Block A — a 90-second calibration check
+
+Do this once. It is the difference between an hour well spent and an hour of
+recordings with no taps in them.
+
+```bash
+./bin/tunk-capture guide --surface desk --only tap_deck --taps 3
+./bin/tunk-label check data/raw/$(ls -t data/raw | head -1)
+```
+
+`tunk-label check` measures the accelerometer inside each beep window and tells
+you, per group, whether two taps actually registered and how far above the noise
+floor they were. It exits non-zero if any group came back empty.
+
+This exists because of a real failure during the build: a critic recorded six
+prompted tap groups without touching the machine at all, and `tunk-capture
+verify` reported PASS. Guided capture is deliberately hands-free and eyes-free,
+so nothing else can tell you your taps are landing.
+
+Expect `3/3 groups landed`. If you see `NOTHING LANDED` or `PARTIAL`, tap harder
+or nearer the left palm rest, where the sensor sits, and run it again. Only start
+Block A once three out of three land.
+
 ## After each block
 
 ```bash
-./bin/tunk-capture verify        # checks the newest session
+./bin/tunk-capture verify                                   # file integrity
+./bin/tunk-label check data/raw/$(ls -t data/raw | head -1)  # did taps land
 ```
 
-PASS or PASS WITH WARNINGS is fine. A FAIL means that session is unusable and
-worth re-recording while you are still set up.
+PASS or PASS WITH WARNINGS from `verify` is fine. A FAIL means that session is
+unusable and worth re-recording while you are still set up.
 
 ## Ground rules
 
@@ -126,8 +150,10 @@ worth re-recording while you are still set up.
   for theatrical taps, and the felt-reliability test at the end will fail.
 - One beep, one double-tap. Rest between prompts is randomised so the labeller
   cannot cheat off a fixed period.
-- If a prompt goes wrong, say what happened out loud and carry on. The tool logs
-  an operator mark and that group gets dropped rather than mislabelled.
+- If a prompt goes wrong, just carry on and let the beep pass. Nothing is lost:
+  `tunk-label` measures each beep window independently, so a group where you
+  fumbled shows up as one that did not land, and gets excluded rather than
+  mislabelled. Do not try to correct it mid-run.
 - Ctrl-C at any point flushes and writes a valid session. Nothing is lost.
 - Note anything unusual about the surface with `--notes "glass desk"`.
 

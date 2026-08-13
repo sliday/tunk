@@ -8,9 +8,11 @@ let package = Package(
         .library(name: "TunkCore", targets: ["TunkCore"]),
         .library(name: "TunkFormat", targets: ["TunkFormat"]),
         .library(name: "TunkIMU", targets: ["TunkIMU"]),
+        .library(name: "TunkLabelCore", targets: ["TunkLabelCore"]),
         .library(name: "TunkEmit", targets: ["TunkEmit"]),
         .executable(name: "tunk-capture", targets: ["TunkCapture"]),
         .executable(name: "tunk-score", targets: ["TunkScore"]),
+        .executable(name: "tunk-label", targets: ["TunkLabel"]),
         .executable(name: "tunk", targets: ["TunkApp"]),
     ],
     targets: [
@@ -32,8 +34,14 @@ let package = Package(
 
         .executableTarget(name: "TunkCapture", dependencies: ["TunkIMU", "TunkFormat", "TunkCore"]),
         .executableTarget(name: "TunkScore", dependencies: ["TunkFormat", "TunkCore"]),
+
+        // Turns prompt beeps into ground-truth onsets, and tells the operator
+        // whether their taps actually landed before they record for an hour.
+        // Split library / executable so the picker is reachable from tests.
+        .target(name: "TunkLabelCore", dependencies: ["TunkCore"]),
+        .executableTarget(name: "TunkLabel", dependencies: ["TunkLabelCore", "TunkFormat", "TunkCore"]),
         .executableTarget(name: "TunkApp", dependencies: ["TunkIMU", "TunkCore", "TunkFormat", "TunkEmit"]),
 
-        .testTarget(name: "TunkCoreTests", dependencies: ["TunkCore", "TunkFormat", "TunkEmit"]),
+        .testTarget(name: "TunkCoreTests", dependencies: ["TunkCore", "TunkFormat", "TunkEmit", "TunkLabelCore"]),
     ]
 )

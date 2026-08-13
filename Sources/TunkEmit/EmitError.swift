@@ -22,6 +22,18 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
     /// The shortcut was still running when the watchdog gave up. It has not been
     /// killed; Tunk simply stopped waiting to hear about it.
     case shortcutTimedOut(name: String, seconds: TimeInterval)
+    /// The bound name is not in the current listing, so it was not run.
+    ///
+    /// This is checked *before* dispatch on purpose. Handing an unknown name to
+    /// the Shortcuts machinery puts a modal dialog on screen, and a tap gesture
+    /// is easy to trigger by accident — so a stale binding would throw a dialog
+    /// in the user's face repeatedly, for months, until they worked out why.
+    /// `wasListedWhenBound` decides the wording: renamed, or never there.
+    case shortcutMissing(name: String, wasListedWhenBound: Bool)
+    /// `shortcuts list` has never come back cleanly, so Tunk cannot tell whether
+    /// the bound name is still good. It refuses to guess, because guessing wrong
+    /// is the modal dialog above.
+    case shortcutsUnreadable(name: String)
 
     public var description: String {
         switch self {
@@ -42,6 +54,12 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
         case .shortcutTimedOut(let name, let seconds):
             return "the Shortcut \"\(name)\" has not finished after "
                  + "\(Int(seconds)) s; it is still running."
+        case .shortcutMissing(let name, let wasListed):
+            return wasListed
+                ? "The Shortcut \"\(name)\" no longer exists. Pick another."
+                : "Tunk cannot find a Shortcut called \"\(name)\"."
+        case .shortcutsUnreadable(let name):
+            return "Tunk cannot read your Shortcuts, so it did not run \"\(name)\"."
         }
     }
 
@@ -71,7 +89,15 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
                  + "fail the same way when Tunk runs it."
         case .shortcutTimedOut:
             return "Nothing was cancelled. If it waits for you every time, it is not a good "
-                 + "fit for a double-tap; pick a Shortcut that runs unattended."
+                 + "fit for a tap gesture; pick a Shortcut that runs unattended."
+        case .shortcutMissing(_, let wasListed):
+            return wasListed
+                ? "It was there when you picked it, so it has since been renamed or deleted. "
+                + "Tunk did not run anything and will not, until you choose again."
+                : "Open Settings → Action and choose one from the list."
+        case .shortcutsUnreadable:
+            return "Open Shortcuts.app once, then press Refresh in Settings → Action. Tunk "
+                 + "will not run a Shortcut it cannot first confirm exists."
         }
     }
 

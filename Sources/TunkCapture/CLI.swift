@@ -7,43 +7,76 @@ let toolVersion = "tunk-capture 0.3.0"
 /// makes the bare name ambiguous inside this target. Pin it to ours once.
 typealias Category = TunkFormat.Category
 
-/// Minimal flag parser. `--key value`, `--key=value`, and bare boolean flags from
-/// a known set. Anything else is positional.
+/// Flag parser driven by the per-command table in `Flags.swift`.
+///
+/// Accepts `--key value`, `--key=value`, and bare switches. Every flag must be
+/// declared for the subcommand being run; anything else raises `ArgError` rather
+/// than being ignored. Silently swallowing an argument is how an hour of
+/// recording gets spent on the wrong thing.
 struct Args {
     private(set) var sub: String = ""
     private(set) var flags: [String: String] = [:]
     private(set) var positional: [String] = []
+    /// True when the operator asked for usage; validation is then skipped so
+    /// `guide --bogus --help` still explains itself.
+    private(set) var wantsHelp = false
 
-    static let booleanFlags: Set<String> = [
-        "help", "h", "allow-no-input", "no-audio", "no-speech", "no-touch",
-        "quiet", "json", "no-marks", "list",
-    ]
-
-    init(_ argv: [String]) {
+    init(_ argv: [String], validate: Bool = true) throws {
         var rest = argv
         if let first = rest.first, !first.hasPrefix("-") {
             sub = first
             rest.removeFirst()
         }
+        wantsHelp = rest.contains { $0 == "--help" || $0 == "-h" }
+        // An unknown subcommand is reported by main.swift; parse it leniently so
+        // the message is "unknown command", not a confusing flag error.
+        let spec = CommandSpecs.spec(sub)
+        let checking = validate && !wantsHelp && spec != nil
+
         var i = 0
         while i < rest.count {
             let tok = rest[i]
-            if tok.hasPrefix("--") || (tok.hasPrefix("-") && tok.count == 2) {
-                let body = String(tok.drop(while: { $0 == "-" }))
-                if let eq = body.firstIndex(of: "=") {
-                    flags[String(body[body.startIndex..<eq])] = String(body[body.index(after: eq)...])
-                } else if Args.booleanFlags.contains(body) {
-                    flags[body] = "true"
-                } else if i + 1 < rest.count, !rest[i + 1].hasPrefix("--") {
-                    flags[body] = rest[i + 1]
-                    i += 1
-                } else {
-                    flags[body] = "true"
+            defer { i += 1 }
+            guard tok.hasPrefix("--") || (tok.hasPrefix("-") && tok.count == 2) else {
+                if checking, spec?.positional == nil {
+                    throw ArgError.unexpectedPositional(command: sub, value: tok)
                 }
-            } else {
                 positional.append(tok)
+                continue
             }
-            i += 1
+            let body = String(tok.drop(while: { $0 == "-" }))
+            let name = body.firstIndex(of: "=").map { String(body[body.startIndex..<$0]) } ?? body
+            let inlineValue = body.firstIndex(of: "=").map { String(body[body.index(after: $0)...]) }
+            let canonical = (name == "h") ? "help" : name
+
+            guard let declared = spec?.flag(canonical) else {
+                if checking { throw ArgError.unknownFlag(command: sub, flag: canonical) }
+                flags[canonical] = inlineValue ?? "true"
+                if inlineValue == nil, i + 1 < rest.count, !rest[i + 1].hasPrefix("-") {
+                    flags[canonical] = rest[i + 1]
+                    i += 1
+                }
+                continue
+            }
+
+            if let inlineValue {
+                if !declared.takesValue, checking {
+                    throw ArgError.unexpectedValue(command: sub, flag: canonical)
+                }
+                flags[canonical] = inlineValue
+            } else if declared.takesValue {
+                // A value that itself looks like a flag is a missing value, not a
+                // value: `--taps --surface desk` must not record 0 taps.
+                guard i + 1 < rest.count, !rest[i + 1].hasPrefix("--") else {
+                    if checking { throw ArgError.missingValue(command: sub, flag: declared) }
+                    flags[canonical] = "true"
+                    continue
+                }
+                flags[canonical] = rest[i + 1]
+                i += 1
+            } else {
+                flags[canonical] = "true"
+            }
         }
     }
 
@@ -54,6 +87,24 @@ struct Args {
     func list(_ k: String) -> [String] {
         (flags[k] ?? "").split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+    }
+
+    /// A numeric flag that was given but does not parse is an error, not a silent
+    /// fallback to the default.
+    func number(_ k: String) throws -> Double? {
+        guard let raw = flags[k] else { return nil }
+        guard let v = Double(raw), v.isFinite else {
+            throw CLIError.badArgument("--\(k) expects a number, got '\(raw)'")
+        }
+        return v
+    }
+
+    func count(_ k: String) throws -> Int? {
+        guard let raw = flags[k] else { return nil }
+        guard let v = Int(raw) else {
+            throw CLIError.badArgument("--\(k) expects a whole number, got '\(raw)'")
+        }
+        return v
     }
 }
 
@@ -73,6 +124,27 @@ func parseCategory(_ s: String?) throws -> Category {
             "unknown category '\(s)'. One of: " + Category.allCases.map(\.rawValue).joined(separator: ", "))
     }
     return c
+}
+
+/// `--only` / `--skip` take category names. A typo there used to filter every
+/// phase out (or none), so each entry is checked against the vocabulary.
+func parseCategoryList(_ args: Args, _ key: String) throws -> Set<String> {
+    let raw = args.list(key)
+    guard !raw.isEmpty else {
+        if args.has(key) {
+            throw CLIError.badArgument("--\(key) is empty. \(CommandSpecs.categoryList)")
+        }
+        return []
+    }
+    let known = Set(Category.allCases.map(\.rawValue))
+    let bad = raw.filter { !known.contains($0) }
+    guard bad.isEmpty else {
+        throw CLIError.badArgument(
+            "--\(key): unknown categor\(bad.count == 1 ? "y" : "ies") "
+            + bad.map { "'\($0)'" }.joined(separator: ", ")
+            + ".\n  \(CommandSpecs.categoryList)")
+    }
+    return Set(raw)
 }
 
 func parseSurface(_ s: String?) throws -> Surface {
@@ -104,28 +176,4 @@ func resolveSplit(outPath: String, explicit: String?) throws -> (URL, Split) {
     return (url, split)
 }
 
-let usageText = """
-\(toolVersion) — record one labelled session per FORMAT.md.
-
-USAGE
-  tunk-capture record --category <cat> --surface <desk|soft|lap>
-                      [--split train|test] [--out data/raw]
-                      [--duration <s>] [--notes "..."] [--expect <n>]
-  tunk-capture guide  --surface <desk|soft|lap> [--out data/raw]
-                      [--taps 20] [--typing-sec 180] [--confound-sec 60]
-                      [--rest-sec 12] [--only tap_deck,typing] [--skip idle]
-  tunk-capture verify [<session-dir>]          (defaults to newest under data/raw)
-  tunk-capture doctor [--seconds 6]            (permission + rig check)
-  tunk-capture list                            (categories and surfaces)
-
-COMMON FLAGS
-  --no-audio      no beeps          --no-speech   no spoken prompts
-  --no-touch      skip trackpad touch-count capture
-  --allow-no-input  record even if the event tap cannot start (session is marked degraded)
-  --report-interval-us 1250         sensor ReportInterval; 1250 => 796 Hz
-
-NOTES
-  Ctrl-C at any point flushes the stream and writes a valid meta.json.
-  The event tap needs Input Monitoring (and Accessibility on some releases)
-  granted to the TERMINAL app you launch this from, not to the binary.
-"""
+var usageText: String { CommandSpecs.overview }

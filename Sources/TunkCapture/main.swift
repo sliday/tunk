@@ -8,11 +8,20 @@ import TunkFormat
 // verify  re-read a session and say whether the rig is sound
 // doctor  permission and sensor check, five seconds, before you commit an hour
 
-let args = Args(Array(CommandLine.arguments.dropFirst()))
+let argv = Array(CommandLine.arguments.dropFirst())
 
-if args.has("help") || args.has("h") || args.sub.isEmpty {
-    print(usageText)
-    exit(args.sub.isEmpty && !args.has("help") && !args.has("h") ? 1 : 0)
+let args: Args
+do {
+    args = try Args(argv)
+} catch {
+    Console.err("error: \(error)")
+    exit(2)
+}
+
+if args.wantsHelp || args.sub.isEmpty {
+    // `tunk-capture guide --help` prints that command's flags, not the overview.
+    print(CommandSpecs.spec(args.sub) != nil ? CommandSpecs.helpText(for: args.sub) : usageText)
+    exit(args.sub.isEmpty && !args.wantsHelp ? 1 : 0)
 }
 
 do {

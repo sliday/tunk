@@ -32,16 +32,31 @@ import Foundation
 ///
 /// ## Grouping
 ///
-/// Onsets `config.minInterTapNs ... config.maxInterTapNs` apart join a group.
+/// Onsets chain into one group while each lands `config.minInterTapNs ...
+/// config.maxInterTapNs` after the previous one. The group fires
+/// `config.confirmWindowNs` after its **last** onset, and the count it reached
+/// picks the action: `tapCount` on the `Trigger` is what the caller binds
+/// against, exactly like Back Tap's separate Double Tap and Triple Tap rows. A
+/// count with nothing bound fires nothing; so does a count outside
+/// `DetectorConfig.supportedTapCounts`.
+///
+/// This rests on `maxInterTapNs <= confirmWindowNs`, enforced by
+/// `DetectorConfig.madeCoherent()` and applied on every config write (see
+/// `effectiveConfig`). With it, any onset that could extend a group arrives
+/// before that group's deadline, so a stream of knocks at double-tap cadence
+/// becomes one long group with an unbound count instead of a trigger every
+/// refractory period. Without it the detector fired 48 times on a synthetic
+/// 60 s stream of thumps 250 ms apart. Double still fires one confirm window
+/// after its second onset whether or not a third was coming, so wiring triple
+/// changes nothing about how double feels, and latency stays ~one confirm
+/// window from the last onset at every count.
+///
 /// An onset closer than `minInterTapNs` is a bounce or a fumbled strike and
 /// aborts the group outright — the make-or-break metric is false triggers, so
-/// ambiguity resolves to "fire nothing". A group short of
-/// `config.tapCountToFire` waits until `lastOnset + maxInterTapNs` for another
-/// member, then dies. A group that has reached the count waits
-/// `config.confirmWindowNs` before firing, which is what leaves room to add
-/// triple-tap later without changing how double feels; an extra onset inside
-/// that window makes the count wrong and the group fires nothing. After any
-/// trigger, onsets are ignored for `config.refractoryNs`.
+/// ambiguity resolves to "fire nothing". An onset later than `maxInterTapNs`
+/// but still inside the confirm window (possible only when the window is set
+/// wider than the join limit) also aborts the group, and starts a new one.
+/// After any trigger, onsets are ignored for `config.refractoryNs`.
 ///
 /// ## Gate
 ///
@@ -62,20 +77,54 @@ public final class TapDetector: TapDetecting {
 
     // MARK: - Public surface
 
-    /// Everything user-tunable. Nothing else in this file reads a default.
-    /// Changing it takes effect on the next ingested sample; call `reset()` if
-    /// the change should also drop in-flight state.
-    public var config: DetectorConfig
+    /// Everything user-tunable, as written by the settings panel. Nothing else
+    /// in this file reads a default. Changing it takes effect on the next
+    /// ingested sample; call `reset()` if the change should also drop in-flight
+    /// state.
+    ///
+    /// The detector never runs these numbers raw: it runs
+    /// `config.madeCoherent()`. Show `effectiveConfig` and
+    /// `config.coherenceIssues` if the two can differ in front of a user.
+    public var config: DetectorConfig {
+        didSet { refreshDerivedConfig() }
+    }
+
+    /// Tap counts that have an action bound to them. A group whose count is not
+    /// in here fires nothing, though its onsets still reach `drainOnsets()` and
+    /// the group itself still reaches `drainGroups()`, so the tap monitor can
+    /// show the user a gesture that was seen and deliberately not acted on.
+    ///
+    /// `nil` means "derive from `config.tapCountToFire`", which is what
+    /// `DetectorConfig` can express on its own today. Set it explicitly to bind
+    /// single, double and triple independently. Counts outside
+    /// `DetectorConfig.supportedTapCounts` are ignored.
+    ///
+    /// Arming 1 is a different risk class from arming 2: every mug set down,
+    /// every footfall and every hard keystroke is one transient, so single-tap
+    /// false triggers must be measured on their own before shipping the binding.
+    public var armedTapCounts: Set<Int>? {
+        didSet { refreshDerivedConfig() }
+    }
+
+    /// The config actually in force: `config` with its incoherent combinations
+    /// clamped. Read this for a UI readout, not `config`.
+    public private(set) var effectiveConfig: DetectorConfig
 
     /// Filter design constants. Not user-facing, not part of `DetectorConfig`,
     /// and not a duplicate of anything in it. Exposed so the scoring harness can
     /// sweep the front end offline.
     public let tuning: DSPTuning
 
-    public init(config: DetectorConfig = .default, tuning: DSPTuning = .default) {
+    public init(config: DetectorConfig = .default,
+                tuning: DSPTuning = .default,
+                armedTapCounts: Set<Int>? = nil) {
         self.config = config
+        self.armedTapCounts = armedTapCounts
         self.tuning = tuning
         self.chain = SignalChain(tuning: tuning)
+        self.effectiveConfig = config.madeCoherent()
+        self.firingCounts = Self.resolveFiringCounts(config: self.effectiveConfig,
+                                                     armed: armedTapCounts)
     }
 
     // MARK: - State
@@ -102,7 +151,13 @@ public final class TapDetector: TapDetecting {
     private var lastOnsetNs: Int64?
     private var pending: PendingOnset?
 
+    /// Members of the live group, kept only while the group could still fire.
+    /// A rhythmic disturbance can chain hundreds of onsets, and once the count
+    /// is past `DetectorConfig.supportedTapCounts` the members are dead weight,
+    /// so storage stops while `groupCount` keeps counting.
     private var group: [GroupOnset] = []
+    private var groupCount: Int = 0
+    private var groupLastOnsetNs: Int64?
     private var groupDeadlineNs: Int64?
     /// Time of the last ungated onset, group member or not. A new group may not
     /// start closer than `minInterTapNs` to it, so a burst of fumbled strikes
@@ -113,6 +168,8 @@ public final class TapDetector: TapDetecting {
     private var gateUntilNs: Int64 = Int64.min
 
     private var onsetLog: [OnsetEvent] = []
+    private var groupLog: [TapGroupEvent] = []
+    private var firingCounts: Set<Int>
 
     // MARK: - TapDetecting
 
@@ -160,10 +217,10 @@ public final class TapDetector: TapDetecting {
 
     public func ingest(input: InputEvent) {
         guard input.kind.gatesDetection else { return }
-        gateUntilNs = max(gateUntilNs, input.tNs + config.gateWindowNs)
+        gateUntilNs = max(gateUntilNs, input.tNs + effectiveConfig.gateWindowNs)
 
         // Retroactive gate: kill an onset that landed just before this event.
-        if let last = group.last, input.tNs >= last.tNs, input.tNs - last.tNs <= tuning.preGateNs {
+        if let last = groupLastOnsetNs, input.tNs >= last, input.tNs - last <= tuning.preGateNs {
             clearGroup()
         }
         if pending != nil, input.tNs >= pending!.tNs, input.tNs - pending!.tNs <= tuning.preGateNs {
@@ -181,6 +238,16 @@ public final class TapDetector: TapDetecting {
         return out
     }
 
+    /// Groups closed since the last drain, fired or not. The tap monitor can say
+    /// "saw three taps, nothing bound to three" instead of going quiet, and the
+    /// scoring harness can count what a count would have cost before it is
+    /// armed. Not required for correctness; not part of `TapDetecting`.
+    public func drainGroups() -> [TapGroupEvent] {
+        let out = groupLog
+        groupLog.removeAll(keepingCapacity: true)
+        return out
+    }
+
     public func reset() {
         chain.reset()
         sampleIndex = 0
@@ -188,12 +255,12 @@ public final class TapDetector: TapDetecting {
         armed = true
         lastOnsetNs = nil
         pending = nil
-        group.removeAll(keepingCapacity: true)
-        groupDeadlineNs = nil
+        clearGroup()
         lastGroupingOnsetNs = nil
         refractoryUntilNs = Int64.min
         gateUntilNs = Int64.min
         onsetLog.removeAll(keepingCapacity: true)
+        groupLog.removeAll(keepingCapacity: true)
     }
 
     // MARK: - Readouts for the tap monitor and the harness
@@ -207,8 +274,21 @@ public final class TapDetector: TapDetecting {
 
     // MARK: - Internals
 
+    /// Tap counts a bound action would actually be reached by, after clamping.
+    public var effectiveArmedTapCounts: Set<Int> { firingCounts }
+
+    private static func resolveFiringCounts(config: DetectorConfig, armed: Set<Int>?) -> Set<Int> {
+        let requested = armed ?? [config.tapCountToFire]
+        return requested.filter { DetectorConfig.supportedTapCounts.contains($0) }
+    }
+
+    private func refreshDerivedConfig() {
+        effectiveConfig = config.madeCoherent()
+        firingCounts = Self.resolveFiringCounts(config: effectiveConfig, armed: armedTapCounts)
+    }
+
     private func currentThreshold() -> Double {
-        max(config.effectiveThreshold,
+        max(effectiveConfig.effectiveThreshold,
             max(tuning.noiseSnrMultiple * chain.noiseFloor, tuning.minThresholdG))
     }
 
@@ -231,6 +311,13 @@ public final class TapDetector: TapDetecting {
             group[i].strength = p.peak
         }
         pending = nil
+    }
+
+    private func append(_ event: TapGroupEvent) {
+        groupLog.append(event)
+        if groupLog.count > tuning.groupLogCapacity {
+            groupLog.removeFirst(groupLog.count - tuning.groupLogCapacity)
+        }
     }
 
     private func append(_ event: OnsetEvent) {

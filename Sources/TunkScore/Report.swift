@@ -11,6 +11,9 @@ struct RunReport: Codable {
     var detectorIsStub: Bool
     var matchWindowMs: Double
     var config: DetectorConfig
+    /// Tap counts the detector was treated as armed for. Everything else must never
+    /// fire, and a trigger with an un-armed tap count is a false trigger.
+    var armedCounts: [Int]
     var pooled: Aggregate
     var perSurface: [Aggregate]
     var perCategory: [Aggregate]
@@ -34,10 +37,12 @@ enum Reporter {
     }
 
     static func build(dataRoot: URL, split: String, config: DetectorConfig,
-                      scores: [SessionScore], warnings: [String]) -> RunReport {
+                      policy: ScoringPolicy, scores: [SessionScore],
+                      warnings: [String]) -> RunReport {
         let (pooled, surfaces, categories) = aggregate(scores)
         let (verdict, checks) = PassLine.verdict(perSurface: surfaces, pooled: pooled)
         var warn = warnings
+        for s in scores { warn.append(contentsOf: s.labelIssues) }
         if DetectorFactory.isStub {
             warn.insert("Graded the HARNESS STUB detector, not a shipping detector. "
                         + "These numbers say nothing about the real build.", at: 0)
@@ -56,6 +61,7 @@ enum Reporter {
             detectorIsStub: DetectorFactory.isStub,
             matchWindowMs: Double(Scoring.matchWindowNs) / 1e6,
             config: config,
+            armedCounts: policy.armedCounts,
             pooled: pooled,
             perSurface: Surface.allCases.compactMap { surfaces[$0.rawValue] },
             perCategory: categories.keys.sorted().map { categories[$0]! },
@@ -74,6 +80,8 @@ enum Reporter {
         out += "- generated: `\(r.generatedAt)`\n"
         out += "- data root: `\(r.dataRoot)` (split `\(r.split)`)\n"
         out += "- detector: `\(r.detectorBackend)`\n"
+        out += "- armed tap counts: `\(r.armedCounts.map(String.init).joined(separator: ", "))` "
+        out += "(any other tap count that fires is a false trigger)\n"
         out += "- match window: ±\(String(format: "%.0f", r.matchWindowMs)) ms\n"
         out += "- sessions graded: \(r.sessions.count), wall time "
         out += String(format: "%.1f min\n", r.pooled.durationSeconds / 60)
@@ -95,31 +103,59 @@ enum Reporter {
 
         out += "## Per surface\n\n"
         out += aggregateTable([r.pooled] + r.perSurface)
+
+        out += "\n## Per tap count\n\n"
+        out += countTable(scope: "pooled", agg: r.pooled)
+        for a in r.perSurface {
+            out += "\n" + countTable(scope: a.label, agg: a)
+        }
+        out += "\nA trigger is attributed to the number of taps it fired. A trigger of an "
+        out += "un-armed count, or a trigger that fires the wrong count on a labelled gesture, "
+        out += "is a false trigger against the count it fired.\n"
+
         out += "\n## Per category\n\n"
         out += aggregateTable(r.perCategory)
 
         out += "\n## Per session\n\n"
-        out += "| session | surface | category | dur | groups | detected | triggers | FP | lat p50 | lat p95 | gaps |\n"
-        out += "|---|---|---|---|---|---|---|---|---|---|---|\n"
+        out += "| session | surface | category | dur | armed groups | detected | must-not-fire | fired anyway | triggers | FP | lat p50 | lat p95 | gaps |\n"
+        out += "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
         for s in r.sessions {
             out += "| `\(s.sessionId)` | \(s.surface) | \(s.category) | "
             out += String(format: "%.0f s", s.durationSeconds) + " | "
-            out += "\(s.doubleGroups) | \(s.detectedGroups) | \(s.triggerCount) | \(s.falsePositives) | "
+            out += "\(s.armedGroups) | \(s.detectedGroups) | \(s.mustNotFireGroups) | "
+            out += "\(s.mustNotFireViolations) | \(s.triggerCount) | \(s.falsePositives) | "
             out += "\(Fmt.msOpt(Percentile.of(s.latenciesNs, 0.5))) | "
             out += "\(Fmt.msOpt(Percentile.of(s.latenciesNs, 0.95))) | \(s.gapCount) |\n"
         }
-        out += "\nLatency is `trigger.t_ns - labelled second onset`, over matched groups whose "
+        out += "\nLatency is `trigger.t_ns - labelled last onset`, over matched groups whose "
         out += "label confidence is not `prompt_window`.\n"
         return out
     }
 
+    static func countTable(scope: String, agg: Aggregate) -> String {
+        let rows = agg.perCount.filter { $0.armed || $0.labelledGroups > 0 || $0.triggers > 0 }
+        guard !rows.isEmpty else { return "**\(scope)** — no tap counts observed or armed.\n" }
+        var out = "**\(scope)**\n\n"
+        out += "| taps | armed | labelled | detected | rate | missed | ambig | must-not-fire | fired anyway | triggers | false triggers | FT/20min | lat p50 | lat p95 |\n"
+        out += "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+        for c in rows.sorted(by: { $0.count < $1.count }) {
+            out += "| \(c.count) | \(c.armed ? "yes" : "**no**") | \(c.labelledGroups) | "
+            out += "\(c.detectedGroups) | \(Fmt.pct(c.detectionRate)) | \(c.missedGroups) | "
+            out += "\(c.ambiguousGroups) | \(c.mustNotFireGroups) | \(c.mustNotFireViolations) | "
+            out += "\(c.triggers) | \(c.falseTriggers) | "
+            out += "\(Fmt.num(agg.falseTriggersPer20Min(count: c.count))) | "
+            out += "\(Fmt.msOpt(c.latencyP50Ns)) | \(Fmt.msOpt(c.latencyP95Ns)) |\n"
+        }
+        return out
+    }
+
     private static func aggregateTable(_ aggs: [Aggregate]) -> String {
-        var out = "| scope | sessions | dur (min) | double groups | detected | rate | triggers | FP | FP/20min | lat p50 | lat p95 | lat max |\n"
+        var out = "| scope | sessions | dur (min) | armed groups | detected | rate | triggers | FP | FP/20min | lat p50 | lat p95 | lat max |\n"
         out += "|---|---|---|---|---|---|---|---|---|---|---|---|\n"
         for a in aggs {
             out += "| \(a.label) | \(a.sessions) | "
             out += String(format: "%.1f", a.durationSeconds / 60) + " | "
-            out += "\(a.doubleGroups) | \(a.detectedGroups) | \(Fmt.pct(a.detectionRate)) | "
+            out += "\(a.armedGroups) | \(a.detectedGroups) | \(Fmt.pct(a.detectionRate)) | "
             out += "\(a.triggerCount) | \(a.falsePositives) | \(Fmt.num(a.falsePositivesPer20Min)) | "
             out += "\(Fmt.msOpt(a.latencyP50Ns)) | \(Fmt.msOpt(a.latencyP95Ns)) | \(Fmt.msOpt(a.latencyMaxNs)) |\n"
         }

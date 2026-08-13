@@ -14,6 +14,44 @@ import Foundation
 /// nothing anywhere in Tunk — may run a shortcut to probe it, validate it, warm
 /// it up or benchmark it. A shortcut runs when the user double-taps, or when
 /// they press Test. Those are the only two.
+/// The result of one `shortcuts list`.
+///
+/// `succeeded` is the load-bearing field. An empty `names` means two very
+/// different things — the library is empty, or the listing itself broke — and
+/// the difference decides whether a bound name is treated as deleted. Collapsing
+/// them would let a three-second timeout silently look like the user deleting
+/// every Shortcut they own.
+public struct ShortcutsListing: Sendable, Equatable {
+    public var names: [String]
+    public var succeeded: Bool
+
+    public init(names: [String], succeeded: Bool) {
+        self.names = names
+        self.succeeded = succeeded
+    }
+
+    /// Never listed successfully. Distinct from a successful empty listing.
+    public static let unknown = ShortcutsListing(names: [], succeeded: false)
+
+    public func contains(_ name: String) -> Bool {
+        names.contains(name.trimmingCharacters(in: .whitespaces))
+    }
+}
+
+/// Answers "does this Shortcut still exist?" without running anything.
+///
+/// Injected into `ActionRunner` so the stale-name check can be driven in tests
+/// without a Shortcuts library.
+public protocol ShortcutNameResolving: AnyObject, Sendable {
+    func listing() -> ShortcutsListing
+}
+
+/// The real resolver: whatever `ShortcutsCatalog` last listed.
+public final class CatalogNameResolver: ShortcutNameResolving, @unchecked Sendable {
+    public init() {}
+    public func listing() -> ShortcutsListing { ShortcutsCatalog.listing() }
+}
+
 public enum ShortcutsCatalog {
     /// Deliberately generous. `shortcuts list` normally answers in ~10 ms; if it
     /// is wedged, the panel gets an empty list and a refresh button rather than a
@@ -21,31 +59,42 @@ public enum ShortcutsCatalog {
     public static let listTimeout: TimeInterval = 3.0
 
     private static let lock = NSLock()
-    private nonisolated(unsafe) static var cache: [String]?
+    private nonisolated(unsafe) static var cache: ShortcutsListing?
 
     /// Cached names, listing on first call. Never throws: a missing CLI, a
     /// sandboxed process or an empty library all read as "no Shortcuts found",
     /// which is a state the panel already has to draw.
-    public static func available() -> [String] {
+    public static func available() -> [String] { listing().names }
+
+    /// The cached listing, including whether it worked. Lists on first call.
+    public static func listing() -> ShortcutsListing {
         lock.lock()
         if let cache {
             lock.unlock()
             return cache
         }
         lock.unlock()
-        return refresh()
+        return refreshListing()
     }
 
     /// Re-lists and replaces the cache. The settings panel calls this when it
-    /// opens and when the user presses the refresh control, so a Shortcut added
-    /// while Tunk was running shows up without a relaunch.
+    /// opens and when the user presses the refresh control, and the engine calls
+    /// it on wake and on a slow timer, so a Shortcut renamed while Tunk was
+    /// running is noticed before the next tap rather than after it.
     @discardableResult
-    public static func refresh() -> [String] {
-        let names = list()
+    public static func refresh() -> [String] { refreshListing().names }
+
+    @discardableResult
+    public static func refreshListing() -> ShortcutsListing {
+        let fresh = list()
         lock.lock()
-        cache = names
+        // A failed listing must not overwrite a good one. Losing the known-good
+        // names because the CLI was busy for three seconds would make every
+        // binding look deleted until the next successful refresh.
+        if fresh.succeeded || cache == nil { cache = fresh }
+        let result = cache ?? fresh
         lock.unlock()
-        return names
+        return result
     }
 
     /// Drops the cache without listing. Tests use it; the app has no reason to.
@@ -63,9 +112,9 @@ public enum ShortcutsCatalog {
 
     // MARK: - The listing itself
 
-    private static func list() -> [String] {
+    private static func list() -> ShortcutsListing {
         let path = ShortcutsProcessSpawner.executablePath
-        guard FileManager.default.isExecutableFile(atPath: path) else { return [] }
+        guard FileManager.default.isExecutableFile(atPath: path) else { return .unknown }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -91,7 +140,7 @@ public enum ShortcutsCatalog {
             try process.run()
         } catch {
             outPipe.fileHandleForReading.readabilityHandler = nil
-            return []
+            return .unknown
         }
 
         if done.wait(timeout: .now() + listTimeout) == .timedOut {
@@ -99,10 +148,13 @@ public enum ShortcutsCatalog {
             // terminating a `run` would not be.
             process.terminate()
             _ = done.wait(timeout: .now() + 0.5)
-            return []
+            return .unknown
         }
+        guard process.terminationStatus == 0 else { return .unknown }
 
-        return parse(out.text)
+        // A clean exit is a real answer, even when it names nothing: that user
+        // genuinely has no Shortcuts.
+        return ShortcutsListing(names: parse(out.text), succeeded: true)
     }
 
     /// One name per line. Blank lines dropped, order preserved (the CLI already
