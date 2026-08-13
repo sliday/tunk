@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<title>Tunk — Back Tap for your Mac. Double-tap your MacBook to fire a shortcut.</title>
+<meta name="description" content="Tunk is a macOS menubar app that turns a double-tap on your MacBook's body into a keyboard shortcut or a macOS Shortcut. It reads the built-in accelerometer at 796 Hz. Like Back Tap on iPhone, for a Mac. In development.">
+<link rel="canonical" href="https://tunk.dev/">
+
+<meta name="theme-color" content="#F6F7F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101317" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tunk">
+<meta property="og:url" content="https://tunk.dev/">
+<meta property="og:title" content="Tunk — Back Tap for your Mac">
+<meta property="og:description" content="Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs any macOS Shortcut. Tunk reads the built-in accelerometer at 796 Hz to pick your deliberate tap out of everything else the laptop feels.">
+<meta property="og:image" content="https://tunk.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A hand double-tapping the aluminium palm rest of a MacBook, beside the Tunk wordmark.">
+<meta property="og:locale" content="en_GB">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tunk — Back Tap for your Mac">
+<meta name="twitter:description" content="Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs any macOS Shortcut. Reads the built-in accelerometer at 796 Hz.">
+<meta name="twitter:image" content="https://tunk.dev/og.png">
+<meta name="twitter:image:alt" content="A hand double-tapping the aluminium palm rest of a MacBook, beside the Tunk wordmark.">
+
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+<link rel="icon" href="/icon-512.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+
+<link rel="stylesheet" href="vendor/daub.css">
+<link rel="stylesheet" href="styles.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Tunk",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS",
+  "url": "https://tunk.dev/",
+  "image": "https://tunk.dev/og.png",
+  "softwareVersion": "in development",
+  "releaseNotes": "Not yet released. The detector is being tuned against recorded accelerometer sessions.",
+  "description": "Tunk is a macOS menubar app that detects a deliberate single or double tap on a MacBook's chassis using the built-in accelerometer, and fires a configurable keyboard shortcut or runs a macOS Shortcut. It reads the sensor at 796 Hz and suppresses detection briefly after keyboard and trackpad activity so typing does not trigger it. The reference is Back Tap on iPhone.",
+  "featureList": [
+    "Double-tap the laptop body to fire a configurable global hotkey",
+    "Bind a tap to any macOS Shortcut",
+    "Separate actions for single tap and double tap",
+    "Reads the built-in accelerometer at 796 Hz",
+    "Suppresses detection briefly after keyboard and trackpad activity",
+    "Calibration step that learns your own tap",
+    "Menubar only, no dock icon"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD",
+    "availability": "https://schema.org/PreOrder"
+  }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is Tunk?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tunk is a macOS menubar app that turns a physical tap on your MacBook's body into an action. You double-tap the chassis and Tunk fires a keyboard shortcut you chose, or runs any macOS Shortcut. It is the same idea as Back Tap on iPhone, where tapping the back of the phone runs an action, applied to a laptop. Tunk reads the accelerometer built into the machine rather than using the microphone or the camera."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does Tunk detect a tap?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tunk reads the accelerometer that Apple Silicon MacBooks expose over the HID interface, at a measured 796 Hz. It looks for sharp transient onsets in that stream and groups them by the interval between them, so two deliberate onsets close together read as a double tap. It also watches keyboard and trackpad activity and suppresses onsets for a short window after each one, which is how typing is kept from triggering it. A consequence of that gate is that you cannot trigger Tunk in the middle of typing."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I download Tunk yet?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Tunk is in development and there is no release to download. The sensor layer, the action dispatch and the recording harness work, and the detector is being tuned against recorded sessions. The build ships when the measured detection and false-trigger numbers hold up on recordings the tuning never saw."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Will typing set Tunk off?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Preventing that is the main design goal, and it is not yet proven. Two mechanisms work against it: a double tap requires two deliberate onsets inside a narrow window, and detection is suppressed for a short gate window after every keystroke and trackpad event. Across 28 minutes of recorded real desk use, which included Swift builds, fans and bass-heavy music through the desk, the current build produced zero triggers. A typing false-positive rate on a dedicated typing set has not been measured yet, so no rate is claimed here."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What can a tap do?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A tap can post a global hotkey of your choosing, or run a macOS Shortcut by name, or do nothing. Single tap and double tap each bind to their own action, the same way Back Tap gives Double Tap and Triple Tap separate rows. Single tap ships unbound by default, because a single transient is a much weaker signal than a pair and every mug set down produces one."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I use Tunk for hands-free dictation?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "This is the use case Tunk was built for. In VoiceInk, open Settings and then Shortcuts, add a Second Shortcut bound to a rare key combination, and set its recording mode to toggle. Then bind Tunk's double tap to that same combination. Tapping the laptop starts dictation and tapping again stops it, and your existing manual VoiceInk binding keeps working untouched. Tunk deliberately refuses to emit a bare Right Shift so that it never collides with the default VoiceInk primary shortcut."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which Macs does Tunk work on?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tunk needs the accelerometer that Apple Silicon MacBooks expose through the SPU HID interface, so it is a laptop-only app. Every number published so far was measured on one machine, an M4 Max MacBook running macOS 26.5. Other Apple Silicon MacBook models expose the same sensor interface, but Tunk has not been measured on them yet."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What permissions does Tunk need?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Two. Input Monitoring, so Tunk can read the accelerometer and watch keyboard and trackpad activity for the suppression gate. Accessibility, so it can post the key event your tap is bound to. Tunk runs with the App Sandbox off, which is what reading the sensor requires. It sends nothing off the machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Tunk drain the battery?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tunk samples continuously, so it always costs something. Measured idle CPU is about 2 percent on the machine it was built on. Battery impact over a full charge cycle has not been measured and is not claimed."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Tunk use the microphone?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Tunk reads only the accelerometer, a motion sensor. It never opens the microphone or the camera, and it sends no data off your machine."
+      }
+    }
+  ]
+}
+</script>
+</head>
+
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap head-row">
+    <a class="brand" href="/" aria-label="Tunk, home">
+      <img class="brand__mark" src="img/icon.svg" width="32" height="32" alt="" aria-hidden="true">
+      <span class="brand__word">Tunk</span>
+    </a>
+    <nav class="head-nav" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#measured">What we measured</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero wrap">
+    <p class="status" role="status">
+      <span class="status__dot" aria-hidden="true"></span>
+      In development. No download yet.
+    </p>
+
+    <h1>Back Tap, for your Mac.</h1>
+
+    <p class="lede">
+      Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs any
+      macOS&nbsp;Shortcut. Tunk reads the accelerometer already inside the machine at
+      796&nbsp;Hz and picks your deliberate tap out of everything else the laptop feels:
+      typing, trackpad clicks, a mug set down, footfall, bass through the desk.
+    </p>
+
+    <div class="cta-row">
+      <a class="db-btn db-btn--primary btn-lg" href="https://github.com/sliday/tunk">
+        Follow the build on GitHub
+      </a>
+      <a class="db-btn db-btn--ghost btn-lg" href="#how">See how it works</a>
+    </div>
+    <p class="cta-note">The repository is private while the detector is being tuned. No mailing list yet.</p>
+
+    <figure class="hero-fig">
+      <img src="img/hero.jpg" width="1536" height="1024" fetchpriority="high" decoding="async"
+           alt="A hand reaching to the aluminium palm rest of an open MacBook on a wooden desk, two fingertips touching the bare metal beside the trackpad.">
+      <figcaption>Tap the body, not a key. Tunk feels the knock through the aluminium.</figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap band" id="gesture">
+    <h2>Two taps, two actions</h2>
+    <p class="section-lede">
+      A single tap and a double tap each bind to their own action, the way Back Tap gives
+      Double&nbsp;Tap and Triple&nbsp;Tap separate rows. Pick a hotkey, pick a Shortcut, or leave
+      one unbound.
+    </p>
+
+    <ol class="gesture-list">
+      <li class="db-card gesture-card">
+        <span class="gesture-card__beats" aria-hidden="true">
+          <span class="beat"></span>
+        </span>
+        <h3>Single tap</h3>
+        <p>
+          One knock on the chassis. Ships unbound, on purpose: every mug set down and every
+          footfall is also one transient, so a single tap is a far weaker signal than a pair.
+          Bind it if you want it, knowing that.
+        </p>
+      </li>
+      <li class="db-card gesture-card">
+        <span class="gesture-card__beats" aria-hidden="true">
+          <span class="beat"></span><span class="beat"></span>
+        </span>
+        <h3>Double tap</h3>
+        <p>
+          Two knocks in quick succession, inside a join window of about 220&nbsp;ms. This is the
+          gesture Tunk is built around, because requiring two deliberate onsets is what keeps the
+          world from triggering it.
+        </p>
+      </li>
+      <li class="db-card gesture-card gesture-card--muted">
+        <span class="gesture-card__beats" aria-hidden="true">
+          <span class="beat"></span><span class="beat"></span><span class="beat"></span>
+        </span>
+        <h3>Triple tap</h3>
+        <p>
+          Built but not wired. The grouping already counts taps, so turning triple on later costs
+          nothing and, by design, will not change how double feels.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="wrap band band--feature" id="dictation">
+    <div class="feature">
+      <div class="feature__text">
+        <p class="eyebrow">The reason it exists</p>
+        <h2>Start dictation without reaching for a key</h2>
+        <p>
+          Tunk began as one problem: toggling dictation hands-free. Bind the double tap to
+          <a href="https://tryvoiceink.com/">VoiceInk</a>'s Second Shortcut, set that shortcut to
+          toggle, and you start and stop dictating by tapping the laptop. Your existing manual
+          binding keeps working, untouched.
+        </p>
+        <p>
+          Tunk refuses to emit a bare Right&nbsp;Shift, which is the key VoiceInk uses by default,
+          so the two never fight over the same binding.
+        </p>
+        <p class="note">
+          Any app with a global hotkey works the same way. Bind a Shortcut instead and a tap can
+          run whatever you have built there.
+        </p>
+      </div>
+      <figure class="feature__fig">
+        <img src="img/gesture.jpg" width="1536" height="1024" loading="lazy" decoding="async"
+             alt="Overhead close-up of two fingertips resting on the brushed aluminium palm rest of a laptop.">
+      </figure>
+    </div>
+  </section>
+
+  <section class="wrap band" id="how">
+    <p class="eyebrow">How it works</p>
+    <h2>Five steps, and one of them is the hard one</h2>
+    <p class="section-lede">
+      Tunk never touches the microphone or the camera. It reads one motion sensor, and everything
+      else is signal processing.
+    </p>
+
+    <ol class="steps">
+      <li>
+        <h3>Read the sensor</h3>
+        <p>
+          Apple Silicon MacBooks carry an accelerometer on the SPU, reachable over HID. It sits
+          idle until you set a report interval, which is the whole trick. Set it and the stream
+          arrives at a measured <b class="num">796&nbsp;Hz</b>, one sample every 1.25&nbsp;ms,
+          unbatched, with sensor-to-callback latency of <b class="num">0.34&nbsp;ms</b> at p95.
+        </p>
+      </li>
+      <li>
+        <h3>Find the onset</h3>
+        <p>
+          A finger striking aluminium makes a sharp transient: energy appearing in a couple of
+          milliseconds and decaying fast. Tunk looks for that shape rather than for loudness,
+          because loudness alone is what a closing lid and a dropped phone also have.
+        </p>
+      </li>
+      <li>
+        <h3>Group the beats</h3>
+        <p>
+          Onsets close together in time become one gesture carrying a count. A group fires one
+          confirm window after its last onset, not instantly, which is what lets triple tap arrive
+          later without changing how double tap feels.
+        </p>
+      </li>
+      <li>
+        <h3>Suppress while you work</h3>
+        <p>
+          Every keystroke, trackpad click and trackpad touch opens a short suppression window
+          during which onsets are discarded. Typing is the main way a tap detector fails, and this
+          gate is the defence. The cost is real and deliberate: you cannot trigger Tunk mid-word.
+        </p>
+      </li>
+      <li>
+        <h3>Dispatch</h3>
+        <p>
+          A confirmed gesture posts your key combination, or spawns your Shortcut by name. Tunk
+          checks a Shortcut still exists before running it, and a missing one fails quietly into an
+          error state in the menubar rather than raising a dialog under your hands.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="wrap band" id="noise">
+    <p class="eyebrow">The problem, drawn to scale</p>
+    <h2>What a laptop feels when nobody taps it</h2>
+    <p class="section-lede">
+      Both traces below are real recordings from the dataset, drawn at the same vertical scale.
+      Neither produced a trigger. The detector has to sit above this and still answer a fingertip.
+    </p>
+    <figure class="trace-fig">
+      <img src="img/trace-real.svg" width="1200" height="472" loading="lazy" decoding="async"
+           alt="Two accelerometer traces on a shared scale. The upper one, 60 seconds of a MacBook running Swift builds on a desk, is mostly flat with occasional spikes reaching about 71 milli-g. The lower one, 90 seconds of bass-heavy music playing through the desk, stays almost perfectly flat at about 3 milli-g.">
+      <figcaption>
+        Plotted straight from <code>data/raw</code>. Vertical axis is deviation from the resting
+        1&nbsp;g reading. No smoothing beyond a min and max envelope per pixel column, which keeps
+        every peak.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap band" id="measured">
+    <p class="eyebrow">Honesty</p>
+    <h2>What has been measured, and what has not</h2>
+    <p class="section-lede">
+      Tunk is a detector, and detectors invite made-up percentages. Everything in the left column
+      came off real recordings on real hardware. Everything in the right column is unknown, and
+      stays unlabelled until it is not.
+    </p>
+
+    <div class="two-col">
+      <div class="db-card panel panel--yes">
+        <h3><span class="tick" aria-hidden="true"></span>Measured</h3>
+        <dl class="metrics">
+          <div>
+            <dt>Sensor rate</dt>
+            <dd class="num">796 Hz</dd>
+            <p>Sustained, unbatched, samples exactly 1.25 ms apart.</p>
+          </div>
+          <div>
+            <dt>Sensor to callback, p95</dt>
+            <dd class="num">0.34 ms</dd>
+            <p>Transport costs under a millisecond, so the latency budget is spent on deciding, not on plumbing.</p>
+          </div>
+          <div>
+            <dt>False triggers, recorded desk use</dt>
+            <dd class="num">0 in 28 min</dd>
+            <p>Real sessions: Swift builds and fans on a hard desk, plus layered 45, 60 and 80 Hz bass through the same desk.</p>
+          </div>
+          <div>
+            <dt>Idle CPU</dt>
+            <dd class="num">about 2%</dd>
+            <p>Continuous sampling on an otherwise idle machine.</p>
+          </div>
+        </dl>
+        <p class="panel__foot">Measured on one machine: an M4 Max MacBook running macOS 26.5.</p>
+      </div>
+
+      <div class="db-card panel panel--no">
+        <h3><span class="cross" aria-hidden="true"></span>Not measured yet</h3>
+        <ul class="unknowns">
+          <li>Detection rate on deliberate taps. No percentage is published because no held-out tap set has been scored.</li>
+          <li>End-to-end latency from your second tap to the action firing.</li>
+          <li>False positives while typing, on a dedicated typing recording.</li>
+          <li>Anything on a lap, a bed, a cushion, or any surface other than a hard desk.</li>
+          <li>Any MacBook other than the one it was built on.</li>
+          <li>Battery cost over a full charge cycle.</li>
+        </ul>
+        <p class="panel__foot">
+          These are the numbers that decide whether Tunk ships. They will appear here when the
+          harness produces them, pass or fail.
+        </p>
+      </div>
+    </div>
+
+    <div class="method">
+      <h3>How reliability gets decided</h3>
+      <p>
+        Rather than a number chosen to sound good, the build runs a method. A capture tool logs the
+        raw sensor stream with timestamps and ground-truth labels. Part of every recorded category
+        is held back as a test set the tuning never sees, so a threshold cannot be quietly fitted to
+        the exam. A scoring harness replays those recordings through the same detector code that
+        runs live, sample for sample, with no clock in the decision path, so a replay and a real tap
+        produce identical results. Separate critic agents run that harness and report the gap.
+      </p>
+      <p>
+        The felt reference for acceptance is Back Tap on an iPhone. A build that scores well and
+        still feels like it is ignoring you has not passed.
+      </p>
+    </div>
+  </section>
+
+  <section class="wrap band" id="requirements">
+    <h2>What it needs</h2>
+    <div class="reqs">
+      <div class="db-card req">
+        <h3>An Apple Silicon MacBook</h3>
+        <p>
+          The sensor lives in the laptop. A Mac mini, Studio or Pro has nothing to tap. Built and
+          measured on an M4 Max, macOS 26.5.
+        </p>
+      </div>
+      <div class="db-card req">
+        <h3>Two permissions</h3>
+        <p>
+          <b>Input Monitoring</b> to read the sensor and see keyboard and trackpad activity for the
+          suppression gate. <b>Accessibility</b> to post the key event your tap is bound to.
+        </p>
+      </div>
+      <div class="db-card req">
+        <h3>Nothing else</h3>
+        <p>
+          Menubar only, no dock icon, no window beyond a small settings panel. No microphone, no
+          camera, no network. Nothing leaves the machine.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap band" id="faq">
+    <h2>Questions</h2>
+    <div class="faq">
+
+      <details class="faq__item">
+        <summary><h3>What is Tunk?</h3></summary>
+        <p>
+          Tunk is a macOS menubar app that turns a physical tap on your MacBook's body into an
+          action. You double-tap the chassis and Tunk fires a keyboard shortcut you chose, or runs
+          any macOS Shortcut. It is the same idea as Back Tap on iPhone, where tapping the back of
+          the phone runs an action, applied to a laptop. Tunk reads the accelerometer built into the
+          machine rather than using the microphone or the camera.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>How does Tunk detect a tap?</h3></summary>
+        <p>
+          Tunk reads the accelerometer that Apple Silicon MacBooks expose over the HID interface, at
+          a measured 796 Hz. It looks for sharp transient onsets in that stream and groups them by
+          the interval between them, so two deliberate onsets close together read as a double tap.
+          It also watches keyboard and trackpad activity and suppresses onsets for a short window
+          after each one, which is how typing is kept from triggering it. A consequence of that gate
+          is that you cannot trigger Tunk in the middle of typing.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>Can I download Tunk yet?</h3></summary>
+        <p>
+          No. Tunk is in development and there is no release to download. The sensor layer, the
+          action dispatch and the recording harness work, and the detector is being tuned against
+          recorded sessions. The build ships when the measured detection and false-trigger numbers
+          hold up on recordings the tuning never saw.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>Will typing set Tunk off?</h3></summary>
+        <p>
+          Preventing that is the main design goal, and it is not yet proven. Two mechanisms work
+          against it: a double tap requires two deliberate onsets inside a narrow window, and
+          detection is suppressed for a short gate window after every keystroke and trackpad event.
+          Across 28 minutes of recorded real desk use, which included Swift builds, fans and
+          bass-heavy music through the desk, the current build produced zero triggers. A typing
+          false-positive rate on a dedicated typing set has not been measured yet, so no rate is
+          claimed here.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>What can a tap do?</h3></summary>
+        <p>
+          A tap can post a global hotkey of your choosing, or run a macOS Shortcut by name, or do
+          nothing. Single tap and double tap each bind to their own action, the same way Back Tap
+          gives Double Tap and Triple Tap separate rows. Single tap ships unbound by default,
+          because a single transient is a much weaker signal than a pair and every mug set down
+          produces one.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>How do I use Tunk for hands-free dictation?</h3></summary>
+        <p>
+          This is the use case Tunk was built for. In VoiceInk, open Settings and then Shortcuts,
+          add a Second Shortcut bound to a rare key combination, and set its recording mode to
+          toggle. Then bind Tunk's double tap to that same combination. Tapping the laptop starts
+          dictation and tapping again stops it, and your existing manual VoiceInk binding keeps
+          working untouched. Tunk deliberately refuses to emit a bare Right Shift so that it never
+          collides with the default VoiceInk primary shortcut.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>Which Macs does Tunk work on?</h3></summary>
+        <p>
+          Tunk needs the accelerometer that Apple Silicon MacBooks expose through the SPU HID
+          interface, so it is a laptop-only app. Every number published so far was measured on one
+          machine, an M4 Max MacBook running macOS 26.5. Other Apple Silicon MacBook models expose
+          the same sensor interface, but Tunk has not been measured on them yet.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>What permissions does Tunk need?</h3></summary>
+        <p>
+          Two. Input Monitoring, so Tunk can read the accelerometer and watch keyboard and trackpad
+          activity for the suppression gate. Accessibility, so it can post the key event your tap is
+          bound to. Tunk runs with the App Sandbox off, which is what reading the sensor requires.
+          It sends nothing off the machine.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>Does Tunk drain the battery?</h3></summary>
+        <p>
+          Tunk samples continuously, so it always costs something. Measured idle CPU is about
+          2 percent on the machine it was built on. Battery impact over a full charge cycle has not
+          been measured and is not claimed.
+        </p>
+      </details>
+
+      <details class="faq__item">
+        <summary><h3>Does Tunk use the microphone?</h3></summary>
+        <p>
+          No. Tunk reads only the accelerometer, a motion sensor. It never opens the microphone or
+          the camera, and it sends no data off your machine.
+        </p>
+      </details>
+
+    </div>
+  </section>
+
+  <section class="wrap band closing">
+    <h2>It is not finished, and that is the point of this page</h2>
+    <p class="section-lede">
+      The sensor works, the actions fire, the recordings are stacking up. What is left is the part
+      that decides whether the thing is any good: proving the detector answers a real tap and
+      ignores a real day. When those numbers exist, they go on this page, whatever they say.
+    </p>
+    <div class="cta-row">
+      <a class="db-btn db-btn--primary btn-lg" href="https://github.com/sliday/tunk">
+        Follow the build on GitHub
+      </a>
+    </div>
+    <p class="cta-note">Private for now. It opens when the detector holds up.</p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-row">
+    <p>
+      <b>Tunk</b> — Back Tap for your Mac. A macOS menubar app, in development.
+    </p>
+    <p class="foot-meta">
+      Numbers on this page were measured on an M4 Max MacBook running macOS 26.5.
+      Nothing here is projected.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

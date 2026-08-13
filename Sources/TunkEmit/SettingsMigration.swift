@@ -107,19 +107,11 @@ public enum SettingsMigration {
     }
 
     /// The detector names its fields as code identifiers. The panel shows these
-    /// to a user, so `maxInterTapNs` becomes the words the slider uses. An
-    /// unknown field falls back to the identifier — wrong-looking, but honest,
-    /// and better than inventing a label for something this build does not know.
+    /// to a user, so `maxInterTapNs` becomes the words the slider uses. The
+    /// table lives in TunkCore next to the issues themselves, so this and the
+    /// panel cannot drift apart.
     private static func label(for field: String) -> String {
-        switch field {
-        case "maxInterTapNs":   return "Max gap between taps"
-        case "minInterTapNs":   return "Min gap between taps"
-        case "confirmWindowNs": return "Confirm window"
-        case "gateWindowNs":    return "Gate window"
-        case "refractoryNs":    return "Refractory"
-        case "tapCountToFire":  return "Taps to fire"
-        default:                return field
-        }
+        DetectorConfig.fieldLabel(for: field)
     }
 
     /// The detector's reasons are written as clause fragments. The panel prints

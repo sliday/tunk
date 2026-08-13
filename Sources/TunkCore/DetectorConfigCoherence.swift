@@ -64,6 +64,35 @@ extension DetectorConfig {
         }
 
         public var description: String { "\(field): \(reason). Using \(applied)." }
+
+        /// The same issue with the field named the way the settings panel names
+        /// it. `description` keeps the code identifier because a harness log
+        /// wants the identifier; a user reading the panel has never seen it.
+        public var userFacingDescription: String {
+            "\(DetectorConfig.fieldLabel(for: field)): \(reason). Using \(applied)."
+        }
+    }
+
+    /// What a user calls each tunable. One table, because the settings panel and
+    /// the settings migration both print these and two copies would drift — the
+    /// migration already had its own before this existed.
+    ///
+    /// An unknown field falls back to the identifier: wrong-looking, but honest,
+    /// and better than inventing a label for something this build cannot name.
+    public static func fieldLabel(for field: String) -> String {
+        switch field {
+        case "sensitivity":         return "Sensitivity"
+        case "gateWindowNs":        return "Gate window"
+        case "minInterTapNs":       return "Min gap between taps"
+        case "maxInterTapNs":       return "Max gap between taps"
+        case "confirmWindowNs":     return "Confirm window"
+        case "refractoryNs":        return "Refractory"
+        case "armedTapCounts":      return "Taps that fire"
+        case "tapCountToFire":      return "Taps to fire"
+        case "defaultThreshold":    return "Default threshold"
+        case "calibratedThreshold": return "Calibrated threshold"
+        default:                    return field
+        }
     }
 
     /// What is wrong with this config, empty if nothing is.

@@ -40,9 +40,19 @@ struct SettingsView: View {
     /// 150–200 ms.
     static let gateCautionMs: Double = 150
 
-    @State private var showAdvanced = false
+    @State private var showAdvanced: Bool
     /// Keyed by tap count: each row's Test button reports into its own row.
     @State private var testResults: [Int: String] = [:]
+
+    /// - Parameter showAdvanced: opens the Timing group. Only `--dump-panel`
+    ///   passes true, so the timing sliders and their in-force readouts can be
+    ///   reviewed as a rendered artifact rather than as a description.
+    init(settings: AppSettings, engine: Engine, panel: PanelModel, showAdvanced: Bool = false) {
+        self.settings = settings
+        self.engine = engine
+        self.panel = panel
+        _showAdvanced = State(initialValue: showAdvanced)
+    }
 
     var body: some View {
         ScrollView(.vertical) {
@@ -283,7 +293,7 @@ struct SettingsView: View {
             // than swallowed: a slider that silently does nothing past a certain
             // point reads as a bug.
             ForEach(engine.coherenceIssues, id: \.description) { issue in
-                Text(issue.description)
+                Text(issue.userFacingDescription)
                     .font(.system(size: 11))
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -294,13 +304,16 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     slider(title: "Min gap between taps",
                            value: msBinding(\.minInterTapNs), range: 40...200, step: 10,
-                           readout: ms(settings.config.minInterTapNs), help: nil)
+                           readout: msReadout(settings.config.minInterTapNs,
+                                              inForce: inForce.minInterTapNs), help: nil)
                     slider(title: "Max gap between taps",
                            value: msBinding(\.maxInterTapNs), range: 200...700, step: 10,
-                           readout: ms(settings.config.maxInterTapNs), help: nil)
+                           readout: msReadout(settings.config.maxInterTapNs,
+                                              inForce: inForce.maxInterTapNs), help: nil)
                     slider(title: "Confirm window",
                            value: msBinding(\.confirmWindowNs), range: 100...300, step: 10,
-                           readout: ms(settings.config.confirmWindowNs),
+                           readout: msReadout(settings.config.confirmWindowNs,
+                                              inForce: inForce.confirmWindowNs),
                            help: "Tunk waits this long after the second tap so a third tap "
                                + "can be added later without changing how double feels.")
                     slider(title: "Refractory",
@@ -331,6 +344,15 @@ struct SettingsView: View {
 
     private func ms(_ ns: Int64) -> String {
         String(format: "%.0f ms", Double(ns) / 1_000_000)
+    }
+
+    /// The slider's own number, and next to it the one the detector runs when
+    /// the coherence clamp overrides it. The orange note below the card already
+    /// explains why; this stops the readout itself from claiming a value that
+    /// is not in force. The slider can reach 700 ms while the detector runs
+    /// 220 ms, and a readout saying only "700 ms" is simply wrong.
+    private func msReadout(_ stored: Int64, inForce: Int64) -> String {
+        stored == inForce ? ms(stored) : "\(ms(stored)) → \(ms(inForce))"
     }
 
     private func slider(title: String, value: Binding<Double>,

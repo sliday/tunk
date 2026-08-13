@@ -57,6 +57,21 @@ enum PanelDump {
             try? data.write(to: file)
             FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
         }
+
+        // And one at the far end of the tap-spacing slider, where the detector
+        // clamps what the panel stores. Both halves of that story have to be on
+        // screen: the issue the clamp reported, and a slider readout that names
+        // the value in force instead of only the one that was dragged to.
+        settings.config.gateWindowNs = DetectorConfig.default.gateWindowNs
+        settings.config.maxInterTapNs = 700_000_000
+        for dark in [false, true] {
+            let file = url.appendingPathComponent("panel-clamped-\(dark ? "dark" : "light").png")
+            let view = SettingsView(settings: settings, engine: engine, panel: panel,
+                                    showAdvanced: true)
+            guard let data = render(view, dark: dark) else { continue }
+            try? data.write(to: file)
+            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
+        }
     }
 
     /// Seeds a throwaway suite with the settings an earlier build left behind,

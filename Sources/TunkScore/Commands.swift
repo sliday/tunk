@@ -187,6 +187,13 @@ enum Commands {
         var latencyP50Ns: Int64?
         var latencyP95Ns: Int64?
         var verdict: String
+        /// What the detector actually ran, when `madeCoherent()` clamped the
+        /// swept value. Nil when the value survived untouched.
+        ///
+        /// Without this a sweep past the clamp is a flat curve with nothing on
+        /// screen to explain it, which reads as "this parameter does nothing"
+        /// rather than "every step past here ran the same number".
+        var inForce: String?
     }
 
     static func sweep(_ args: inout Args) throws -> Int32 {
@@ -243,9 +250,16 @@ enum Commands {
                                      sessions: 0, armedGroups: 0, detected: 0, detectionRate: nil,
                                      triggers: 0, falsePositives: 0, typingFalsePositives: 0,
                                      confoundFalsePositives: 0, falsePositivesPer20Min: nil,
-                                     latencyP50Ns: nil, latencyP95Ns: nil, verdict: "invalid"))
+                                     latencyP50Ns: nil, latencyP95Ns: nil, verdict: "invalid",
+                                     inForce: nil))
                 continue
             }
+
+            // The detector clamps an incoherent config on every write, so a step
+            // past `confirmWindowNs` runs a different number than the one in the
+            // first column. Say which, per row, rather than printing a flat tail.
+            let coherent = cfg.madeCoherent()
+            let inForce = param.get(cfg) != param.get(coherent) ? param.display(coherent) : nil
 
             // The armed set follows the swept config unless --armed pinned it, so a
             // sweep over tapCountToFire scores each step against what it fires on.
@@ -270,7 +284,7 @@ enum Commands {
                 confoundFalsePositives: pooled.confoundFalsePositives,
                 falsePositivesPer20Min: pooled.falsePositivesPer20Min,
                 latencyP50Ns: pooled.latencyP50Ns, latencyP95Ns: pooled.latencyP95Ns,
-                verdict: verdict.rawValue))
+                verdict: verdict.rawValue, inForce: inForce))
         }
 
         let table = sweepTable(param: paramName, rows: rows, sessions: sessions.count, root: root)
@@ -298,10 +312,19 @@ enum Commands {
         out += "| \(param) | detected | rate | triggers | FP | FP typing | FP confound | FP/20min | lat p50 | lat p95 | verdict |\n"
         out += "|---|---|---|---|---|---|---|---|---|---|---|\n"
         for r in rows {
-            out += "| \(r.displayValue) | \(r.detected)/\(r.armedGroups) | \(Fmt.pct(r.detectionRate)) | "
+            let asked = r.inForce.map { "\(r.displayValue) → \($0)" } ?? r.displayValue
+            out += "| \(asked) | \(r.detected)/\(r.armedGroups) | \(Fmt.pct(r.detectionRate)) | "
             out += "\(r.triggers) | \(r.falsePositives) | \(r.typingFalsePositives) | \(r.confoundFalsePositives) | "
             out += "\(Fmt.num(r.falsePositivesPer20Min)) | \(Fmt.msOpt(r.latencyP50Ns)) | "
             out += "\(Fmt.msOpt(r.latencyP95Ns)) | \(r.verdict) |\n"
+        }
+        let clamped = rows.filter { $0.inForce != nil }
+        if !clamped.isEmpty {
+            out += "\n**\(clamped.count) of \(rows.count) steps ran a different value than the one "
+                + "asked for.** `a → b` means the detector clamped `a` to `b` to keep "
+                + "`minInterTapNs <= maxInterTapNs <= confirmWindowNs`. Those rows repeat the same "
+                + "measurement, so read the flat tail as the clamp, not as the parameter having "
+                + "no effect.\n"
         }
         return out
     }
