@@ -4,15 +4,16 @@
   gradients, no bloom, no shock ring — a browser tab renders this at 16 px, where every one
   of those turns to mud. Use this under 32 px, never a shrunk icon.svg.</desc>
 
-  <!-- Gap between the amber discs is 7.7 units, which is 1.9 px at 16 px. That number is
-       the whole design: below about 6 units the two strikes fuse into one blob and the
-       mark stops saying "double". -->
+  <!-- Radii 8.0 and 6.5 hold icon.svg's 1.23 ratio. The unequal pair is what stops two
+       amber dots on a rounded tile reading as a face, and it costs nothing at 16 px.
+       Gap between them is 7.5 units, which is 1.9 px at 16 px. Below about 5.6 units the
+       two strikes fuse into one blob and the mark stops saying "double". -->
   <rect width="64" height="64" rx="14" fill="#5A616B"/>
   <rect width="64" height="32" rx="14" fill="#6E757F"/>
   <rect y="18" width="64" height="14" fill="#6E757F"/>
 
-  <circle cx="21" cy="31" r="9.6" fill="#2B2F35" opacity="0.5"/>
-  <circle cx="43" cy="31" r="9.1" fill="#2B2F35" opacity="0.5"/>
-  <circle cx="21" cy="31" r="7.4" fill="#FF9A1F"/>
-  <circle cx="43" cy="31" r="6.9" fill="#FFB020"/>
+  <circle cx="21" cy="31" r="10.2" fill="#2B2F35" opacity="0.5"/>
+  <circle cx="43" cy="31" r="8.7" fill="#2B2F35" opacity="0.5"/>
+  <circle cx="21" cy="31" r="8.0" fill="#FF9A1F"/>
+  <circle cx="43" cy="31" r="6.5" fill="#FFB020"/>
 </svg>

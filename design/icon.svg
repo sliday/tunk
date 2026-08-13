@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <title>Tunk</title>
   <desc>Two strikes on the deck, seen from above. The tile is the surface, so no separate
-  line has to say "surface" — which is the element that cost v1 half its canvas. Two amber
-  impact points own the frame. One low-contrast ring, centred on the pair, is the shock the
-  plate carries; it is the first and only thing allowed to disappear below 128 px.</desc>
+  line has to say "surface". Two amber impact points own two-thirds of the width. One
+  low-contrast ring, centred on the pair rather than on either strike, is the shock the
+  plate carries; it is the only element allowed to vanish below 128 px.</desc>
 
   <defs>
     <!-- Apple continuous-corner squircle: 824 body in a 1024 canvas, R = 184.32 -->
@@ -80,21 +80,29 @@
     <rect x="100" y="100" width="824" height="824" fill="url(#sweep)"/>
 
     <!-- one shock, concentric with the pair, not with either strike -->
-    <circle cx="512" cy="500" r="300" fill="none" stroke="url(#emboss)" stroke-width="24"/>
+    <circle cx="519" cy="500" r="300" fill="none" stroke="url(#emboss)" stroke-width="24"/>
 
     <!-- bloom -->
-    <circle cx="348" cy="500" r="300" fill="url(#bloom)"/>
-    <circle cx="676" cy="500" r="330" fill="url(#bloom)"/>
+    <circle cx="366" cy="500" r="330" fill="url(#bloom)"/>
+    <circle cx="696" cy="500" r="300" fill="url(#bloom)"/>
 
-    <!-- first strike -->
-    <circle cx="348" cy="500" r="144" fill="url(#halo)"/>
-    <circle cx="348" cy="500" r="118" fill="url(#core)"/>
-    <ellipse cx="308" cy="453" rx="44" ry="30" fill="url(#spec)" transform="rotate(-32 308 453)"/>
+    <!--
+      STRIKE RADII 128 AND 104. The 1.23 ratio is load-bearing twice over: it says the
+      two strikes are not a matched pair of anything, and it is what stops two amber
+      discs on a rounded tile reading as a face. The earlier 118/112 was a 5% difference,
+      which is 0.09 px at 16 and did neither job.
 
-    <!-- second strike -->
-    <circle cx="676" cy="500" r="138" fill="url(#halo)"/>
-    <circle cx="676" cy="500" r="112" fill="url(#core)"/>
-    <ellipse cx="638" cy="455" rx="42" ry="28" fill="url(#spec)" transform="rotate(-32 638 455)"/>
+      Centres 366 and 696, so the gap between them is 98 units — 1.5 px at 16 px. That
+      number is the one thing in this file that must not drift; below about 1.4 px the
+      two strikes fuse into one blob and the mark stops saying "double". IDENTITY.md §8.
+    -->
+    <circle cx="366" cy="500" r="154" fill="url(#halo)"/>
+    <circle cx="366" cy="500" r="128" fill="url(#core)"/>
+    <ellipse cx="322" cy="449" rx="48" ry="33" fill="url(#spec)" transform="rotate(-32 322 449)"/>
+
+    <circle cx="696" cy="500" r="130" fill="url(#halo)"/>
+    <circle cx="696" cy="500" r="104" fill="url(#core)"/>
+    <ellipse cx="660" cy="458" rx="39" ry="26" fill="url(#spec)" transform="rotate(-32 660 458)"/>
 
     <path d="M381.76 100 L642.24 100 C723.42 100 763.93 100 807.60 113.81 C855.28 137.55 886.45 168.72 910.19 216.40 C924 260.07 924 300.58 924 381.76 L924 642.24 C924 723.42 924 763.93 910.19 807.60 C886.45 855.28 855.28 886.45 807.60 910.19 C763.93 924 723.42 924 642.24 924 L381.76 924 C300.58 924 260.07 924 216.40 910.19 C168.72 886.45 137.55 855.28 113.81 807.60 C100 763.93 100 723.42 100 642.24 L100 381.76 C100 300.58 100 260.07 113.81 216.40 C137.55 168.72 168.72 137.55 216.40 113.81 C260.07 100 300.58 100 381.76 100 Z"
           fill="none" stroke="url(#rim)" stroke-width="9"/>
