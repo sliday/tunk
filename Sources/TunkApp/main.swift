@@ -29,6 +29,14 @@ if let index = arguments.firstIndex(of: "--latency-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.latencyProbe(iterations: n)
 }
+if let index = arguments.firstIndex(of: "--collect-taps") {
+    // Run the app normally, but keep the seconds around every tap-shaped
+    // transient. Removes the need for a scripted recording session to gather a
+    // tap PROFILE; it cannot replace prompted sessions for detection rate.
+    let dir = index + 1 < arguments.count && !arguments[index + 1].hasPrefix("-")
+        ? arguments[index + 1] : "data/raw"
+    PassiveCollection.enable(at: dir)
+}
 if arguments.contains("--haptic-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.hapticProbe()

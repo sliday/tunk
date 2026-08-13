@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import TunkCore
+import TunkFormat
 import TunkEmit
 import TunkIMU
 
@@ -118,6 +119,11 @@ final class Engine: ObservableObject {
     private var ring = ContiguousArray<Float>(repeating: 0, count: Engine.bucketCount)
     private var ringBucket: Int64 = 0
     private var onsetLog: [OnsetEvent] = []
+
+    /// Writes the seconds around tap-shaped transients to disk during ordinary
+    /// use. Nil unless switched on. See `PassiveCapture` for what its output can
+    /// and cannot be used to measure.
+    var passive: PassiveCapture?
     private var triggerLog: [Int64] = []
     private var gateLog: [Int64] = []
 
@@ -218,6 +224,11 @@ final class Engine: ObservableObject {
         detector.reset()
         detectorLock.unlock()
 
+        // Created here rather than in init: the sensor epoch is not settled
+        // until start(), and a collector holding a ring from a previous epoch
+        // would write snippets whose timestamps mean nothing.
+        if passive == nil { passive = PassiveCollection.makeIfRequested() }
+
         let monitor = InputActivityMonitor(epochNs: { [weak self] in self?.epochNs ?? 0 }) {
             [weak self] event in self?.feed(input: event)
         }
@@ -260,6 +271,16 @@ final class Engine: ObservableObject {
         // threshold line in one coordinate system.
         recordEnvelope(tNs: sample.tNs, value: Float(readout?.envelope ?? 0))
         for onset in onsets { record(onset: onset) }
+        // Passive capture, off unless deliberately switched on. Fed the same
+        // onsets the monitor draws, so it keeps the seconds around anything
+        // tap-shaped without a second detector or a second filter.
+        if let passive {
+            passive.ingest(sample: sample)
+            for onset in onsets {
+                passive.noteCandidate(atNs: onset.tNs, strength: onset.strength,
+                                      suppressed: onset.suppressedByGate)
+            }
+        }
         if let trigger { record(trigger: trigger) }
         // Groups that closed without firing. Draining is not optional here: the
         // log is bounded, and an undrained one would just discard the oldest.
@@ -307,6 +328,11 @@ final class Engine: ObservableObject {
         e.tNs = max(e.tNs, ringBucket * Engine.bucketNs)
         detector.ingest(input: e)
         if e.kind.gatesDetection { record(gate: e.tNs) }
+        // Input goes into the snippet too. Without it the harness cannot
+        // reproduce the suppression gate when replaying one, and a snippet that
+        // cannot be replayed faithfully is worth very little.
+        passive?.ingest(input: InputRecord(tNs: e.tNs, kind: e.kind,
+                                           code: e.code >= 0 ? e.code : nil))
         detectorLock.unlock()
     }
 

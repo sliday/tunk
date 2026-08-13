@@ -143,6 +143,27 @@ structure, and synthetic key events move no mass.
 Also measured, on this machine: sensor 796 Hz with p95 event-to-callback lag
 0.34 ms; idle CPU 2.0 %; idle noise floor 0.00089 g median, 0.0109 g peak.
 
+## Collecting taps without a scripted session
+
+Leave the app running with collection on, use the machine normally, and tap it
+when you would anyway. Each tap-shaped transient writes the seconds around it.
+
+```bash
+./dist/Tunk.app/Contents/MacOS/Tunk --collect-taps data/raw
+```
+
+**Good for the tap profile** — amplitude, rise, decay, and the inter-tap
+interval of a real person on a real machine. Those come out of the waveform and
+owe nothing to how the snippet was chosen. They are what `calibratedThreshold`,
+`onsetCeilingG` and `calibratedInterTapNs` should be fitted to, and all three are
+currently numbers somebody guessed.
+
+**Not a detection-rate denominator.** The snippets are selected *by* the
+detector, so a tap it missed leaves no file, and scoring against them asks only
+whether the detector agrees with itself. Every snippet is written with
+`expected_triggers = 0` under a non-tap category so the harness cannot mistake
+one for prompted ground truth. Detection rate still needs `tunk-capture guide`.
+
 ## Recording a dataset
 
 `notes/RECORDING_PLAN.md` is the script, and every command in it has been run
