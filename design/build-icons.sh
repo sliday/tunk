@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rasterise design/icon.svg into the PNG set, the .iconset and AppIcon.icns, plus the
-# menubar glyph and the favicon at the sizes they are actually consumed at.
+# Rasterise the Tunk marks: the app icon PNG set, the .iconset and AppIcon.icns, the
+# menubar glyph, the favicon, and the full-bleed variant for home-screen icons.
 #
 # Every size is rendered from the vector rather than downscaled from 1024, so the 16 and
 # 32 px versions get real hinting off the gradients instead of a blurred 1024.
@@ -14,6 +14,8 @@
 #   brew install --cask inkscape
 #   Google Chrome             # headless fallback, no install needed
 # iconutil and sips ship with macOS.
+#
+# Do NOT substitute ImageMagick's built-in SVG renderer. It flattens the gradients.
 
 set -euo pipefail
 
@@ -94,11 +96,21 @@ if [ -f "$DIR/menubar-glyph.svg" ]; then
   done
 fi
 
-# Favicon, at the sizes the site cuts. 16 is the one that decides whether it works.
+# Favicon. Flat by design. 16 is the size that decides whether it works at all.
 if [ -f "$DIR/favicon.svg" ]; then
-  for s in 16 32 180 192 512; do
+  for s in 16 32 48 192; do
     render "$DIR/favicon.svg" "$s" "$OUT/favicon-${s}.png"
     echo "  png/favicon-${s}.png"
+  done
+fi
+
+# Full bleed, for apple-touch-icon and maskable manifest icons only. iOS and Android
+# apply their own corner mask; giving them the squircle version nests one rounded tile
+# inside another with a transparent gutter.
+if [ -f "$DIR/icon-fullbleed.svg" ]; then
+  for s in 180 192 512; do
+    render "$DIR/icon-fullbleed.svg" "$s" "$OUT/fullbleed-${s}.png"
+    echo "  png/fullbleed-${s}.png"
   done
 fi
 

@@ -198,7 +198,8 @@ lettering, no logotype file — the mark is the icon, the wordmark is just type 
 Lockup: favicon mark on the left, wordmark on the right, gap equal to 0.5× the mark's
 height, and align the **centre line of the two amber strikes** to the wordmark's x-height
 centre rather than centring the two boxes. Box-centring puts the wordmark slightly low,
-because the mark's strikes sit above its own centre.
+because the mark's strikes sit above its own centre. Expect to need a 1 px nudge on top of
+the arithmetic; take the one that looks right.
 
 ---
 
@@ -386,42 +387,50 @@ itself is the surface, which is what frees the strikes to be that large. A singl
 low-contrast embossed ring, centred between the two strikes rather than around either one,
 is the shock the plate carries; it is the only element permitted to vanish below 128 px.
 
-Files in this directory:
+### Three files, three jobs. Picking the wrong one is the usual way this goes wrong.
 
-| File | Use |
-|---|---|
-| `icon.svg` | The master. Anything 32 px and up |
-| `png/icon-*.png` | Built by `build-icons.sh`, 16 → 1024 |
-| `AppIcon.icns` | The app bundle |
-| `favicon.svg` | **Browser tab, and anything under 32 px.** Flat, no bloom, no shock ring |
-| `menubar-glyph.svg` | Reference only. Do not put this on the site as a logo |
-| `explorations/` | Rejected directions, including the graphite v1. Do not ship these |
+| File | Use it for | Never use it for |
+|---|---|---|
+| `icon.svg` | Dock, Finder, `.icns`, OG image, anything 32 px and up that keeps its own corners | Home-screen icons, anything under 32 px |
+| `icon-fullbleed.svg` | `apple-touch-icon.png`, any manifest icon marked `"purpose": "maskable"` | The Dock or the `.icns` — it has no corners |
+| `favicon.svg` | Browser tab, `.ico`, the site header mark, anything under 32 px | Anything large; it is flat and will look bare |
 
-Rules:
+Supporting files: `png/` (built by `build-icons.sh`, every size from every source),
+`AppIcon.icns` (the app bundle), `menubar-glyph.svg` (reference only, never a site logo),
+`explorations/` (rejected directions including the graphite v1 — do not ship these).
+
+**Why `icon-fullbleed.svg` exists.** `icon.svg` is an 824 body inside a 1024 canvas: a
+squircle with a transparent gutter and a baked cast shadow. iOS and Android apply their
+own corner mask to home-screen icons. Give them `icon.svg` and you get a rounded tile
+floating inside another rounded tile, with a shadow smeared along one edge. The full-bleed
+variant is the identical artwork scaled by `1024/824` about the centre with the squircle,
+rim and shadow removed, so the two files share every coordinate and cannot drift.
+
+### Rules
 
 - Never place `icon.svg` on an amber background. Amber on amber kills the only accent.
 - Never add a border or outline to it. It ships with its own rim and cast shadow, and it
-  now has enough internal contrast to hold its own edge on light and dark alike.
+  has enough internal contrast to hold its own edge on light and dark alike.
 - Never re-corner it. The squircle is part of the mark.
 - Never recolour the ground toward graphite to "match the page". That was v1 and it
   measured 37/255 mean luminance, which is a blank tile at 16 px in a Dock.
-- Below 32 px use `favicon.svg`. The bloom, the brushed texture and the shock ring are
-  large-size detail and turn to haze when shrunk.
+- Rasterise each size **from the vector**, never by downscaling the 1024. And not with
+  ImageMagick's SVG renderer, which flattens the gradients into mud.
 
 ### The one number to protect
 
 The gap between the two strikes is 98 units on the 1024 grid, which is 1.5 px at 16 px. If
-you ever redraw or crop the mark, keep that gap above about 1.4 px at your smallest render.
+you redraw or crop the mark, keep that gap above about 1.4 px at your smallest render.
 Below it the two strikes fuse into one blob and the mark stops saying "double", which is
-the entire product.
+the entire product. Worth an assertion in whatever script cuts your assets.
 
 ### Open Graph
 
-1200 × 630, `--ink-000` ground. The icon at roughly 300 px on the left third, or the mark
-redrawn full-bleed across the left half with the deck running to the edges. Wordmark and
-one sentence on the right in `--ink-900`. Amber appears only on the two strikes — nowhere
-else in the image, per the restraint rule. No screenshot, no browser chrome, no drop shadow
-on the text.
+1200 × 630, `--ink-000` ground, cut from `icon.svg`. The icon at roughly 300 px on the left
+third, or the mark redrawn full-bleed across the left half with the deck running to the
+edges. Wordmark and one sentence on the right in `--ink-900`. Amber appears only on the two
+strikes — nowhere else in the image, per the restraint rule. No screenshot, no browser
+chrome, no drop shadow on the text.
 
 ---
 

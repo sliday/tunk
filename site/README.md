@@ -70,23 +70,45 @@ Do not deploy `tools/`. It is source, not site.
 
 | Asset | Size | How it was made |
 |---|---|---|
-| `og.png` | 1200 × 630 | Composed in Chromium from an HTML template, over `img/hero@2x.jpg` with the app icon and wordmark. |
-| `favicon.ico` | 16, 32, 48 | Three sizes packed with ImageMagick, each rendered separately from `design/icon.svg`. |
-| `favicon.svg` | vector | Copied from `design/icon.svg`'s flat sibling `design/favicon.svg`. Browsers that support SVG icons take this; the `.ico` is the fallback. |
+| `og.png` | 1200 × 630 | Composed in Chromium from `tools/og-template.html`: the mark at 300 px on an `--ink-000` ground, wordmark and one sentence beside it. Amber appears only on the two strikes. |
+| `favicon.ico` | 16, 32, 48 | Three sizes packed with ImageMagick, each rendered separately from `design/favicon.svg`. |
+| `favicon.svg` | vector | Copied from `design/favicon.svg`, the flat mark. Browsers that support SVG icons take this; the `.ico` is the fallback. |
 | `apple-touch-icon.png` | 180 × 180 | Rendered from `design/icon.svg`. |
-| `icon-16/32/192/512.png` | as named | Rendered from `design/icon.svg`, each size drawn from the vector rather than downscaled from 1024, so the small ones keep their edges. |
+| `icon-192.png`, `icon-512.png` | as named | Rendered from `design/icon.svg`, each size drawn from the vector rather than downscaled from 1024. |
 | `site.webmanifest` | — | Hand-written. |
 | `img/trace-real.svg` | 1200 × 476 | Generated from the real dataset. See below. |
 | `img/hero.jpg`, `hero@2x.jpg` | 720 / 1440 wide | gpt-image-2, then cropped and converted. |
 | `img/gesture.jpg`, `gesture@2x.jpg` | 720 / 1440 wide | gpt-image-2. |
 | `img/surface.jpg`, `surface@2x.jpg` | 600 / 1200 wide | gpt-image-2. |
 
-The icons are re-cut by rendering `design/icon.svg` in headless Chromium at each
-size, then packing the `.ico`. ImageMagick's own SVG renderer flattens the
-icon's gradients into mud and must not be used for this.
+#### Two icon sources, and picking the wrong one is the trap
 
-**If `design/icon.svg` changes, the whole favicon set and `og.png` need
-regenerating.** They are snapshots, not references.
+`design/favicon.svg` is the flat mark and owns **everything under 32 px**:
+`favicon.ico` at 16, 32 and 48, plus the 30 px mark in the site header.
+`design/icon.svg` is the full mark and owns **32 px and up**: the Apple touch
+icon and the 192 and 512 PNGs, plus the 300 px mark on the Open Graph card.
+This split comes from `IDENTITY.md` section 8. The full mark carries a bloom and
+an embossed shock ring that turn to haze when shrunk to a browser tab, so a
+favicon cut from it reads as a smudge.
+
+`tools/render-assets.py` encodes the split, so re-cutting is one command and
+cannot pick the wrong source by accident.
+
+Everything is rendered in headless Chromium. **ImageMagick's own SVG renderer
+must not be used for the icon**; it flattens the gradients into mud, which on
+the first attempt turned the 512 into a brown blob.
+
+#### The gap guard
+
+`render-assets.py` measures the gap between the two amber strikes in
+`favicon.svg` before it renders anything, and **refuses to build** if that gap
+falls below 1.4 px at a 16 px render. It is 1.93 px as drawn. Below the floor
+the two strikes fuse into one disc and the mark stops saying "double", which is
+the entire product. `IDENTITY.md` section 8 calls this "the one number to
+protect", so it is checked rather than trusted.
+
+**If `design/icon.svg` or `design/favicon.svg` changes, the whole icon set and
+`og.png` need regenerating.** They are snapshots, not references.
 
 ## The images, and what produced them
 

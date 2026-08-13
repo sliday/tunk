@@ -298,15 +298,15 @@ code {
   padding: 6px 8px 6px 0;
 }
 
+/* No radius, no shadow, no outline. IDENTITY section 8: the squircle is part of
+   the mark and re-cornering it is a mistake, and the mark now carries enough
+   internal contrast to hold its own edge on light and dark alike. Under 32 px
+   the source is favicon.svg, the flat mark. */
 .brand__mark {
   width: 30px;
   height: 30px;
-  /* The icon carries its own rim and cast shadow. Light pages get shadow-2,
-     and it never receives an outline. */
-  box-shadow: var(--shadow-2);
-  border-radius: 7px;
-  /* Align the mark's rule to the wordmark baseline, not box to box: the beats
-     carry mass above the rule, so geometric centring sits the word low. */
+  /* Align the mark's deck to the wordmark baseline rather than box to box: the
+     strikes carry mass above the deck, so geometric centring sits the word low. */
   transform: translateY(-1px);
 }
 
