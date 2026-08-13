@@ -32,6 +32,17 @@ import TunkFormat
 /// "the operator was asked to tap here", independent of whether anything fired.
 /// `tunk-capture guide` is still the only source of that.
 ///
+/// ## Verification status, stated plainly
+///
+/// Wired and confirmed receiving: the collector is constructed at engine start
+/// and takes every sample and every input event. **The onset-to-snippet path has
+/// not been exercised end to end**, because doing so needs an onset, and an
+/// onset needs a real tap. Speaker impulses at full volume, sparse enough not to
+/// lift the adaptive noise floor, still fall under `DSPTuning.minThresholdG`;
+/// the Taptic Engine measures 2.5x the noise floor against the ~6x needed. The
+/// format contract a snippet must satisfy is under test in
+/// `PassiveCaptureTests`; the trigger path is not, and one real tap settles it.
+///
 /// The written session is marked `passive` in its notes and carries
 /// `expected_triggers = 0`, so the harness treats it as a false-positive set
 /// rather than a detection set. Nothing downstream can mistake it for prompted

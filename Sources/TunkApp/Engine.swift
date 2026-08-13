@@ -215,6 +215,20 @@ final class Engine: ObservableObject {
         guard perms.ready else {
             stopSensors()
             status = .needsPermission
+            // Say so on stderr as well as in the menubar. Running the binary
+            // from a terminal — which is how every probe and every collection
+            // run starts — otherwise looks like a working app that simply never
+            // sees a tap. Rebuilding the bundle revokes these grants, so this
+            // fires far more often during development than in normal use.
+            FileHandle.standardError.write(Data("""
+            tunk: NOT ARMED — missing permission
+              input monitoring: \(perms.inputMonitoring ? "granted" : "MISSING")
+              accessibility:    \(perms.accessibility ? "granted" : "MISSING")
+            Add this exact binary in System Settings > Privacy & Security, then
+            relaunch. A rebuilt bundle is a new binary even at the same path, so
+            the grant has to be renewed after every build.
+
+            """.utf8))
             return
         }
 
