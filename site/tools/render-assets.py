@@ -26,6 +26,7 @@ image placeholders.
 
 Needs: playwright (with chromium installed) and ImageMagick's `magick`.
 """
+import json
 import os
 import shutil
 import subprocess
@@ -51,8 +52,30 @@ RENDERS = [
     ("icon-maskable-512.png", 512, BLEED),
 ]
 
+# Corner-alpha thresholds, IDENTITY.md section 8. A full-bleed render must have
+# no transparent gutter for iOS or Android to double-mask; a squircle render must
+# keep its own. Measured on the current set: full-bleed 1.000 and 0.996, squircle
+# 0.000 to 0.004.
+#
+# These are thresholds, not equalities, and that matters. A full-bleed render
+# antialiases its own corner pixel, so `alpha == 1` FAILS ON A CORRECT FILE, and
+# `alpha == 0` fails on a correct 16 px squircle for the same reason. A check
+# that cries wolf gets switched off, which is worse than no check.
+OPAQUE_MIN = 0.95
+TRANSPARENT_MAX = 0.05
+
 # The gap between the two amber strikes must survive the smallest render, or the
 # mark stops saying "double". IDENTITY.md section 8, "the one number to protect".
+#
+# Measured on favicon.svg, deliberately. IDENTITY section 8 gives two gap
+# figures and they are not interchangeable:
+#
+#   favicon.svg   7.5 units on 64    1.88 px at 16 px   <- what ships at 16 px
+#   icon.svg      98 units on 1024   1.53 px at 16 px   <- master constraint only
+#
+# icon.svg is never rendered at 16 px, so a guard reading it would be checking a
+# size that never reaches a browser tab. If this ever reports 1.53, someone has
+# pointed it at the wrong file.
 MIN_GAP_PX = 1.4
 
 
@@ -65,9 +88,59 @@ def gap_at(size_px):
     circles = [(float(m.group(1)), float(m.group(2)))
                for m in re.finditer(r'<circle cx="([\d.]+)"[^/]*?r="([\d.]+)"[^/]*fill="#FF', svg)]
     if len(circles) != 2:
-        return None
+        raise SystemExit(
+            f"refusing to build: found {len(circles)} amber strikes in "
+            f"{os.path.basename(FLAT)}, expected 2, so the gap cannot be "
+            f"measured. If the mark was legitimately redrawn, update this "
+            f"parser rather than deleting the check — an unverifiable mark "
+            f"must not ship unverified. See IDENTITY.md section 8.")
     (cx1, r1), (cx2, r2) = sorted(circles)
     return ((cx2 - r2) - (cx1 + r1)) * size_px / units
+
+
+def corner_alpha(path):
+    """Alpha of the top-left pixel, 0.0 to 1.0."""
+    out = subprocess.run(["magick", path, "-crop", "1x1+0+0", "-format", "%[fx:a]", "info:"],
+                         capture_output=True, text=True, check=True)
+    return float(out.stdout.strip())
+
+
+def verify():
+    """Assert every render carries the gutter its platform expects.
+
+    Two independent failures share one visual symptom, so fixing either alone
+    looks complete while the other still ships:
+
+      wrong source   apple-touch-icon.png cut from icon.svg
+      wrong manifest a `purpose: maskable` entry pointed at a squircle PNG
+
+    Both surface only once someone adds the site to a home screen, which is why
+    this is a build assertion and not a note in the README.
+    """
+    problems = []
+    for out, size, src in RENDERS:
+        a = corner_alpha(os.path.join(HERE, out))
+        if src is BLEED:
+            ok, want = a > OPAQUE_MIN, f"> {OPAQUE_MIN} (full bleed, platform masks it)"
+        else:
+            ok, want = a < TRANSPARENT_MAX, f"< {TRANSPARENT_MAX} (keeps its own squircle)"
+        print(f"  {out:24s} corner alpha {a:.3f}  {'ok' if ok else 'FAIL'}")
+        if not ok:
+            problems.append(f"{out}: corner alpha {a:.3f}, expected {want}")
+
+    # The manifest declaration fails identically to a wrong source, so check it too.
+    manifest = json.load(open(os.path.join(SITE, "site.webmanifest")))
+    bleed_outputs = {out for out, _, src in RENDERS if src is BLEED}
+    for entry in manifest.get("icons", []):
+        name = entry["src"].lstrip("/")
+        if entry.get("purpose") == "maskable" and name not in bleed_outputs:
+            problems.append(
+                f"site.webmanifest declares {entry['src']} as maskable, but it is "
+                f"not cut from icon-fullbleed.svg. Android will double-mask it.")
+
+    if problems:
+        raise SystemExit("refusing to install:\n  " + "\n  ".join(problems)
+                         + "\nSee IDENTITY.md section 8.")
 
 
 def render(browser):
@@ -126,9 +199,7 @@ def install():
 
 def main():
     g = gap_at(16)
-    if g is None:
-        print("WARNING: could not measure the strike gap in favicon.svg")
-    elif g < MIN_GAP_PX:
+    if g < MIN_GAP_PX:
         raise SystemExit(
             f"refusing to build: strike gap is {g:.2f} px at 16 px, below the "
             f"{MIN_GAP_PX} px floor. The two strikes will fuse and the mark "
@@ -141,6 +212,7 @@ def main():
         render(b)
         og(b)
         b.close()
+    verify()
     install()
 
 

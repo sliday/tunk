@@ -102,14 +102,61 @@ Everything is rendered in headless Chromium. **ImageMagick's own SVG renderer
 must not be used for the icon**; it flattens the gradients into mud, which on
 the first attempt turned the 512 into a brown blob.
 
+#### The masking assertion
+
+Before installing anything, `render-assets.py` reads the top-left pixel of every
+render and refuses to install if the gutter is wrong:
+
+| Files | Corner alpha | Meaning |
+|---|---|---|
+| `apple-touch-icon.png`, `icon-maskable-512.png` | **> 0.95** | No gutter for the platform to double-mask |
+| `icon-16/32/48`, `icon-192`, `icon-512` | **< 0.05** | The gutter is the squircle, and it stays |
+
+It also reads `site.webmanifest` and fails if a `"purpose": "maskable"` entry
+points at a PNG that was not cut from `icon-fullbleed.svg`.
+
+Both checks exist because **two independent failures share one visual symptom**,
+so fixing either alone looks complete while the other still ships. The wrong
+source produces a rounded tile floating inside another rounded tile. The wrong
+manifest declaration produces exactly the same thing from a correctly cut file.
+Neither is visible in a browser; both appear only once someone saves the site to
+a home screen. This project shipped both at once and caught them by review.
+
+**These are thresholds, not equalities, and that is the point.** A full-bleed
+render antialiases its own corner pixel, so `alpha == 1` fails on a correct file
+— `icon-maskable-512.png` measures 0.996. `alpha == 0` fails for the same reason
+on a correct 16 px squircle, which measures 0.004. A check that cries wolf gets
+switched off, which leaves you worse off than no check.
+
+All three paths are tested rather than assumed: the current build passes, an
+`apple-touch-icon.png` swapped for the squircle stops the install at alpha 0.000,
+and a manifest declaring `icon-512.png` maskable stops it by name.
+
 #### The gap guard
 
-`render-assets.py` measures the gap between the two amber strikes in
-`favicon.svg` before it renders anything, and **refuses to build** if that gap
-falls below 1.4 px at a 16 px render. It is 1.93 px as drawn. Below the floor
-the two strikes fuse into one disc and the mark stops saying "double", which is
-the entire product. `IDENTITY.md` section 8 calls this "the one number to
-protect", so it is checked rather than trusted.
+`render-assets.py` measures the gap between the two amber strikes before it
+renders anything and **refuses to build** if that gap falls below 1.4 px at a
+16 px render. It is 1.88 px as drawn. Below the floor the two strikes fuse into
+one disc and the mark stops saying "double", which is the entire product.
+`IDENTITY.md` section 8 calls this "the one number to protect", so it is checked
+rather than trusted.
+
+It measures **`favicon.svg`**, and the file matters. Section 8 gives two gap
+figures which are not interchangeable:
+
+| File | Gap in its own grid | At 16 px | Role |
+|---|---|---|---|
+| `favicon.svg` | 7.5 units on 64 | **1.88 px** | What actually renders below 32 px. Assert on this. |
+| `icon.svg` | 98 units on 1024 | 1.53 px | A constraint on the master. Never rendered at 16 px. |
+
+A guard reading `icon.svg` would be checking a size that never reaches a browser
+tab. If the build ever prints 1.53, someone has pointed it at the wrong file.
+
+The check also refuses to build when it finds anything other than two amber
+strikes, rather than warning and carrying on. A mark it cannot measure must not
+ship unmeasured. Both paths are tested: a mutated mark with the strikes moved
+together stops the build at 0.12 px, and a mark with one strike removed stops it
+with a parse error that says to fix the parser rather than delete the check.
 
 **If `design/icon.svg` or `design/favicon.svg` changes, the whole icon set and
 `og.png` need regenerating.** They are snapshots, not references.

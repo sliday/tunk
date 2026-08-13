@@ -419,17 +419,43 @@ adds the site to a home screen. Ship a distinct `icon-maskable-512.png` from
 `icon-fullbleed.svg`, point the maskable entry at that file alone, and mark every other
 entry `"purpose": "any"` explicitly.
 
+Two independent failure modes, one visual symptom. Fixing either alone looks complete while
+shipping the other, which is why the check below has to cover both.
+
 ### Check it mechanically, not by eye
 
-Neither failure above is visible in a browser. Both are one assertion away:
+Neither failure above is visible in a browser. Both are one assertion away, on corner-pixel
+alpha:
 
-- `apple-touch-icon.png` and `icon-maskable-512.png` must be **fully opaque** — alpha 1 in
-  every corner pixel.
-- `icon-512.png`, `icon-192.png` and every `.icns` member must have **alpha 0** in the
-  corner. That gutter is the squircle and it belongs there.
+| File | Corner alpha | Meaning |
+|---|---|---|
+| `apple-touch-icon.png`, `icon-maskable-512.png` | **> 0.95** | No gutter. Nothing for iOS or Android to double-mask |
+| `icon-512.png`, `icon-192.png`, every `.icns` member | **< 0.05** | The gutter is the squircle, and it belongs there |
 
-Wire both into whatever cuts your assets. A rule in this document is a thing someone can
-misread; an assertion in the build is not.
+Also assert that no `"purpose": "maskable"` entry in the manifest points at a PNG cut from
+anything but `icon-fullbleed.svg`. The alpha check alone will not catch a correct file
+declared wrongly.
+
+**Write thresholds on both sides, never `== 1` and `== 0`.** Every render antialiases its
+own corner pixel, and the measured values sit off the round number in both directions:
+
+```
+apple-touch-icon.png    1.000
+icon-maskable-512.png   0.996    <- not 1
+icon-16.png             0.004    <- not 0
+icon-32/48/192/512      0.000
+```
+
+So `alpha == 1` fails on a correct `icon-maskable-512.png`, and `alpha == 0` fails on a
+correct `icon-16.png`. The transparent side is not the safe side; it only looks that way
+because the larger renders happen to land on zero. The first thing anyone does with a check
+that fires on a correct build is switch it off, which leaves you with neither the check nor
+the rule.
+
+Test the assertion against a deliberately broken build before trusting it. An untested
+assertion is a confident guess. Wire all of this into whatever cuts your assets: a rule in
+this document is a thing someone can misread, and an assertion in the build is not — but
+only if the assertion is right, and you find that out by running it.
 
 ### The one number to protect
 
@@ -446,6 +472,12 @@ Two figures, and they measure different files. Keep them straight:
 
 A guard that measures `icon.svg` and reports 1.53 is measuring a size that never ships.
 Measure `favicon.svg`, and expect 1.88.
+
+The guard must **refuse to build**, not warn and carry on. It also has to handle not
+finding two strikes at all — a redraw that leaves one, or that changes the markup enough to
+defeat the parser, is exactly the change most likely to break the mark. Refuse there too,
+and say so in a message that tells the next person to fix the parser rather than delete the
+check.
 
 ### Rasterising
 
