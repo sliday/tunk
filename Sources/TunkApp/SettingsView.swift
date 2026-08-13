@@ -5,6 +5,16 @@ import TunkEmit
 
 final class PanelModel: ObservableObject {
     @Published var showCalibration = false
+
+    /// Whether the panel is actually on screen.
+    ///
+    /// This drives the tap monitor's 60 Hz timer, and it is owned by the window
+    /// rather than by the view because SwiftUI's `onDisappear` does not fire for
+    /// a hosted view whose window is merely ordered out. The settings window is
+    /// deliberately kept alive between opens (`isReleasedWhenClosed = false`) so
+    /// reopening shows it settled, which means the view hierarchy stays mounted
+    /// and the monitor would otherwise poll forever after the first open.
+    @Published var isOnScreen = false
 }
 
 struct SettingsView: View {
@@ -12,6 +22,15 @@ struct SettingsView: View {
     @ObservedObject var engine: Engine
     @ObservedObject var panel: PanelModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Slider floor for the gate window, in ms. A fast typist puts ~100 ms
+    /// between keystrokes, so a gate much under this leaves gaps typing can
+    /// fire through. The harness sets `DetectorConfig` directly and is not
+    /// bound by this; the panel is where a user could do it by accident.
+    static let gateFloorMs: Double = 60
+    /// Below this the panel explains the cost. The PRD's own starting range is
+    /// 150–200 ms.
+    static let gateCautionMs: Double = 150
+
     @State private var showAdvanced = false
     /// Keyed by tap count: each row's Test button reports into its own row.
     @State private var testResults: [Int: String] = [:]
@@ -134,7 +153,8 @@ struct SettingsView: View {
         Card(title: "Tap monitor",
              caption: "Onsets as they land, with the gate window shaded. If a spike is grey "
                     + "the gate ate it on purpose — that is typing suppression working.") {
-            TapMonitorView(engine: engine, armed: engine.status.isArmed)
+            TapMonitorView(engine: engine, armed: engine.status.isArmed,
+                           onScreen: panel.isOnScreen)
             // A gesture the detector saw and deliberately did not act on. Without
             // this the app just looks broken to someone tapping three times.
             if let seen = engine.lastUnboundGesture,
@@ -167,14 +187,30 @@ struct SettingsView: View {
                    readout: String(format: "%.2f×", settings.config.sensitivity),
                    help: "Lower fires on lighter taps. Higher needs a firmer knock.")
 
+            // Floored, not free. The gate is the single mechanism that stops
+            // typing from firing the detector, and the PRD calls typing false
+            // positives the make-or-break metric — a slider that reaches 0
+            // lets a user switch that defence off by dragging, with no idea
+            // what they just did. The floor is 60 ms; below the PRD's own
+            // 150 ms starting point the panel says what it costs.
             slider(title: "Gate window",
                    value: Binding(
                     get: { Double(settings.config.gateWindowNs) / 1_000_000 },
                     set: { settings.config.gateWindowNs = Int64($0 * 1_000_000) }),
-                   range: 0...400, step: 10,
+                   range: Self.gateFloorMs...400, step: 10,
                    readout: String(format: "%.0f ms", Double(settings.config.gateWindowNs) / 1_000_000),
                    help: "Onsets are ignored for this long after any keystroke or click. "
                        + "This is the knob that kills typing false positives.")
+
+            if Double(settings.config.gateWindowNs) / 1_000_000 < Self.gateCautionMs {
+                Text("Below \(Int(Self.gateCautionMs)) ms the gate stops covering the gap "
+                   + "between keystrokes, so typing can fire a tap. Raise it back to "
+                   + "180 ms if Tunk starts triggering mid-sentence.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             // Read what is in force, not what was typed. The detector clamps
             // incoherent combinations on every write, so these two can differ —

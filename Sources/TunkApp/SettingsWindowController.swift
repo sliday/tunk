@@ -40,6 +40,34 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         engine.refreshShortcutCatalog()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        panel.isOnScreen = true
         if startCalibration { panel.showCalibration = true }
+    }
+
+    // MARK: - visibility
+
+    // The tap monitor polls the engine 60 times a second. It must run only
+    // while the panel is actually visible, and the window is the only thing
+    // that knows: this window is kept alive between opens, so closing it orders
+    // it out without unmounting the SwiftUI view, and `onDisappear` never
+    // fires. Wiring the timer to the view's lifecycle left it running forever
+    // after the first open.
+
+    func windowWillClose(_ notification: Notification) {
+        panel.isOnScreen = false
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        panel.isOnScreen = false
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        panel.isOnScreen = window.isVisible
+    }
+
+    /// Also covers the window being fully hidden behind another one, where the
+    /// trace is redrawing pixels nobody can see.
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        panel.isOnScreen = window.isVisible && window.occlusionState.contains(.visible)
     }
 }

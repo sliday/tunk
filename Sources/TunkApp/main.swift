@@ -14,6 +14,15 @@ if let index = arguments.firstIndex(of: "--dump-glyphs") {
     GlyphDump.run(into: directory)
     exit(0)
 }
+if let index = arguments.firstIndex(of: "--cpu-probe") {
+    let seconds = index + 1 < arguments.count ? Double(arguments[index + 1]) ?? 10 : 10
+    app.setActivationPolicy(.accessory)
+    Diagnostics.cpuProbe(seconds: seconds)
+}
+if arguments.contains("--config-trace") {
+    app.setActivationPolicy(.accessory)
+    Diagnostics.configTrace()
+}
 if let index = arguments.firstIndex(of: "--dump-panel") {
     let directory = index + 1 < arguments.count ? arguments[index + 1] : "."
     app.setActivationPolicy(.accessory)

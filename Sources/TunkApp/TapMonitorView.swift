@@ -13,10 +13,17 @@ import TunkCore
 ///  3. Nothing above this view observes either clock, so a moving trace never
 ///     invalidates the sliders, the cards or the window chrome.
 ///
-/// Measured on this machine (M4 Max, 120 Hz display): one shared 60 Hz object
-/// driving the whole panel cost 28 % of a core. This arrangement costs 7–9 %,
-/// and only while the panel is open. With the panel closed the whole app sits
-/// at 1.2 % with the sensor running at 796 Hz.
+/// The split into two clocks is a design choice, not a measured one — the
+/// earlier version of this comment quoted CPU figures that were never measured,
+/// including a "1.2 % with the panel closed" that was false: the timer was
+/// wired to `onDisappear`, which never fires for a window that is ordered out
+/// rather than unmounted, so it ran forever after the panel was opened once.
+///
+/// Run `tunk --cpu-probe` for the real numbers on this machine. It samples the
+/// process's own user+system time with the panel closed, open, and closed again,
+/// so a regression of that leak shows up as the third phase not returning to the
+/// first. Figures measured that way are in the report; do not put a number here
+/// that you have not run that probe to get.
 final class MonitorStore {
     let trace = TraceModel()
     let numbers = NumbersModel()
@@ -103,6 +110,9 @@ final class NumbersModel: ObservableObject {
 struct TapMonitorView: View {
     let engine: Engine
     var armed: Bool
+    /// Driven by the window, not by SwiftUI's view lifecycle. See
+    /// `PanelModel.isOnScreen` for why `onDisappear` cannot be trusted here.
+    var onScreen: Bool
     @State private var store = MonitorStore()
 
     var body: some View {
@@ -114,8 +124,15 @@ struct TapMonitorView: View {
             MonitorNumbers(model: store.numbers)
             legend
         }
-        .onAppear { store.start(engine: engine) }
+        .onAppear { sync() }
         .onDisappear { store.stop() }
+        .onChange(of: onScreen) { _ in sync() }
+    }
+
+    /// The only place the timer is started or stopped. Both calls are
+    /// idempotent, so a duplicate visibility notification costs nothing.
+    private func sync() {
+        onScreen ? store.start(engine: engine) : store.stop()
     }
 
     private var legend: some View {
