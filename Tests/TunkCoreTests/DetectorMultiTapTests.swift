@@ -167,11 +167,25 @@ final class DetectorMultiTapTests: XCTestCase {
         XCTAssertEqual(fixed.refractoryNs, DetectorConfig.maxWindowNs)
         XCTAssertEqual(config.coherenceIssues.count, 2)
 
+        // An unsupported count is DROPPED, not clamped into range. Clamping
+        // used to rewrite the whole armed set through the single-value
+        // `tapCountToFire` setter, so {0, 2} became {1}: double disarmed and
+        // single armed — the count that fires on every mug and every footfall.
+        // Arming a count the user never asked for is worse than arming nothing,
+        // and the change is reported in `coherenceIssues` either way.
         config = base
-        config.tapCountToFire = 9
-        XCTAssertEqual(config.madeCoherent().tapCountToFire, 3)
-        config.tapCountToFire = 0
-        XCTAssertEqual(config.madeCoherent().tapCountToFire, 1)
+        config.armedTapCounts = [9]
+        XCTAssertEqual(config.madeCoherent().armedTapCounts, [])
+        XCTAssertTrue(config.coherenceIssues.contains { $0.field == "armedTapCounts" })
+
+        config = base
+        config.armedTapCounts = [0]
+        XCTAssertEqual(config.madeCoherent().armedTapCounts, [])
+
+        config = base
+        config.armedTapCounts = [0, 2, 9]
+        XCTAssertEqual(config.madeCoherent().armedTapCounts, [2],
+                       "valid counts must survive alongside an invalid one")
 
         config = base
         config.sensitivity = 0

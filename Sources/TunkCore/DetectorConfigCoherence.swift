@@ -120,15 +120,20 @@ extension DetectorConfig {
             out.minInterTapNs = out.maxInterTapNs
         }
 
-        if !supportedTapCounts.contains(out.tapCountToFire) {
-            let clamped = min(max(out.tapCountToFire, supportedTapCounts.lowerBound),
-                              supportedTapCounts.upperBound)
+        // Filter the armed set, never rewrite it through `tapCountToFire`. That
+        // setter replaces the whole set with one value, so clamping this way
+        // turned {0, 2} into {1} — disarming double and arming single tap, the
+        // count that fires on every mug and every footfall. Dropping the
+        // unsupported entry and keeping the rest is the only safe move.
+        let unsupported = out.armedTapCounts.filter { !supportedTapCounts.contains($0) }
+        if !unsupported.isEmpty {
+            let kept = out.armedTapCounts.filter { supportedTapCounts.contains($0) }
             issues.append(CoherenceIssue(
-                field: "tapCountToFire",
+                field: "armedTapCounts",
                 reason: "only \(supportedTapCounts.lowerBound)...\(supportedTapCounts.upperBound) "
-                      + "taps can be told apart",
-                applied: "\(clamped)"))
-            out.tapCountToFire = clamped
+                      + "taps can be told apart, so \(unsupported.sorted()) cannot be armed",
+                applied: kept.isEmpty ? "nothing armed" : "\(kept.sorted())"))
+            out.armedTapCounts = kept
         }
 
         if !(out.sensitivity.isFinite && out.sensitivity > 0) {

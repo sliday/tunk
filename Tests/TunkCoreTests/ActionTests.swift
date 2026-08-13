@@ -856,15 +856,20 @@ final class DetectorArmingContractTests: XCTestCase {
         XCTAssertTrue(fires(armed: [1, 2], taps: 2), "double tap must fire when armed")
     }
 
-    /// The trap. `nil` makes the detector derive from `config.tapCountToFire`,
-    /// which is the *lowest* armed count — so a config armed for both fires
-    /// single only, and double taps do nothing. This is why the factory must
-    /// never leave it nil.
-    func testLeavingArmingNilArmsOnlyTheLowestCount() {
+    /// This test used to assert the trap: `nil` derived the firing counts from
+    /// `config.tapCountToFire`, the *lowest* armed count, so a config armed for
+    /// both fired single only and double-tap silently did nothing. It said
+    /// "if this ever passes, the detector's nil default changed and
+    /// DetectorFactory can stop compensating for it".
+    ///
+    /// That is exactly what happened: the detector now reads the whole
+    /// `config.armedTapCounts`, so `nil` is safe and the factory no longer has
+    /// to compensate. Inverted rather than deleted, so the trap stays closed.
+    func testLeavingArmingNilHonoursEveryArmedCount() {
         XCTAssertTrue(fires(armed: nil, taps: 1))
-        XCTAssertFalse(fires(armed: nil, taps: 2),
-                       "if this ever passes, the detector's nil default changed and "
-                       + "DetectorFactory can stop compensating for it")
+        XCTAssertTrue(fires(armed: nil, taps: 2),
+                      "with single and double both armed, omitting the override must "
+                      + "still fire double — deriving from the lowest count is the bug")
     }
 
     /// An unarmed count is silent, not an error — the quiet no-op the panel and

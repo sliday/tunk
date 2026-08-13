@@ -282,7 +282,15 @@ public final class TapDetector: TapDetecting {
     // MARK: - Internals
 
     private static func resolveFiringCounts(config: DetectorConfig, armed: Set<Int>?) -> Set<Int> {
-        let requested = armed ?? [config.tapCountToFire]
+        // Read the whole armed set, never `tapCountToFire`. That accessor is
+        // `armedTapCounts.min()`, so going through it silently drops every count
+        // above the lowest: with single and double both bound it armed single
+        // only and double-tap went dead without a word.
+        //
+        // An empty set means nothing is bound, and that is a real state the
+        // settings panel can produce. It must fire nothing, not fall back to a
+        // default — firing a count the user did not arm is worse than silence.
+        let requested = armed ?? config.armedTapCounts
         return requested.filter { DetectorConfig.supportedTapCounts.contains($0) }
     }
 
