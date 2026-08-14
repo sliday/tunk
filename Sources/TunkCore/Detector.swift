@@ -210,6 +210,7 @@ public final class TapDetector: TapDetecting {
         }
 
         let threshold = currentThreshold()
+        envelopeForTesting = envelope
         var onsetTrigger: Trigger?
 
         if armed {
@@ -308,6 +309,12 @@ public final class TapDetector: TapDetecting {
     public var envelope: Double { chain.envelope }
     /// Current adaptive noise floor, in g.
     public var noiseFloor: Double { chain.noiseFloor }
+
+    // Diagnostic only. Reading the arm state and the last envelope value is the
+    // only way to tell "the tap was too weak" apart from "the detector was
+    // still disarmed when it arrived", and those two have opposite fixes.
+    public var isArmedForTesting: Bool { armed }
+    public private(set) var envelopeForTesting: Double = 0
     /// The threshold an onset would have to beat right now, in g.
     public var activeThreshold: Double { currentThreshold() }
     /// The counts that can actually fire, after unsupported ones are dropped.
