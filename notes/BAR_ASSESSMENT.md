@@ -52,6 +52,33 @@ What it does establish, and this matters: **the four held-out lap misses are
 recoverable by changing the detector, without touching a single label.** They are
 not a labelling artifact and not a hardware limit.
 
+### Searched properly, on train only, the corner cannot hold soft
+
+Knowing a solution exists somewhere in the space, the disciplined question is
+whether one exists that keeps soft. Swept on training data, threshold refit at
+every corner, soft shown as a count because that is where it breaks:
+
+```
+hp     thr      desk      soft     lap      lapFP   typingFP
+30     0.008    95.65    11/20    36/80     6.54       2
+30     0.012    95.65    12/20    56/80    13.08       0
+40     0.012    95.65    15/20    64/80    10.90       0
+50     0.012    95.65    18/20    67/80    10.90       0
+60     0.012    95.65    17/20    70/80     8.72       0
+```
+
+**No cell holds soft at 20/20.** The best is 18/20, and at the low corners a low
+threshold starts breaking the make-or-break metric — two typing false triggers at
+30 Hz / 0.008 g. So the 60 Hz point's held-out soft 20/20 is a favourable roll on
+twenty gestures, not a property of the configuration: on eighty times the lap
+evidence and the same twenty soft gestures it reads 17/20.
+
+The resonator remains the best known point and beats every cell above: train soft
+**20/20** with lap 73/80, held-out desk 20/20, soft 20/20, lap 19/20. Its
+remaining costs are one held-out lap gesture and a lap false-trigger rate of
+13.08 per 20 minutes against a bar of 1 — which the corrected labels take to 2
+false triggers (4.36 per 20 min), still above the bar.
+
 ## The largest open question: the lap labels may be wrong
 
 A critic commissioned to refute the unreachability claim came back with
