@@ -201,6 +201,39 @@ final class CaptureCLITests: XCTestCase {
 
     // MARK: - The recording plan itself
 
+    /// Every tunk-capture command in bin/record-for-the-bar.sh, run as written.
+    ///
+    /// That script is the one the operator will actually run to close the eight
+    /// held-out checks that currently have no data behind them, and it is worth
+    /// exactly as much as its flags are valid. A plan of mine once carried
+    /// `--category` and `--duration` on a subcommand that accepts neither; they
+    /// were swallowed and an hour of recording produced the wrong thing.
+    func testEveryCommandInTheBarScriptRuns() throws {
+        let url = CaptureCLITests.repoRoot.appendingPathComponent("bin/record-for-the-bar.sh")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        // The script invokes $CAPTURE, so normalise that to the literal the
+        // command scraper looks for before scraping.
+        let normalised = text.replacingOccurrences(of: "$CAPTURE", with: "tunk-capture")
+            .replacingOccurrences(of: "\"$surface\"", with: "desk")
+            .replacingOccurrences(of: "\"$OUT\"", with: "data/holdout")
+            .replacingOccurrences(of: "\"$SPLIT\"", with: "test")
+        let commands = CaptureCLITests.captureCommands(inShell: normalised)
+        XCTAssertGreaterThanOrEqual(commands.count, 4,
+                                    "found almost no commands in record-for-the-bar.sh")
+        for argv in commands {
+            guard let sub = argv.first else { continue }
+            guard sub == "guide" || sub == "record" else {
+                let r = try capture(argv + ["--help"])
+                XCTAssertEqual(r.status, 0, "unknown subcommand in record-for-the-bar.sh: "
+                               + argv.joined(separator: " ") + "\n" + r.all)
+                continue
+            }
+            let r = try capture(argv + ["--dry-run"])
+            XCTAssertEqual(r.status, 0, "record-for-the-bar.sh command failed:\n  tunk-capture "
+                           + argv.joined(separator: " ") + "\n" + r.all)
+        }
+    }
+
     /// Every command in notes/RECORDING_PLAN.md, run as written with `--dry-run`
     /// appended. The plan is what the operator follows; if it drifts away from the
     /// CLI again, this fails instead of an hour of recording.
@@ -253,7 +286,27 @@ final class CaptureCLITests: XCTestCase {
             guard let r = full.range(of: "tunk-capture ") else { continue }
             let tail = String(full[r.upperBound...])
             var argv = [String]()
-            for token in tail.split(separator: " ").map(String.init) where !token.isEmpty {
+            // Split on whitespace but keep quoted runs together. Splitting
+            // naively turned --notes "held-out typing, for the bar" into five
+            // arguments, and the CLI then rejected the stray words as
+            // positionals — a failure in the checker that looked exactly like a
+            // failure in the thing being checked.
+            var tokens = [String]()
+            var current = ""
+            var quote: Character?
+            for ch in tail {
+                if let q = quote {
+                    if ch == q { quote = nil } else { current.append(ch) }
+                } else if ch == "\"" || ch == "'" {
+                    quote = ch
+                } else if ch == " " {
+                    if !current.isEmpty { tokens.append(current); current = "" }
+                } else {
+                    current.append(ch)
+                }
+            }
+            if !current.isEmpty { tokens.append(current) }
+            for token in tokens where !token.isEmpty {
                 if token.hasPrefix("$") {
                     argv += (vars[String(token.dropFirst())] ?? "").split(separator: " ").map(String.init)
                 } else {

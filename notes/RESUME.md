@@ -17,23 +17,37 @@ rate on every surface (zero loose credits — see the referee audit below):
 Harness verdict: **FAIL**, on lap detection. It would read INCOMPLETE even if
 lap passed, because held-out has no typing sessions.
 
-## The two recordings that are still missing
+## The recordings that are still missing — one command
 
-Neither is fixable in code. Both block the bar.
+Nothing here is fixable in code, and all of it blocks the bar.
 
 ```bash
 cd /Users/stas/Playground/tunk
-
-# 1. The make-or-break metric, out of sample. It has NEVER been graded on
-#    held-out data. ~5 min each. Headphones on — the tool speaks and beeps.
-./bin/tunk-capture guide --surface desk --only typing --typing-sec 300 --out data/holdout --split test
-./bin/tunk-capture guide --surface soft --only typing --typing-sec 300 --out data/holdout --split test
-./bin/tunk-capture guide --surface lap  --only typing --typing-sec 300 --out data/holdout --split test
-
-# 2. A larger held-out lap deck. At n=20, 98 % can only be met by 20/20 and one
-#    gesture is five points, so the set cannot tell a real fix from luck.
-./bin/tunk-capture guide --surface lap --only tap_deck --taps 60 --out data/holdout --split test
+./bin/record-for-the-bar.sh --dry-run     # see the plan, record nothing
+./bin/record-for-the-bar.sh               # about 28 minutes
 ```
+
+Headphones on: the tool speaks and beeps, and through speakers both shake the
+chassis into the data. Ctrl-C at any point flushes the stream and writes a valid
+session, so stopping early costs only what has not been recorded yet.
+
+It records three things:
+
+1. **Typing, all three surfaces, held out.** Eight checks currently read
+   `[ ---- ] no typing sessions` / `no confound sessions`, which is why the
+   harness returns INCOMPLETE rather than a verdict. Detection is measured out
+   of sample; the make-or-break metric never has been.
+2. **`confound_handling` and `confound_music`, all three surfaces.** Handling has
+   never been recorded on any surface and it is the one that prices the lap
+   false-trigger question — four of the six lap false triggers look like the
+   machine being shifted rather than tapped, and the corpus holds zero seconds
+   of a laptop on a lap while nobody is tapping it.
+3. **A sixty-gesture held-out lap deck.** At twenty, 98 % can only be met by
+   20/20, so one gesture is five points.
+
+Every command in that script is re-run with `--dry-run` by
+`CaptureCLITests.testEveryCommandInTheBarScriptRuns`, because a plan of mine
+once carried flags the CLI silently swallowed and cost an hour of recording.
 
 Worth adding, because posture is a measured hidden variable — one lap session
 scores below chance on three separate statistics while the others score
