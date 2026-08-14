@@ -74,9 +74,18 @@ run_once() {
 
   bar "next"
   if [ "$DATA" = "data/raw" ]; then
-    note "Held-out set is what decides pass or fail. Record it last:"
-    note "  ./bin/tunk-capture guide --surface desk --out data/holdout --split test --taps 20 --only tap_palmrest"
+    # This used to suggest a desk tap_palmrest deck, which was the gap when it
+    # was written and has not been the gap for a long time. Held-out now has
+    # twenty tap gestures on each of the three surfaces; what it has none of is
+    # typing or confound sessions, so eight checks read "no data" and the
+    # harness cannot return anything but INCOMPLETE however good detection gets.
+    note "Held-out decides pass or fail, and it is missing the sessions that"
+    note "grade the make-or-break metric. Eight checks currently read no data:"
+    note "  ./bin/record-for-the-bar.sh --dry-run   # see the plan, record nothing"
+    note "  ./bin/record-for-the-bar.sh             # about 28 minutes"
     note "  ./analyse.sh --holdout"
+  else
+    note "This is the set that decides. Do not tune against it."
   fi
   return $verdict
 }
