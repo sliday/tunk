@@ -1,0 +1,12 @@
+{"kind":"input_tap","t_ns":1339833,"text":"active"}
+{"kind":"phase","t_ns":1674458,"text":"start:tap_deck"}
+{"kind":"phase","t_ns":4589625,"text":"Deliberate double taps on the keyboard deck."}
+{"kind":"prompt","t_ns":4617292,"text":"After each beep, double tap the deck beside the keyboard. Two firm taps, then hands off."}
+{"group":0,"kind":"prompt","t_ns":11946510208,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":0,"kind":"beep","t_ns":11946565500}
+{"group":1,"kind":"prompt","t_ns":15855696375,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":1,"kind":"beep","t_ns":15855778625}
+{"group":2,"kind":"prompt","t_ns":19924356958,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":2,"kind":"beep","t_ns":19924432875}
+{"kind":"phase","t_ns":25577919208,"text":"stop"}
+{"kind":"phase","t_ns":25577997208,"text":"end:script"}

@@ -35,7 +35,8 @@ func usage() {
       tunk-label show  <session-dir>        per-group detail, for eyeballing
 
     FLAGS
-      --window-ms 1200   how long after a beep to look for the gesture
+      --window-ms 2600   how long after a beep to look for the gesture
+                         (covers ~1 s of human reaction time plus the tap pair)
       --snr 6            peak must clear this multiple of the noise floor
       --min-gap-ms 80    minimum spacing between the taps of one gesture
       --max-gap-ms 400   maximum spacing between the taps of one gesture
@@ -125,7 +126,12 @@ func sessions(at path: String) throws -> [Session] {
 
 // MARK: - Commands
 
-let windowNs = Int64((Double(flag("window-ms") ?? "1200") ?? 1200) * 1e6)
+// 2600 ms, not 1200. Measured against the operator's first real session: taps
+// land 994-1083 ms after the beep, because a human hears it, decides, and moves.
+// At 1200 ms the FIRST tap of a pair fit and the second fell outside, so a clean
+// double read as "one transient only" and a whole group read as silence. The
+// window has to cover reaction time plus the gesture, not just the gesture.
+let windowNs = Int64((Double(flag("window-ms") ?? "2600") ?? 2600) * 1e6)
 let minGapNs = Int64((Double(flag("min-gap-ms") ?? "80") ?? 80) * 1e6)
 let maxGapNs = Int64((Double(flag("max-gap-ms") ?? "400") ?? 400) * 1e6)
 let snr = Double(flag("snr") ?? "6") ?? 6

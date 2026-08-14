@@ -1,0 +1,22 @@
+{
+  "category" : "tap_deck",
+  "duration_ns" : 25579745458,
+  "epoch_mach_ns" : 502829879744458,
+  "epoch_wall_iso" : "2026-08-14T07:07:00.210Z",
+  "expected_triggers" : 3,
+  "machine" : {
+    "chip" : "Apple M4 Max",
+    "model" : "Mac16,6",
+    "os" : "26.5.2"
+  },
+  "nominal_interval_ns" : 1250625,
+  "nominal_rate_hz" : 799.6,
+  "operator_notes" : "",
+  "report_interval_us" : 1250,
+  "sample_count" : 20448,
+  "schema" : 1,
+  "session_id" : "tap_deck__desk__20260814-090700__8f0079",
+  "split" : "train",
+  "surface" : "desk",
+  "tool_version" : "tunk-capture 0.3.0"
+}
