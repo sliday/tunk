@@ -205,7 +205,30 @@ final class AppSettings: ObservableObject {
         var next = DetectorConfig.default
         // Calibration is a property of this machine and this user's hand, not a
         // tuning knob. Resetting the sliders must not throw it away.
+        //
+        // That meant the threshold only, and the learned RHYTHM went with the
+        // defaults: `calibratedInterTapNs` back to nil and the window it derived
+        // back to 220 ms. Measured consequence, on the very case the calibration
+        // copy exists for: a 230 ms-spaced double-tap fires with a learned
+        // 235 ms window and stops firing after a reset, while the calibration
+        // card still reads "calibrated" with the old threshold. The user's hand
+        // did not change when they moved a slider.
         next.calibratedThreshold = config.calibratedThreshold
+        next.calibratedInterTapNs = config.calibratedInterTapNs
+        if let learned = config.calibratedInterTapNs {
+            next.maxInterTapNs = learned
+            next.confirmWindowNs = learned
+        }
+        // Preserve what is ARMED, or this button silently stops a bound tap
+        // count from firing. `armDetectorForBoundCounts()` runs from
+        // `bindings.didSet` and from `init`, never from a wholesale config
+        // write, so a reset left bindings holding count 1 while armedTapCounts
+        // was back to [2]. Measured: a single synthetic tap fires [1] armed
+        // [1,2] and fires nothing armed [2], while the single-tap row still
+        // shows its hotkey and Test still works because Test bypasses the
+        // detector. A relaunch re-armed it, which is the "it worked yesterday"
+        // report nobody can reproduce.
+        next.armedTapCounts = config.armedTapCounts
         config = next
     }
 

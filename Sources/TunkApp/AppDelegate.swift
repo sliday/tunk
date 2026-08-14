@@ -43,6 +43,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] status in self?.render(status: status) }
             .store(in: &cancellables)
 
+        // Same treatment for a live action failure: it changes the glyph and the
+        // tooltip, so the render has to be driven by it too or the state only
+        // appears the next time something else happens to redraw.
+        engine.$lastActionFailed
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.render(status: self.engine.status)
+            }
+            .store(in: &cancellables)
+
         // A Shortcut renamed months ago surfaces here and nowhere else until the
         // user opens the panel. That is the whole point: passive, never a dialog.
         engine.$actionStats
@@ -152,6 +164,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let broken = engine.brokenBinding {
                 return "Shortcut \"\(broken.name)\" is missing — open Settings"
             }
+            if engine.lastActionFailed {
+                return "Last tap was detected but its action failed — open Settings"
+            }
             return String(format: "Listening · %.0f Hz · %d fired",
                           engine.sampleRateHz, engine.triggerCount)
         case .off:
@@ -190,7 +205,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // A broken binding does not stop detection, so it only overrides the
         // armed glyph. A sensor or permission problem is the bigger one and
         // keeps its own mark.
-        if state == .armed && engine.brokenBinding != nil { state = .actionBroken }
+        if state == .armed && (engine.brokenBinding != nil || engine.lastActionFailed) {
+            state = .actionBroken
+        }
         statusItem.button?.image = MenuBarGlyph.image(for: state)
         statusItem.button?.toolTip = "Tunk — " + statusText()
         refreshMenuText()

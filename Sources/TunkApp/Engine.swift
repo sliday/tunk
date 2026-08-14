@@ -70,6 +70,11 @@ final class Engine: ObservableObject {
     /// problems with different fixes.
     @Published private(set) var shortcutsReadable = false
 
+    /// Set when the most recent gesture fired but its action threw. Distinct
+    /// from `brokenBinding`, which is a static problem with what is configured;
+    /// this is a live failure of an action that looked fine.
+    @Published private(set) var lastActionFailed = false
+
     /// A bound Shortcut that no longer resolves. Passive by design — the
     /// menubar glyph and the panel show it, and nothing ever raises a dialog.
     var brokenBinding: BrokenBinding? { actionStats.brokenBinding }
@@ -344,7 +349,14 @@ final class Engine: ObservableObject {
         // Throws only on the hotkey path, and the runner has already put the
         // text in `stats.lastErrorText`; catching it here keeps it off the
         // sensor thread's call stack.
-        _ = try? runner.run(for: trigger)
+        // The failure is kept, not swallowed. It used to be `_ = try?`, and
+        // then `triggerCount` incremented and the glyph flashed regardless — so
+        // a hotkey being eaten by secure input, or a Shortcut that no longer
+        // exists, looked exactly like a working tap from the menubar. The text
+        // was visible only to somebody who already had Settings open, which is
+        // nobody who does not already suspect a problem.
+        var actionFailed = false
+        do { _ = try runner.run(for: trigger) } catch { actionFailed = true }
 
         // Measured after the runner returns, so this is onset-to-handoff: the
         // keystroke is out, or the shortcut has been handed to its own queue.
@@ -356,6 +368,10 @@ final class Engine: ObservableObject {
             guard let self else { return }
             self.triggerCount += 1
             self.lastLatencyMs = latencyMs
+            // Counted as detected either way — the gesture DID happen, and
+            // pretending otherwise would hide a detector working correctly
+            // behind an action that is not. The failure rides alongside.
+            self.lastActionFailed = actionFailed
             self.onTrigger?()
         }
     }
