@@ -92,6 +92,30 @@ naturally slower tapper from being failed by a number chosen for someone else,
 and the clamp is now reported to the user instead of applied silently — but it is
 not the lap fix, and nothing here should be read as one.
 
+### Correction: the ring carries what the noise floor did not
+
+The claim below — that nothing available separates the surfaces — is right about
+the noise floor and wrong as a general statement. Ring-to-strike, measured per
+session across both data roots:
+
+```
+desk  0.20-0.29   (3 sessions)
+soft  0.18-0.34   (2 sessions)
+lap   0.30-0.61   (5 sessions)
+```
+
+Lap runs 0.30-0.61 against 0.18-0.34 for desk and soft, overlapping only in
+0.30-0.34, which is two sessions out of ten. The noise floor by comparison reads
+0.00011 / 0.00014 / 0.00012 and separates nothing at all.
+
+Ten sessions is far too few to drive automatic profile switching, and the
+overlap is real. But the more useful point is that **the surface was never the
+thing worth knowing.** What predicts detection is how loudly the case rings, and
+that is measurable directly — a lap that does not ring works (a4a257, ratio 0.42,
+100 %) and a lap that does fails (13e15a, ratio 0.61, 80 %). Conditioning on the
+ring is strictly better than conditioning on the furniture, and it is what
+calibration now reports to the user.
+
 ### Why calibration cannot pick the surface for you
 
 Per-surface calibration helps (the table above), so the obvious next step is to
