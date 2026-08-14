@@ -84,6 +84,30 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   first — see the detector agent's report for what a shape test would key on and
   why tuning one against synthetic taps would only fit it to our imagination.
 
+  **In proportion: it is not observed in any real recording.** The synthetic
+  train fires 28.8 times per 60 s. The same detector fires **0 times in
+  39.7 minutes** of real non-tapping recordings. Both are true, and the
+  reconciliation is in how many onsets the detector declares at all:
+
+  ```
+  idle             0 and 3 onsets      over 26 minutes
+  confound_music   0 and 4 onsets      over 2.1 minutes
+  typing         540, 190, 269 onsets  over 11.7 minutes — all gated, 0 triggers
+  synthetic train ~480 knocks in 60 s, every one at 1.6x threshold
+  ```
+
+  Real ambient recordings barely produce a suprathreshold onset — at most four
+  across twenty-seven minutes. Typing produces hundreds and the input gate kills
+  every one. The synthetic train resembles neither: sustained suprathreshold
+  impacts every 100-400 ms for a minute, with no keyboard activity to gate them.
+
+  So the finding describes a real weakness in the grouping logic and a regime
+  this machine has never been recorded in. What would test it honestly is
+  `confound_footfall` — sustained mechanical disturbance with nobody typing —
+  which has never been recorded on any surface. Until it is, "24 triggers per
+  minute" should be read as what the detector does to a pathological input, not
+  as what a user would experience.
+
   **The resonator does not close it.** Measured with each front end's knock
   amplitude scaled to its own chain gain, and with a control requiring each to
   detect a real double-tap at that amplitude: shipped 28.8 per 60 s, resonator
