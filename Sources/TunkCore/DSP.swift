@@ -171,10 +171,32 @@ public struct DSPTuning: Sendable, Equatable {
     /// Envelope must fall back below this fraction of the threshold before the
     /// detector re-arms. Hysteresis, so one strike is one onset.
     public var releaseFraction: Double
-    /// Minimum spacing between two accepted onsets. Shorter than
-    /// `config.minInterTapNs` on purpose: ring-down inside this window is one
-    /// physical tap, while a second strike between this and `minInterTapNs` is a
-    /// real but illegal double and must kill the group rather than be swallowed.
+    /// Minimum spacing between two accepted onsets, in ns. **100 ms, set from
+    /// real recordings on a soft surface.**
+    ///
+    /// It was 30 ms, which was fine on a hard desk and wrong everywhere else. A
+    /// damped surface rings for far longer, so the envelope dips under the
+    /// re-arm level and climbs again on the same strike, declaring a spurious
+    /// third onset. That turns a double into an un-armed triple and the gesture
+    /// fires nothing — the detector was working, and the count was wrong.
+    ///
+    /// Measured across all three recorded tap sessions, triggers out of 20
+    /// prompted gestures each:
+    ///
+    ///     debounce   soft    desk    held-out
+    ///      30 ms     12/20   20/20   20/20
+    ///      50 ms     15/20   20/20   20/20
+    ///      80 ms     18/20   20/20   20/20
+    ///     100 ms     19/20   20/20   20/20
+    ///
+    /// Soft recovers from 60 % to 95 % and the hard-desk sessions do not move at
+    /// all. The shortest inter-tap interval ever recorded from this operator is
+    /// 149 ms, so a 100 ms debounce sits well clear of a real gesture.
+    ///
+    /// The cost is that the old bounce-rejection band between this and
+    /// `config.minInterTapNs` disappears: a second strike inside 100 ms now
+    /// merges into one onset instead of aborting the group. On a damped surface
+    /// that merge is the correct reading, and it is why this works.
     public var onsetDebounceNs: Int64
     /// How long after a crossing the peak is tracked before the onset's strength
     /// is published. Does not delay the trigger; grouping uses the crossing time.
@@ -232,7 +254,7 @@ public struct DSPTuning: Sendable, Equatable {
         noiseSnrMultiple: 4.0,
         minThresholdG: 0.02,
         releaseFraction: 0.4,
-        onsetDebounceNs: 30_000_000,
+        onsetDebounceNs: 100_000_000,
         peakHoldNs: 12_000_000,
         warmupSamples: 200,
         gapResetNs: 20_000_000,

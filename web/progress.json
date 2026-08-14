@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "title": "Tunk — gauntlet loop",
-  "generated_at": "2026-08-14T08:37:24Z",
+  "generated_at": "2026-08-14T09:00:48Z",
   "stale_after_s": 900,
   "cold_after_s": 7200,
   "primary_tap_count": "2",
@@ -1442,6 +1442,796 @@
                 "latency_max_ms": {
                   "value": 221.4,
                   "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 14,
+      "label": "10:42 · 8 session(s)",
+      "timestamp": "2026-08-14T08:42:58Z",
+      "status": "scored",
+      "headline": "fail — 8 session(s) graded across 2 surface(s)",
+      "biggest_gap": "desk: detection rate, all armed gestures — needs ≥ 98 %, got 95.65 % (22/23).",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false,
+        "warnings": [
+          "tap_deck__soft__20260814-104124__fe9b8c: group 1 has 1 onset(s) but intent 'double'. Scored as a 1-tap gesture (onset count wins).",
+          "tap_deck__soft__20260814-104124__fe9b8c: group 19 has 1 onset(s) but intent 'double'. Scored as a 1-tap gesture (onset count wins)."
+        ]
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 7,
+            "tap_groups": {
+              "1": 0,
+              "2": 23
+            }
+          },
+          "taps": {
+            "1": {
+              "metrics": {
+                "detection_rate": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no labelled tap groups in this scope"
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 7
+                },
+                "latency_p50_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_p95_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_max_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            },
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.65,
+                  "n": 23
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 7
+                },
+                "latency_p50_ms": {
+                  "value": 198.9,
+                  "n": 22
+                },
+                "latency_p95_ms": {
+                  "value": 210.1,
+                  "n": 22
+                },
+                "latency_max_ms": {
+                  "value": 221.4,
+                  "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "1": 0,
+              "2": 18
+            }
+          },
+          "taps": {
+            "1": {
+              "metrics": {
+                "detection_rate": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no labelled tap groups in this scope"
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_p95_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_max_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            },
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 33.33,
+                  "n": 18
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 78.284,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 205.1,
+                  "n": 6
+                },
+                "latency_p95_ms": {
+                  "value": 218.9,
+                  "n": 6
+                },
+                "latency_max_ms": {
+                  "value": 218.9,
+                  "n": 6
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 15,
+      "label": "10:46 · 9 session(s)",
+      "timestamp": "2026-08-14T08:46:35Z",
+      "status": "scored",
+      "headline": "fail — 9 session(s) graded across 2 surface(s)",
+      "biggest_gap": "desk: detection rate, all armed gestures — needs ≥ 98 %, got 95.65 % (22/23).",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 7,
+            "tap_groups": {
+              "2": 23
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.65,
+                  "n": 23
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 7
+                },
+                "latency_p50_ms": {
+                  "value": 188.8,
+                  "n": 22
+                },
+                "latency_p95_ms": {
+                  "value": 200.1,
+                  "n": 22
+                },
+                "latency_max_ms": {
+                  "value": 211.4,
+                  "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 2,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 60.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 2
+                },
+                "latency_p50_ms": {
+                  "value": 196.4,
+                  "n": 12
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 12
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 12
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 16,
+      "label": "10:49 · 10 session(s)",
+      "timestamp": "2026-08-14T08:49:22Z",
+      "status": "scored",
+      "headline": "fail — 10 session(s) graded across 3 surface(s)",
+      "biggest_gap": "desk: detection rate, all armed gestures — needs ≥ 98 %, got 95.65 % (22/23).",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 7,
+            "tap_groups": {
+              "2": 23
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.65,
+                  "n": 23
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 7
+                },
+                "latency_p50_ms": {
+                  "value": 188.8,
+                  "n": 22
+                },
+                "latency_p95_ms": {
+                  "value": 200.1,
+                  "n": 22
+                },
+                "latency_max_ms": {
+                  "value": 211.4,
+                  "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 2,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 2
+                },
+                "latency_p50_ms": {
+                  "value": 193.9,
+                  "n": 19
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 19
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 19
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "lap": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 65.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 38.983,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 131.3,
+                  "n": 13
+                },
+                "latency_p95_ms": {
+                  "value": 212.6,
+                  "n": 13
+                },
+                "latency_max_ms": {
+                  "value": 212.6,
+                  "n": 13
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 17,
+      "label": "10:53 · 11 session(s)",
+      "timestamp": "2026-08-14T08:53:11Z",
+      "status": "scored",
+      "headline": "fail — 11 session(s) graded across 3 surface(s)",
+      "biggest_gap": "desk: detection rate, all armed gestures — needs ≥ 98 %, got 95.65 % (22/23).",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 7,
+            "tap_groups": {
+              "2": 23
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.65,
+                  "n": 23
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 7
+                },
+                "latency_p50_ms": {
+                  "value": 188.8,
+                  "n": 22
+                },
+                "latency_p95_ms": {
+                  "value": 200.1,
+                  "n": 22
+                },
+                "latency_max_ms": {
+                  "value": 211.4,
+                  "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 2,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 2
+                },
+                "latency_p50_ms": {
+                  "value": 193.9,
+                  "n": 19
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 19
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 19
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "lap": {
+          "coverage": {
+            "sessions": 2,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 65.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 12.593,
+                  "n": 2
+                },
+                "latency_p50_ms": {
+                  "value": 131.3,
+                  "n": 13
+                },
+                "latency_p95_ms": {
+                  "value": 212.6,
+                  "n": 13
+                },
+                "latency_max_ms": {
+                  "value": 212.6,
+                  "n": 13
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 18,
+      "label": "all three surfaces measured",
+      "timestamp": "2026-08-14T09:00:48Z",
+      "status": "scored",
+      "headline": "fail — 11 session(s) graded across 3 surface(s)",
+      "biggest_gap": "desk: detection rate, all armed gestures — needs ≥ 98 %, got 95.65 % (22/23).",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 7,
+            "tap_groups": {
+              "2": 23
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.65,
+                  "n": 23
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 7
+                },
+                "latency_p50_ms": {
+                  "value": 188.8,
+                  "n": 22
+                },
+                "latency_p95_ms": {
+                  "value": 200.1,
+                  "n": 22
+                },
+                "latency_max_ms": {
+                  "value": 211.4,
+                  "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 2,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 95.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 2
+                },
+                "latency_p50_ms": {
+                  "value": 193.9,
+                  "n": 19
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 19
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 19
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "lap": {
+          "coverage": {
+            "sessions": 2,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 65.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": 0,
+                  "n": 1
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 12.593,
+                  "n": 2
+                },
+                "latency_p50_ms": {
+                  "value": 131.3,
+                  "n": 13
+                },
+                "latency_p95_ms": {
+                  "value": 212.6,
+                  "n": 13
+                },
+                "latency_max_ms": {
+                  "value": 212.6,
+                  "n": 13
                 },
                 "stuck_modifiers": {
                   "value": null,

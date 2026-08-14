@@ -32,6 +32,11 @@ public struct OnsetPicker {
     /// And this absolute height, so a pathologically quiet session cannot make
     /// sensor dither look like a tap.
     public var absoluteFloor = 0.004        // g
+    /// How far a local maximum must stand above the dip separating it from a
+    /// taller neighbour, as a fraction of its own height. Stops ripple on a
+    /// decaying tail from counting as a second strike, while still separating
+    /// two real taps whose rings overlap — which is what a soft surface does.
+    public var prominenceFraction = 0.35
 
     public init() {}
 
@@ -93,24 +98,57 @@ public struct OnsetPicker {
         var found: [Peak] = []
         let minHeight = max(floor * snrThreshold, absoluteFloor)
 
+        // Every LOCAL maximum above the bar, not one per plateau.
+        //
+        // Taking a single maximum per contiguous run above `minHeight` looked
+        // right on a hard desk, where the ring decays below the bar between the
+        // two taps of a gesture. On a soft surface it does not: the case rings
+        // longer, the envelope never dips under the bar, and both taps merge
+        // into one plateau whose single reported peak is the louder strike. The
+        // second tap vanishes, the labeller writes a one-onset group, and the
+        // detector's perfectly correct trigger then scores as a false positive
+        // against a label anchored on the beep. That is how a working detector
+        // read 33 % on soft.
+        //
+        // A local maximum needs `prominence`: it must stand clear of the
+        // shallowest dip separating it from a taller neighbour, so ripple on the
+        // way down does not become a tap.
         var i = 0
         while i < samples.count, samples[i].tNs < from { i += 1 }
+        let start = i
         while i < samples.count, samples[i].tNs <= to {
             let v = env[i]
-            if v >= minHeight {
-                // Walk to the top of this plateau.
-                var j = i
-                var best = i
-                while j < samples.count, samples[j].tNs <= to, env[j] >= minHeight {
-                    if env[j] > env[best] { best = j }
-                    j += 1
-                }
-                found.append(Peak(tNs: samples[best].tNs, amplitude: env[best], snr: env[best] / floor))
-                i = j
-            } else {
-                i += 1
+            let prev = i > start ? env[i - 1] : 0
+            let next = (i + 1 < samples.count && samples[i + 1].tNs <= to) ? env[i + 1] : 0
+            if v >= minHeight, v >= prev, v > next {
+                found.append(Peak(tNs: samples[i].tNs, amplitude: v, snr: v / floor))
             }
+            i += 1
         }
+
+        // Drop maxima that do not stand clear of the dip between them and a
+        // taller neighbour. Without this every wobble on a decaying tail counts.
+        let byTime = found.sorted { $0.tNs < $1.tNs }
+        var prominent: [Peak] = []
+        for (idx, p) in byTime.enumerated() {
+            var isProminent = true
+            for (jdx, q) in byTime.enumerated() where q.amplitude > p.amplitude {
+                // Lowest envelope value between the two.
+                let lo = min(idx, jdx), hi = max(idx, jdx)
+                var valley = Double.greatestFiniteMagnitude
+                var k = 0
+                while k < samples.count, samples[k].tNs < byTime[lo].tNs { k += 1 }
+                while k < samples.count, samples[k].tNs <= byTime[hi].tNs {
+                    valley = min(valley, env[k]); k += 1
+                }
+                if p.amplitude - valley < p.amplitude * prominenceFraction {
+                    isProminent = false
+                    break
+                }
+            }
+            if isProminent { prominent.append(p) }
+        }
+        found = prominent
 
         // Collapse anything closer than one physical event apart, keeping the
         // taller of the pair.

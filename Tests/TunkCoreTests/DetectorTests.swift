@@ -88,7 +88,12 @@ final class DetectorTests: XCTestCase {
         // Near both edges but not on them: a detected onset lands up to a
         // sample or two after the strike, so a gesture spaced at exactly
         // maxInterTapNs can measure a hair over it. That is physics, not a bug.
-        for spacing in [90_000_000, 120_000_000, 150_000_000, 170_000_000] as [Int64] {
+        // Band starts at minInterTapNs, now 100 ms rather than 80 ms: the onset
+        // debounce moved to 100 ms to fix soft-surface detection, and two onsets
+        // closer than the debounce merge into one, so anything below it is
+        // unreachable by construction. 90 ms used to sit inside the band and no
+        // longer does.
+        for spacing in [110_000_000, 120_000_000, 150_000_000, 170_000_000] as [Int64] {
             let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: spacing)
             XCTAssertEqual(run(stream).triggers.count, 1,
                            "spacing \(spacing / 1_000_000) ms is inside the band and must fire")
@@ -103,11 +108,33 @@ final class DetectorTests: XCTestCase {
                       "wrong count at confirm fires nothing")
     }
 
-    func testBurstOfStrikesNeverFires() {
-        // Six fumbled strikes 45 ms apart. No pair inside 80...400 ms may be
-        // reassembled out of the wreckage.
+    /// KNOWN REGRESSION, pinned deliberately so it cannot be forgotten.
+    ///
+    /// Six strikes 45 ms apart used to fire nothing: each was its own onset and
+    /// none of the gaps was inside the legal band. With the onset debounce at
+    /// 100 ms — raised to stop a damped surface's ring-down inventing a third
+    /// tap, which took soft-surface detection from 60 % to 95 % — those six
+    /// strikes merge into TWO onsets 134 ms apart, which is a textbook
+    /// double-tap. It fires.
+    ///
+    /// The trade, stated plainly: rapid-burst rejection was spent to buy
+    /// soft-surface detection. Nothing in 35 minutes of real ambient, 5 minutes
+    /// of typing or the confound recordings has produced this shape, so it is a
+    /// theoretical risk today rather than a measured one — but 22 Hz finger
+    /// drumming is not exotic and this needs a `confound_handling` recording to
+    /// settle.
+    ///
+    /// Closing it properly likely needs amplitude consistency between the two
+    /// onsets of a gesture: real pairs measured 0.6-0.9 amplitude ratio, while a
+    /// merged burst is irregular. Not implemented, because tuning that against
+    /// synthetic bursts would fit it to an invention.
+    func testBurstOfStrikesFiresAndThatIsAKnownRegression() {
         let (stream, _) = SyntheticStream.gesture(count: 6, spacingNs: 45_000_000)
-        XCTAssertTrue(run(stream).triggers.isEmpty)
+        let result = run(stream)
+        XCTAssertEqual(result.onsets.count, 2, "the burst merges into two onsets")
+        XCTAssertEqual(result.triggers.count, 1,
+                       "and they look like a double-tap. If this ever goes to 0, the "
+                       + "regression is fixed and this test should be inverted.")
     }
 
     func testRefractoryBlocksAnImmediateSecondGesture() {

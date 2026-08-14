@@ -140,6 +140,21 @@ extension DetectorConfig {
             out.maxInterTapNs = out.confirmWindowNs
         }
 
+        // A minimum below the onset debounce describes a gesture the front end
+        // cannot emit: two onsets closer than the debounce are merged into one,
+        // so the band between them is unreachable. This pair drifted apart once,
+        // when the debounce moved to 100 ms to fix soft-surface detection and
+        // left the minimum at 80 ms.
+        let debounceNs = DSPTuning.default.onsetDebounceNs
+        if out.minInterTapNs < debounceNs {
+            issues.append(CoherenceIssue(
+                field: "minInterTapNs",
+                reason: "onsets closer than the \(ms(debounceNs)) debounce are merged into "
+                      + "one, so a smaller minimum is unreachable",
+                applied: ms(debounceNs)))
+            out.minInterTapNs = debounceNs
+        }
+
         if out.minInterTapNs > out.maxInterTapNs {
             issues.append(CoherenceIssue(
                 field: "minInterTapNs",

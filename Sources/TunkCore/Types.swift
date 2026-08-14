@@ -142,7 +142,13 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
 
     /// Suppress onsets for this long after any gating input event.
     public var gateWindowNs: Int64
-    /// Minimum and maximum spacing between the two onsets of a double-tap.
+    /// Minimum spacing between the two onsets of a double-tap.
+    ///
+    /// Must be at least `DSPTuning.onsetDebounceNs`, or it describes a gesture
+    /// the front end cannot produce: onsets closer than the debounce are merged
+    /// into one, so a "legal" band below it is unreachable config. Raised to
+    /// 100 ms when the debounce moved there to fix soft-surface detection. The
+    /// shortest interval this operator has ever produced is 149 ms.
     public var minInterTapNs: Int64
     public var maxInterTapNs: Int64
     /// After the last accepted onset, wait this long before firing, so a further
@@ -255,7 +261,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedThreshold: nil,
         defaultThreshold: 0.030,
         gateWindowNs: 180_000_000,
-        minInterTapNs: 80_000_000,
+        minInterTapNs: 100_000_000,
         maxInterTapNs: 220_000_000,
         confirmWindowNs: 220_000_000,
         refractoryNs: 600_000_000,

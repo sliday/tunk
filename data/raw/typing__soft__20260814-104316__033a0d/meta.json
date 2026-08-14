@@ -1,0 +1,22 @@
+{
+  "category" : "typing",
+  "duration_ns" : 193430779666,
+  "epoch_mach_ns" : 508606376420000,
+  "epoch_wall_iso" : "2026-08-14T08:43:16.652Z",
+  "expected_triggers" : 0,
+  "machine" : {
+    "chip" : "Apple M4 Max",
+    "model" : "Mac16,6",
+    "os" : "26.5.2"
+  },
+  "nominal_interval_ns" : 1250782,
+  "nominal_rate_hz" : 799.5,
+  "operator_notes" : "",
+  "report_interval_us" : 1250,
+  "sample_count" : 154640,
+  "schema" : 1,
+  "session_id" : "typing__soft__20260814-104316__033a0d",
+  "split" : "train",
+  "surface" : "soft",
+  "tool_version" : "tunk-capture 0.3.0"
+}

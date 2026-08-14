@@ -1,0 +1,7 @@
+{"kind":"input_tap","t_ns":1078292,"text":"active"}
+{"kind":"phase","t_ns":1171667,"text":"start:typing"}
+{"kind":"phase","t_ns":5282792,"text":"Continuous typing. No taps at all in this phase."}
+{"kind":"prompt","t_ns":5322375,"text":"Type real prose at your normal pace until I say stop. Do not tap the machine."}
+{"kind":"phase","t_ns":7365426042,"text":"go"}
+{"kind":"phase","t_ns":192063664083,"text":"stop"}
+{"kind":"phase","t_ns":193527550958,"text":"end:script"}
