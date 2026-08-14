@@ -91,6 +91,8 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "secondTapThresholdFraction": return "Second-tap bar"
+        case "secondTapBaselineFraction":  return "Second-tap baseline return"
         default:                    return field
         }
     }
@@ -192,6 +194,27 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // A fraction outside (0, 1] is not a reduced bar: above 1 it would RAISE
+        // the bar for a second tap, which no measurement asks for, and at or
+        // below 0 it would arm on sensor hash. Clamp to 1.0, which is off.
+        if !(out.secondTapThresholdFraction.isFinite
+             && out.secondTapThresholdFraction > 0
+             && out.secondTapThresholdFraction <= 1) {
+            issues.append(CoherenceIssue(field: "secondTapThresholdFraction",
+                                         reason: "not a reduction in (0, 1]",
+                                         applied: "1.0 (no reduction)"))
+            out.secondTapThresholdFraction = 1.0
+        }
+
+        if !(out.secondTapBaselineFraction.isFinite
+             && out.secondTapBaselineFraction >= 0
+             && out.secondTapBaselineFraction <= 1) {
+            issues.append(CoherenceIssue(field: "secondTapBaselineFraction",
+                                         reason: "not a fraction of the threshold in [0, 1]",
+                                         applied: "0 (reduction never arms)"))
+            out.secondTapBaselineFraction = 0
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

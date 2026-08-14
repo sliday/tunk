@@ -171,6 +171,10 @@ public final class TapDetector: TapDetecting {
     /// start closer than `minInterTapNs` to it, so a burst of fumbled strikes
     /// cannot reassemble itself into a legal-looking pair.
     private var lastGroupingOnsetNs: Int64?
+    /// Whether the envelope has fallen below
+    /// `config.secondTapBaselineFraction * threshold` since the live group's
+    /// last onset. Gates the reduced second-tap bar; see `currentThreshold()`.
+    private var baselineReturnedSinceOnset: Bool = false
 
     private var refractoryUntilNs: Int64 = Int64.min
     private var gateUntilNs: Int64 = Int64.min
@@ -208,6 +212,8 @@ public final class TapDetector: TapDetecting {
             pending!.peak = max(pending!.peak, envelope)
             if sample.tNs - pending!.tNs >= tuning.peakHoldNs { publishPending() }
         }
+
+        noteBaselineReturn(envelope: envelope)
 
         let threshold = currentThreshold()
         var onsetTrigger: Trigger?
@@ -333,9 +339,37 @@ public final class TapDetector: TapDetecting {
         firingCounts = Self.resolveFiringCounts(config: effectiveConfig, armed: armedTapCounts)
     }
 
+    /// The bar with no in-gesture reduction applied: the calibrated absolute
+    /// threshold, the adaptive SNR term and the sanity floor. Both reductions
+    /// below are fractions of this, and so is the baseline-return test, so the
+    /// gate does not move when the bar it guards moves.
+    private func baseThreshold() -> Double {
+        max(effectiveConfig.effectiveThreshold,
+            max(tuning.noiseSnrMultiple * chain.noiseFloor, tuning.minThresholdG))
+    }
+
+    /// Record that the envelope has come back down since the live group's last
+    /// onset. This is the whole difference between this mechanism and the flat
+    /// `inGestureThresholdFraction` that collapsed soft-surface detection: a
+    /// ring tail is one continuous decay from the strike that started it and
+    /// never returns to the floor before it crosses a reduced bar, while a real
+    /// second strike is always preceded by that return.
+    ///
+    /// Off unless both knobs are set, and the flag is cleared by every accepted
+    /// onset, so the evidence has to be re-earned per tap rather than once per
+    /// gesture.
+    private func noteBaselineReturn(envelope: Double) {
+        guard !baselineReturnedSinceOnset,
+              !group.isEmpty,
+              effectiveConfig.secondTapThresholdFraction < 1,
+              effectiveConfig.secondTapBaselineFraction > 0 else { return }
+        if envelope <= effectiveConfig.secondTapBaselineFraction * baseThreshold() {
+            baselineReturnedSinceOnset = true
+        }
+    }
+
     private func currentThreshold() -> Double {
-        let base = max(effectiveConfig.effectiveThreshold,
-                       max(tuning.noiseSnrMultiple * chain.noiseFloor, tuning.minThresholdG))
+        let base = baseThreshold()
         // While a gesture is in flight, the bar for the NEXT onset comes down.
         //
         // A first onset is strong evidence that a second is about to arrive, and
@@ -352,7 +386,15 @@ public final class TapDetector: TapDetecting {
         guard !group.isEmpty, let last = groupLastOnsetNs else { return base }
         let openUntil = last + effectiveConfig.maxInterTapNs
         guard let now = lastSampleNs, now <= openUntil else { return base }
-        return base * tuning.inGestureThresholdFraction
+        var fraction = tuning.inGestureThresholdFraction
+        // The gated reduction, `config.secondTapThresholdFraction`. Whichever
+        // bar is lower wins, so the two mechanisms cannot fight; with the
+        // shipped 1.0 on both this multiplies by exactly 1 and every number
+        // downstream is bit-identical to the build before they existed.
+        if baselineReturnedSinceOnset {
+            fraction = min(fraction, effectiveConfig.secondTapThresholdFraction)
+        }
+        return base * fraction
     }
 
     /// Drop everything derived from the sample stream, keeping gate and
@@ -475,6 +517,9 @@ public final class TapDetector: TapDetecting {
     /// always fires one confirm window after its last onset, whatever the count;
     /// `maxInterTapNs <= confirmWindowNs` is what makes that safe.
     private func extendGroup(to tNs: Int64, strength: Double) {
+        // A fresh onset resets the baseline evidence: the next reduced bar has
+        // to wait for the envelope to come back down again after THIS strike.
+        baselineReturnedSinceOnset = false
         groupCount += 1
         if groupCount <= Self.groupOnsetRetentionLimit {
             group.append(GroupOnset(tNs: tNs, strength: strength))
@@ -489,6 +534,7 @@ public final class TapDetector: TapDetecting {
         DetectorConfig.supportedTapCounts.upperBound + 1
 
     private func clearGroup() {
+        baselineReturnedSinceOnset = false
         group.removeAll(keepingCapacity: true)
         groupCount = 0
         groupLastOnsetNs = nil

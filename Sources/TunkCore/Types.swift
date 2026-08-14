@@ -219,6 +219,41 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Multiplier on the onset threshold for a **second** tap, applied only once
+    /// the envelope has genuinely returned to baseline since the first onset.
+    /// **1.0, which disables the whole mechanism.**
+    ///
+    /// `DSPTuning.inGestureThresholdFraction` already tried the plain version of
+    /// this — a flat reduction for everything inside `maxInterTapNs` of an
+    /// accepted onset — and it collapsed soft-surface detection from 100 % to
+    /// 55 %. The reason was never that the evidence is wrong; a first onset
+    /// really does predict a second, and roughly one lap second-tap in ten falls
+    /// under the shipped bar. The reason is that a damped chassis rings for tens
+    /// of milliseconds, so the reduced bar was live during the ring-down and the
+    /// decay itself crossed it, turning a double into an un-armed triple.
+    ///
+    /// The gate below is what separates the two cases. A real second strike is
+    /// preceded by the envelope falling back toward the noise floor; a ring tail
+    /// never does, because it is one continuous decay from the first strike.
+    /// So the reduced bar arms only after that fall has been observed.
+    ///
+    /// Set with `secondTapBaselineFraction`. 1.0 here means "no reduction", and
+    /// the detector then computes exactly the number it computed before this
+    /// pair existed.
+    public var secondTapThresholdFraction: Double
+
+    /// How far the envelope must fall, as a fraction of the active threshold,
+    /// before `secondTapThresholdFraction` is allowed to apply.
+    ///
+    /// Measured on a soft surface, one strike's second lobe sits at ~80 % of the
+    /// first peak with a trough of ~18 % between them, so this number decides
+    /// whether a lobe counts as "the envelope came back". It is compared against
+    /// the *unreduced* threshold, so the gate does not move when the bar does.
+    ///
+    /// 0 means the fall can never be observed, which also disables the
+    /// reduction. The mechanism needs both knobs set.
+    public var secondTapBaselineFraction: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -260,7 +295,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
         onsetCeilingG: 2.5,
-        motionGateG: 0
+        motionGateG: 0,
+        secondTapThresholdFraction: 1.0,
+        secondTapBaselineFraction: 0.25
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
@@ -269,6 +306,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                secondTapThresholdFraction: Double = 1.0,
+                secondTapBaselineFraction: Double = 0.25,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +320,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.secondTapThresholdFraction = secondTapThresholdFraction
+        self.secondTapBaselineFraction = secondTapBaselineFraction
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +344,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case secondTapThresholdFraction, secondTapBaselineFraction
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +362,10 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        secondTapThresholdFraction = try c.decodeIfPresent(Double.self, forKey: .secondTapThresholdFraction)
+            ?? d.secondTapThresholdFraction
+        secondTapBaselineFraction = try c.decodeIfPresent(Double.self, forKey: .secondTapBaselineFraction)
+            ?? d.secondTapBaselineFraction
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +389,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(secondTapThresholdFraction, forKey: .secondTapThresholdFraction)
+        try c.encode(secondTapBaselineFraction, forKey: .secondTapBaselineFraction)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)

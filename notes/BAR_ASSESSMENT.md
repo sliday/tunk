@@ -65,6 +65,51 @@ during typing, which stayed at zero.
 | Wider join window | lap 65 → 70 %, **latency p95 209 → 389 ms** |
 | Per-surface calibration | desk 95.65 %, soft 100 %, **lap 82.5 % at its own best** |
 | Learned join window (235 ms) | held-out lap **80 % → 80 %**, latency 208.9 → 223.9 ms |
+| Lower bar for the 2nd tap, **gated on baseline return** | lap 73.75 → 81.25 %, soft holds 100 %, but lap false triggers 3 → 5 |
+
+### The gated second-tap bar
+
+The flat "lower bar for the 2nd tap" row above failed because the reduction was
+live during ring-down and the decay crossed it. A real second strike is preceded
+by the envelope falling back toward the noise floor; a ring tail never is, being
+one continuous decay from the strike that started it. So the reduction now arms
+only after that fall has been observed:
+`DetectorConfig.secondTapThresholdFraction` (f, the reduced bar) and
+`secondTapBaselineFraction` (r, how far the envelope must drop first, as a
+fraction of the unreduced threshold). Both ship off, f = 1.0.
+
+Grid on `data/raw`, detection rate per surface and lap false triggers, f down
+the side and r across:
+
+```
+ f\r     0.10             0.15             0.22             0.30
+0.90  75.00 / 100 / 3   76.25 / 100 / 4   80.00 / 100 / 6   80.00 / 100 / 6
+0.85  75.00 / 100 / 3   77.50 / 100 / 4   81.25 / 100 / 6   81.25 / 100 / 5
+0.82  76.25 / 100 / 3   78.75 / 100 / 4   82.50 /  90 / 6   82.50 /  85 / 5
+0.80  76.25 / 100 / 3   78.75 / 100 / 4   80.00 /  90 / 7   80.00 /  85 / 6
+0.70  73.75 / 100 / 4   76.25 / 100 / 5   80.00 /  90 / 7   76.25 /  85 / 6
+                        lap % / soft % / lap false triggers   (baseline 73.75 / 100 / 3)
+```
+
+Desk is 95.65 % in every cell, latency p95 never moves past 225.2 ms, and false
+triggers while typing stay at 0 across the whole grid.
+
+**This is the first lever that lifts lap without spending soft.** Along the
+f = 0.85 row, lap gains 7.5 points and soft stays at 100 % all the way to
+r = 0.35; soft only collapses at r = 0.40 (85 %), which is where the return test
+gets loose enough to accept a ring trough as a return to baseline.
+
+What it costs is the other lap number. At f = 0.85, r = 0.30 lap false triggers
+go 3 → 5 in 9.2 minutes, i.e. 6.54 → 10.90 per 20 min against a bar of 1. That
+metric was already failing on lap and this makes it worse, so the setting is not
+a free win and is not defaulted on.
+
+There is a smaller setting that costs nothing measurable: **f = 0.80, r = 0.10**
+gives lap 76.25 % (+2.5), soft 100 %, desk 95.65 %, lap false triggers 3 —
+identical to baseline — and p95 225.2 ms. Two of the eighty lap gestures
+recovered for no measured price anywhere.
+
+Neither setting reaches the 98 % bar, and neither was graded on held-out data.
 
 ### What the learned window does and does not fix
 
