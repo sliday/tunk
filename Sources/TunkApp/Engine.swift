@@ -124,6 +124,11 @@ final class Engine: ObservableObject {
     /// use. Nil unless switched on. See `PassiveCapture` for what its output can
     /// and cannot be used to measure.
     var passive: PassiveCapture?
+
+    /// Every confirmed gesture, for the live acceptance test. Set only by
+    /// `Diagnostics.acceptance`; nil in normal operation, so it costs a nil
+    /// check per trigger and nothing per sample.
+    var onTriggerForTesting: ((Trigger) -> Void)?
     private var triggerLog: [Int64] = []
     private var gateLog: [Int64] = []
 
@@ -295,7 +300,10 @@ final class Engine: ObservableObject {
                                       suppressed: onset.suppressedByGate)
             }
         }
-        if let trigger { record(trigger: trigger) }
+        if let trigger {
+            record(trigger: trigger)
+            onTriggerForTesting?(trigger)
+        }
         // Groups that closed without firing. Draining is not optional here: the
         // log is bounded, and an undrained one would just discard the oldest.
         let unbound = readout?.drainGroups().last { !$0.fired }

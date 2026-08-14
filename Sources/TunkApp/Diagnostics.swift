@@ -665,3 +665,119 @@ extension Diagnostics {
         exit(0)
     }
 }
+
+// MARK: - live acceptance
+
+extension Diagnostics {
+    /// The PRD's final acceptance test, run on the built app rather than on a
+    /// replay: "perform 50 deliberate double-taps and record hit rate and
+    /// latency, then type continuously for 5 minutes and record false triggers".
+    ///
+    /// Two phases, counted live against the real sensor, the real detector and
+    /// the real action path.
+    ///
+    /// Phase 1 prompts N deliberate double-taps and counts what fired. Hit rate
+    /// is triggers divided by prompts. Latency is measured from the detector's
+    /// own last onset to the moment the trigger was returned, which is the same
+    /// definition the harness uses offline, so the two are comparable.
+    ///
+    /// Phase 2 asks for continuous typing and counts anything that fires. The
+    /// bar is zero, and this is the metric the PRD calls make-or-break.
+    ///
+    /// Deliberately does NOT post the bound action. Firing a hotkey or a
+    /// Shortcut fifty times into whatever has focus would be its own disaster,
+    /// and the acceptance question is whether the gesture is recognised, not
+    /// whether CGEventPost works — `--live-emit-probe` already covers that.
+    static func acceptance(taps: Int, typingSeconds: Double) {
+        let engine = Engine(settings: AppSettings())
+        var fired: [(atNs: Int64, lastOnsetNs: Int64)] = []
+        let lock = NSLock()
+
+        engine.onTriggerForTesting = { trigger in
+            lock.lock()
+            fired.append((trigger.tNs, trigger.tapOnsets.last ?? trigger.tNs))
+            lock.unlock()
+        }
+        engine.setEnabled(true)
+        Thread.sleep(forTimeInterval: 1.5)
+        guard case .running = engine.status else {
+            line("not armed: \(engine.status). Grant Input Monitoring to this binary.")
+            exit(2)
+        }
+
+        func speak(_ s: String) {
+            line(s)
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
+            p.arguments = ["-r", "220", s]
+            try? p.run(); p.waitUntilExit()
+        }
+
+        line("")
+        line("LIVE ACCEPTANCE — phase 1 of 2: \(taps) deliberate double-taps")
+        line("  Wait for each prompt, then double-tap the chassis. Hands off between.")
+        speak("Phase one. \(taps) double taps.")
+
+        var hits = 0
+        for i in 1...taps {
+            lock.lock(); let before = fired.count; lock.unlock()
+            line("  tap \(i)/\(taps)")
+            speak("tap")
+            Thread.sleep(forTimeInterval: 2.6)
+            lock.lock(); let after = fired.count; lock.unlock()
+            if after > before { hits += 1 }
+        }
+
+        lock.lock()
+        let phase1 = fired
+        fired.removeAll()
+        lock.unlock()
+
+        line("")
+        line("LIVE ACCEPTANCE — phase 2 of 2: type for \(Int(typingSeconds)) s")
+        line("  Real prose, normal speed and force. No deliberate taps.")
+        speak("Phase two. Type normally for \(Int(typingSeconds / 60)) minutes.")
+        let start = Date()
+        while Date().timeIntervalSince(start) < typingSeconds {
+            Thread.sleep(forTimeInterval: 10)
+            lock.lock(); let n = fired.count; lock.unlock()
+            let left = Int(typingSeconds - Date().timeIntervalSince(start))
+            line("  \(left) s left, false triggers so far: \(n)")
+        }
+        speak("Done.")
+
+        lock.lock(); let falseTriggers = fired.count; lock.unlock()
+        engine.setEnabled(false)
+
+        let latencies = phase1.map { Double($0.atNs - $0.lastOnsetNs) / 1e6 }.sorted()
+        func pct(_ p: Double) -> Double {
+            latencies.isEmpty ? .nan
+                : latencies[min(latencies.count - 1, Int((Double(latencies.count - 1) * p).rounded()))]
+        }
+        let hitRate = Double(hits) / Double(taps) * 100
+
+        line("")
+        line("========================================")
+        line("           LIVE ACCEPTANCE")
+        line("========================================")
+        line("")
+        line(String(format: "  hit rate            %.1f %% (%d/%d)   bar 98 %%   %@",
+                    hitRate, hits, taps, hitRate >= 98 ? "PASS" : "FAIL"))
+        if !latencies.isEmpty {
+            line(String(format: "  latency p50         %.1f ms", pct(0.50)))
+            line(String(format: "  latency p95         %.1f ms   bar 250 ms   %@",
+                        pct(0.95), pct(0.95) <= 250 ? "PASS" : "FAIL"))
+        }
+        line(String(format: "  false triggers      %d in %.0f s of typing   bar 0   %@",
+                    falseTriggers, typingSeconds, falseTriggers == 0 ? "PASS" : "FAIL"))
+        line("")
+        let pass = hitRate >= 98 && falseTriggers == 0 && (latencies.isEmpty || pct(0.95) <= 250)
+        line("  VERDICT: \(pass ? "PASS" : "FAIL")")
+        line("")
+        line("  Measured on the built app against the real sensor. The bound")
+        line("  action is deliberately NOT posted — firing a hotkey 50 times into")
+        line("  whatever has focus would be its own disaster, and emission is")
+        line("  covered by --live-emit-probe.")
+        exit(pass ? 0 : 1)
+    }
+}

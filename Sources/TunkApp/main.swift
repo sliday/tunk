@@ -37,6 +37,13 @@ if let index = arguments.firstIndex(of: "--collect-taps") {
         ? arguments[index + 1] : "data/raw"
     PassiveCollection.enable(at: dir)
 }
+if let index = arguments.firstIndex(of: "--acceptance") {
+    // The PRD's final sign-off, run on the built app against the real sensor.
+    let taps = index + 1 < arguments.count ? Int(arguments[index + 1]) ?? 50 : 50
+    let typing = index + 2 < arguments.count ? Double(arguments[index + 2]) ?? 300 : 300
+    app.setActivationPolicy(.accessory)
+    Diagnostics.acceptance(taps: taps, typingSeconds: typing)
+}
 if arguments.contains("--haptic-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.hapticProbe()
