@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "title": "Tunk — gauntlet loop",
-  "generated_at": "2026-08-14T10:33:35Z",
+  "generated_at": "2026-08-14T11:06:25Z",
   "stale_after_s": 900,
   "cold_after_s": 7200,
   "primary_tap_count": "2",
@@ -3225,6 +3225,173 @@
       "status": "scored",
       "headline": "The second taps are 1.2-2.0x the bar. The detector was disarmed when they landed.",
       "biggest_gap": "Re-arm needs the envelope back under 0.4x threshold; a damped case rings for hundreds of ms, so the detector is deaf through the second strike. Every soft miss and half the lap misses are this. Four amplitude mechanisms were built on the wrong premise and rejected. Held-out also has no typing or confound sessions, so the make-or-break metric is ungraded out of sample.",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "test",
+        "data_root": "/Users/stas/Playground/tunk/data/holdout",
+        "is_stub": false,
+        "warnings": [
+          "\n┌──────────────────────────────────────────────────────────────────────┐\n│  HOLDOUT RUN — CRITIC MODE                                           │\n│  Grading against held-out test data. These numbers are the verdict.  │\n│  Do not feed them back into tuning.                                  │\n└──────────────────────────────────────────────────────────────────────┘\nReason: the path /Users/stas/Playground/tunk/data/holdout is held-out test data."
+        ]
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 187.6,
+                  "n": 20
+                },
+                "latency_p95_ms": {
+                  "value": 198.9,
+                  "n": 20
+                },
+                "latency_max_ms": {
+                  "value": 210.1,
+                  "n": 20
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 197.6,
+                  "n": 20
+                },
+                "latency_p95_ms": {
+                  "value": 207.6,
+                  "n": 20
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 20
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "lap": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 80.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 183.9,
+                  "n": 16
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 16
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 16
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 26,
+      "label": "lap: ten mechanisms, none reach the bar",
+      "timestamp": "2026-08-14T11:06:25Z",
+      "status": "scored",
+      "headline": "Unlimited latency does not close lap — the window saturates at 280 ms and 77.5 %",
+      "biggest_gap": "On a lap the second strike and the first strike's ring are the same size in the envelope, so hearing the second tap also hears the tail's ripple, the group becomes 3 onsets, and the grouper fires on exactly 2. Curing deafness (12 -> 2 on lap) recovered zero gestures. The only remaining candidate is a front end that separates strike from ring, which is research. Held-out still has no typing or confound sessions.",
       "source": {
         "tool": "tunk-score 0.1.0",
         "detector": "TunkCore.TapDetector",

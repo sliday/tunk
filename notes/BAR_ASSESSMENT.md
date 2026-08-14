@@ -181,6 +181,62 @@ it is one result, and it is the signature of a mispecified problem. Train gains
 of 6 to 8 gestures did not transfer, and per-session effects ranged from -2 to
 +5, which is an overfit signature on n=80.
 
+## Three re-arm mechanisms, built and rejected
+
+Same discipline: one builder each, one fresh critic each, graded on held-out.
+
+| mechanism | held-out lap | g1 | g3 | g6 | critic |
+|---|---|---|---|---|---|
+| valley-rise (causal prominence) | 80 % -> **10 %** at best-for-deafness | no | no | no | do not ship |
+| modelled tail decay | 80 % -> 80 % (no effect) | no | no | no | do not ship |
+| debounce-only re-arm | 80 % -> 85 % | yes | no | no | do not ship |
+
+The valley-rise mechanism **did** do what it was built to do: lap deaf counts fell
+12 -> 2 and soft 3 -> 0. It recovered **zero gestures**. That is the finding.
+
+The third mechanism's "recovery" was caught by its critic as an artifact: the
+detector clocked a synthetic onset onto its own ringing tail at exactly
+`lastOnset + tailRearmNs`, manufacturing a 201 ms interval inside the 100-220 ms
+join window. A fitted number, not a cure.
+
+### Why hearing the second tap does not help
+
+On a lap the second strike and the first strike's ring are the same amplitude
+scale. So:
+
+1. The second tap lands on a decaying tail.
+2. To hear it, the detector must re-arm while the tail is still elevated.
+3. Re-arming on the tail also hears the tail's own ripple.
+4. The group becomes three or more onsets, and the grouper fires on exactly two.
+
+Every re-arm mechanism runs into this. Held-out declared onsets went 117 -> 145
+on one setting while detection *fell* by 21 gestures; the onset trace shows the
+detector firing at 16.713, 16.820, 16.921, 17.021 — a metronome at the debounce
+period, re-arming on ripple rather than on strikes.
+
+## The latency budget, priced
+
+`BAR_ASSESSMENT` previously offered "a latency budget above 250 ms" as a way to
+close lap, calling it a product decision. It has now been measured, moving
+`maxInterTapNs` and `confirmWindowNs` together on training data:
+
+| join window | lap detection | p95 | typing FP |
+|---|---|---|---|
+| 220 ms | 73.75 % (59/80) | 225 ms | 0 |
+| 240 ms | 75.00 % (60/80) | 245 ms | 0 |
+| 260 ms | 76.25 % (61/80) | 265 ms | 0 |
+| 280 ms | 77.50 % (62/80) | 285 ms | 0 |
+| 300 ms | 77.50 % (62/80) | 305 ms | 0 |
+| 400 ms | 77.50 % (62/80) | 405 ms | 0 |
+
+**It saturates at 280 ms.** Buying 180 ms of extra latency — well past the point
+where the gesture stops feeling like a double-tap — recovers three gestures out
+of eighty and leaves lap at 77.5 %. With an *unlimited* latency budget lap does
+not reach the bar. That option is now closed, not deferred.
+
+At the saturating window, 17 of the 18 remaining lap misses are still
+"only 1 ungated onset near this label".
+
 ## Two gaps in the measurement itself
 
 Named independently by all four critics, and neither is fixable by code:
@@ -235,13 +291,20 @@ wider interval range than a 250 ms latency budget can admit.
 
 Closing lap needs one of:
 
-1. **A latency budget above 250 ms**, which the PRD sets and which is a product
-   decision, not an engineering one. A 300 ms window recovers most of the eight
-   out-of-window misses.
-2. **A front end that preserves onset shape**, read before the sliding maximum,
-   with a discriminator that is not rise time — spectral content is the untested
-   candidate.
+1. ~~A latency budget above 250 ms.~~ **Measured and closed.** The window
+   saturates at 280 ms and lap tops out at 77.5 % with an unlimited budget.
+2. **A front end that separates a strike from a ring at the same amplitude.**
+   Every mechanism tried operates on the existing envelope, and on a lap the
+   second strike and the first strike's tail are the same size in that envelope.
+   This is the only remaining candidate and it is research, not tuning: a new
+   front end, re-tuned from scratch, re-graded on all three surfaces.
 3. **Shipping lap as unsupported**, and saying so.
+
+Ten mechanisms have now been built and independently graded — four amplitude,
+three re-arm, plus threshold, debounce and window sweeps. None reached the bar
+on lap. The evidence that this is structural rather than a tuning failure is no
+longer one measurement; it is ten, from agents that did not see each other's
+work, every one graded on data its builder could not touch.
 
 ## Coverage limits
 
