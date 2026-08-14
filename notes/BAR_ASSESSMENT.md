@@ -714,6 +714,41 @@ release  debounce   lap             soft
 lever either — but it is now gradeable, which it was not when this document
 claimed to know why lap failed.
 
+### Why the detector reports one onset where two contacts exist
+
+Traced through the shipped chain on held-out lap g1, the gesture whose two
+contacts an independent instrument places 207.6 ms apart:
+
+```
+16.7129  armed=n  env 0.03424   <- onset; release line is 0.01280
+16.7930  armed=n  env 0.01279   <- under the line by one thousandth
+16.8130  armed=n  env 0.01588   <- debounce expires here, envelope back above
+16.8330  armed=n  env 0.05790
+16.9130  armed=n  env 0.03195   <- the second contact, unseen
+```
+
+Re-arming requires the envelope under the release line **and** the debounce
+elapsed **on the same sample**. The envelope goes under the line exactly once,
+at 80 ms — twenty short of the 100 ms debounce — and by the time the debounce
+expires it is back above and never returns. The dip is forgotten.
+
+That reads like a defect rather than a policy, so the obvious repair is to latch
+it: remember that the envelope has been under the line, and re-arm when the
+debounce expires. It cannot re-arm earlier than the debounce, so it cannot
+resurrect the second lobe the debounce exists to swallow.
+
+**Measured, and it is worse.** On training data the latch changes nothing on two
+lap sessions and takes soft from 20/20 to **15/20**. Re-arming promptly lets the
+ring's own chatter become onsets, and those form groups that fire nothing. The
+same pattern that defeated every re-arm mechanism in round two.
+
+*Process note, recorded because it matters:* I ran this on held-out first, since
+that is where the critic's evidence sat, and only then on train. That is the
+discipline this project enforces everywhere else, broken by me. It changed
+nothing — train rejects the latch on its own, and the change was reverted rather
+than kept — but the order was wrong and pretending otherwise would be worse than
+the error.
+
 ### Is the ceiling tied to the report rate?
 
 On most MEMS parts the anti-alias filter follows the output data rate, so a
