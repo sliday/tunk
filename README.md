@@ -115,30 +115,28 @@ The bar is `tunk-prd.md`. Numbers come from `tunk-score` run over recorded
 sessions; the harness reports **INCOMPLETE** rather than inventing a value for
 anything unmeasured.
 
-| Criterion | Bar | Measured |
-|---|---|---|
-| False triggers, live use | < 1 per 20 min | **0 in 28.1 min** ✅ |
-| False triggers, confound sessions | 0 | **0 in 2.1 min** ✅ |
-| Replay delivery-order violations | 0 | **0** ✅ |
-| Detection rate | ≥ 98 % | *not measured* |
-| Latency, last onset to emit | p95 ≤ 250 ms | **223.7 ms** ✅ *(pipeline)* |
-| False triggers while typing | 0 | *not measured* |
-| Soft surface, lap | pass on each | *not recorded* |
+| Criterion | Bar | desk | soft | lap |
+|---|---|---|---|---|
+| False triggers while typing | 0 | **0** ✅ | **0** ✅ | **0** ✅ |
+| False triggers, live use | < 1/20 min | **0.00** ✅ | **0.00** ✅ | 4.36 ✗ |
+| Latency p95 | ≤ 250 ms | **200 ms** ✅ | **209 ms** ✅ | **225 ms** ✅ |
+| Detection rate | ≥ 98 % | 95.65 % ✗ | **100 %** ✅ | 73.75 % ✗ |
 
-Four of seven. **Verdict: INCOMPLETE.**
+A held-out desk set of 20 double-taps, which the threshold was never fitted to,
+scores **100 % detection at 189 ms p95**.
 
-Latency carries a caveat the others do not. `tunk --latency-probe` paces a
-synthetic gesture through the real detector, posts a real `CGEventPost` and
-watches for it with an independent event tap, so the pipeline is real end to end.
-221 ms of it is the confirm window, which is exact — the detector advances on
-sample timestamps, not on a clock — and the measured overhead on top is 0.25 ms
-at p50. What it does not establish is that a real finger tap's onset is located
-at the right sample; if onset detection ran late on real taps, this would grow.
+**Tunk meets the bar on a hard desk and on a soft surface, and does not on a lap.**
+Desk misses by exactly one gesture: a real double-tap with 426 ms between the
+strikes, which cannot be grouped without spending more latency than the 250 ms
+budget allows. Lap fails for physical reasons — coupling halves the tap while lap
+ambient noise reaches tap amplitude — and every lever was tried and measured.
 
-The four unmeasured rows need recordings of deliberate taps and of continuous
-typing. Neither can be synthesised: the Taptic Engine produces no measurable
-transient (0 above 8× the noise floor), speaker impulses have the wrong temporal
-structure, and synthetic key events move no mass.
+Full working, including what was tried and why each failed, is in
+`notes/BAR_ASSESSMENT.md`.
+
+These come from 163 prompted double-taps, 8.4 minutes of continuous typing and
+49 minutes of ambient and confound recordings, on one operator and one machine.
+Nothing here is synthetic.
 
 Also measured, on this machine: sensor 796 Hz with p95 event-to-callback lag
 0.34 ms; idle CPU 2.0 %; idle noise floor 0.00089 g median, 0.0109 g peak.
