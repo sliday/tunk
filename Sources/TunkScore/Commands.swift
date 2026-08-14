@@ -66,7 +66,11 @@ enum Commands {
         try args.checkUnknown()
 
         var config = DetectorConfig.default
-        if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
+        if let p = configPath {
+            let loaded = try ConfigIO.loadFull(url: Paths.resolve(p))
+            config = loaded.config
+            DetectorFactory.tuning = loaded.tuning
+        }
         applyArmed(armed, to: &config)
         try ConfigIO.validate(config)
         let policy = ScoringPolicy.from(config: config, override: armed)
@@ -80,6 +84,14 @@ enum Commands {
         // The banner lands in the report's warnings, which the console, the JSON
         // and the markdown all carry, so it cannot be lost by redirecting stdout.
         var warnings = try HoldoutGuard.check(root: root, sessions: sessions, isCritic: isCritic)
+
+        // A front-end override changes what the detector IS, not merely how it is
+        // tuned, and the config block in the report only prints `DetectorConfig`.
+        // Say so on the face of the report or a variant run is indistinguishable
+        // from a shipped one.
+        if let t = TuningParam.describe(DetectorFactory.tuning) {
+            warnings.append("NON-DEFAULT FRONT END — this is not the shipped signal chain:\n" + t)
+        }
 
         // Tripwire: the grader and the detector must agree on what was armed.
         // When they diverged, `--armed 1` scored a count the detector never fired
@@ -220,7 +232,11 @@ enum Commands {
         try args.checkUnknown()
 
         var base = DetectorConfig.default
-        if let p = configPath { base = try ConfigIO.load(url: Paths.resolve(p)) }
+        if let p = configPath {
+            let loaded = try ConfigIO.loadFull(url: Paths.resolve(p))
+            base = loaded.config
+            DetectorFactory.tuning = loaded.tuning
+        }
 
         if HoldoutGuard.pathLooksLikeHoldout(root) && !isCritic {
             _ = try HoldoutGuard.check(root: root, sessions: [], isCritic: false)
@@ -347,7 +363,11 @@ enum Commands {
             _ = try HoldoutGuard.check(root: url, sessions: [], isCritic: false)
         }
         var config = DetectorConfig.default
-        if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
+        if let p = configPath {
+            let loaded = try ConfigIO.loadFull(url: Paths.resolve(p))
+            config = loaded.config
+            DetectorFactory.tuning = loaded.tuning
+        }
         applyArmed(armed, to: &config)
         let policy = ScoringPolicy.from(config: config, override: armed)
 

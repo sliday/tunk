@@ -283,4 +283,43 @@ final class ScoreHarnessCLITests: XCTestCase {
         XCTAssertEqual(status, 64, out)
         XCTAssertTrue(out.contains("--armed expects"), out)
     }
+
+    // MARK: - Front-end keys
+
+    private func configFile(_ json: String, _ name: String) throws -> URL {
+        let dir = try scratchDir(name)
+        let url = dir.appendingPathComponent("config.json")
+        try json.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    /// The front-end keys live in `DSPTuning`, not `DetectorConfig`, and reach
+    /// the detector through a different path. A value outside the enum must stop
+    /// the run: silently falling back to the shipped chain would report a
+    /// variant's name against the shipped chain's numbers.
+    func testEnvelopeModeRejectsAValueOutsideTheEnum() throws {
+        let exe = try binary()
+        let cfg = try configFile(#"{"envelopeMode": 9}"#, "envmode")
+        let (status, out) = try run(exe, ["run", "--data", "data/raw", "--config", cfg.path])
+        XCTAssertEqual(status, 64, out)
+        XCTAssertTrue(out.contains("envelopeMode must be one of"), out)
+    }
+
+    func testEnvelopeKeysAreKnownConfigKeys() throws {
+        let exe = try binary()
+        let cfg = try configFile(#"{"envelopeMode": 0, "envelopeDecayTauMs": 0}"#, "envknown")
+        let (_, out) = try run(exe, ["run", "--data", "data/raw", "--config", cfg.path])
+        XCTAssertFalse(out.contains("unknown config key"), out)
+    }
+
+    /// A typo still has to be fatal, and the message has to name the front-end
+    /// keys or nobody will find them.
+    func testUnknownKeyListsTheFrontEndKeysToo() throws {
+        let exe = try binary()
+        let cfg = try configFile(#"{"envelopeMdoe": 1}"#, "envtypo")
+        let (status, out) = try run(exe, ["run", "--data", "data/raw", "--config", cfg.path])
+        XCTAssertEqual(status, 64, out)
+        XCTAssertTrue(out.contains("unknown config key"), out)
+        XCTAssertTrue(out.contains("envelopeDecayTauMs"), out)
+    }
 }

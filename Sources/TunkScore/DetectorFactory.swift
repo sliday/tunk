@@ -16,6 +16,11 @@ enum DetectorFactory {
     /// Set once from `--detector`. Single-threaded CLI; no locking needed.
     nonisolated(unsafe) static var backend: DetectorBackend = .real
 
+    /// Front-end constants, from the config file's tuning keys. Same lifetime
+    /// and same single-threaded assumption as `backend`. Defaults to the shipped
+    /// chain, so a run that names no tuning key is the shipped run.
+    nonisolated(unsafe) static var tuning: DSPTuning = .default
+
     /// Printed in every report so nobody mistakes a stub run for a real one.
     static var backendName: String {
         switch backend {
@@ -28,7 +33,7 @@ enum DetectorFactory {
 
     static func make(config: DetectorConfig) -> TapDetecting {
         switch backend {
-        case .real: return TapDetector(config: config)
+        case .real: return TapDetector(config: config, tuning: tuning)
         case .stub: return StubTapDetector(config: config)
         }
     }

@@ -86,6 +86,75 @@ public struct SlidingMax: Sendable, Equatable {
     }
 }
 
+/// Which final envelope stage the chain runs. **`.slidingMax` ships**; every
+/// other value is an experiment kept because it was measured, and the
+/// measurement is in `DSPTuning.envelopeMode`.
+public enum EnvelopeMode: Int, Sendable, Equatable, CaseIterable, Codable {
+    /// 3-sample sliding maximum. What has always shipped.
+    case slidingMax = 0
+    /// No dilation at all: the quadrature pair straight through.
+    case sample = 1
+    /// Median over `envelopePeakSamples`.
+    case median = 2
+    /// Peak hold with an explicit exponential release, `envelopeDecayTauMs`.
+    case decayHold = 3
+}
+
+/// Median over a short window. Same ring geometry as `SlidingMax` (zeros until
+/// the window fills) so the two can be swapped without changing warm-up.
+public struct SlidingMedian: Sendable, Equatable {
+    private var ring: [Double]
+    private var index: Int = 0
+    private var filled: Int = 0
+
+    public init(length: Int) {
+        ring = Array(repeating: 0, count: max(1, length))
+    }
+
+    public mutating func reset() {
+        for i in ring.indices { ring[i] = 0 }
+        index = 0
+        filled = 0
+    }
+
+    @inline(__always)
+    public mutating func process(_ x: Double) -> Double {
+        ring[index] = x
+        index = (index + 1) % ring.count
+        if filled < ring.count { filled += 1 }
+        var window = Array(ring[0..<filled])
+        window.sort()
+        let n = window.count
+        return n % 2 == 1 ? window[n / 2] : 0.5 * (window[n / 2 - 1] + window[n / 2])
+    }
+}
+
+/// Peak hold with an exponential release: `y[n] = max(x[n], y[n-1] * d)`.
+///
+/// Index-domain like everything else here — the release is one multiply per
+/// sample, so it never reads a clock. `d` comes from a time constant only
+/// because that is the unit a human can reason about.
+public struct DecayingPeakHold: Sendable, Equatable {
+    public let decay: Double
+    private var held: Double = 0
+
+    /// A tau of zero or less releases instantly, i.e. the stage passes its input
+    /// through. That degenerate case has to be the *harmless* one: a hold that
+    /// never releases would leave the detector disarmed forever.
+    public init(tauSeconds: Double, sampleRateHz: Double) {
+        let fs = max(sampleRateHz, 1.0)
+        decay = tauSeconds > 0 ? exp(-1.0 / max(tauSeconds * fs, 1.0)) : 0
+    }
+
+    public mutating func reset() { held = 0 }
+
+    @inline(__always)
+    public mutating func process(_ x: Double) -> Double {
+        held = max(x, held * decay)
+        return held
+    }
+}
+
 /// One-pole low pass. Used to track where the accelerometer settles, so
 /// "the machine is being moved" can be told apart from "the case rang".
 public struct OnePoleLowPass: Sendable, Equatable {
@@ -268,6 +337,40 @@ public struct DSPTuning: Sendable, Equatable {
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
 
+    /// Which final envelope stage runs. **`.slidingMax`, i.e. off.**
+    ///
+    /// The hypothesis this exists to test: the 3-sample sliding maximum dilates
+    /// every transient, so on a damped surface the first strike could be smeared
+    /// over the window where the second lands and the second would never appear
+    /// as a rise of its own. If that were true, the lap misses labelled
+    /// "amplitude" would be a front-end artefact rather than physics.
+    ///
+    /// **Measured on data/raw, and it is not true.** Peak envelope in a ±25 ms
+    /// window around every labelled SECOND tap, by variant:
+    ///
+    ///     variant   desk p50 / p10     soft p50 / p10     lap p50 / p10
+    ///     max3      0.0837 / 0.0733    0.0801 / 0.0499    0.0420 / 0.0306
+    ///     none      0.0837 / 0.0733    0.0801 / 0.0499    0.0420 / 0.0306
+    ///     med3      0.0827 / 0.0728    0.0796 / 0.0498    0.0408 / 0.0299
+    ///     max2/5/8  identical to max3 at four decimals
+    ///
+    /// The window is 3.8 ms at 796 Hz and the strikes are 180 ms apart, so there
+    /// is nothing to smear. Second taps clearing the shipped 0.032 threshold:
+    /// 67/80 on lap under max3 and 67/80 under no envelope stage at all. The
+    /// thirteen that miss are below the bar in the raw quadrature pair; the
+    /// front end never had them.
+    ///
+    /// What removing the stage does buy is a little noise: ambient p99.99 falls
+    /// 0.0848 to 0.0804 on lap gaps, 0.1061 to 0.1024 while typing, with the tap
+    /// peaks unchanged — about 4 % of SNR, which is worth roughly one step of
+    /// threshold. `.sample` at 0.031 is the best that margin buys and it is
+    /// graded in the report; it does not close lap.
+    public var envelopeMode: EnvelopeMode
+    /// Release time constant for `.decayHold`, in milliseconds. Ignored by every
+    /// other mode. Zero or less means "hold forever", which is why it is
+    /// validated rather than used raw.
+    public var envelopeDecayTauMs: Double
+
     public static let `default` = DSPTuning(
         sampleRateHz: 796.3,
         highPassHz: 20.0,
@@ -287,7 +390,9 @@ public struct DSPTuning: Sendable, Equatable {
         settleFastHz: 6.0,
         settleSlowHz: 0.3,
         onsetLogCapacity: 512,
-        groupLogCapacity: 256
+        groupLogCapacity: 256,
+        envelopeMode: .slidingMax,
+        envelopeDecayTauMs: 0
     )
 
     public init(sampleRateHz: Double, highPassHz: Double, envelopePeakSamples: Int,
@@ -299,7 +404,9 @@ public struct DSPTuning: Sendable, Equatable {
                 inGestureThresholdFraction: Double = 1.0,
                 settleFastHz: Double = 6.0,
                 settleSlowHz: Double = 0.3,
-                onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
+                onsetLogCapacity: Int, groupLogCapacity: Int = 256,
+                envelopeMode: EnvelopeMode = .slidingMax,
+                envelopeDecayTauMs: Double = 0) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
         self.envelopePeakSamples = envelopePeakSamples
@@ -319,6 +426,8 @@ public struct DSPTuning: Sendable, Equatable {
         self.settleSlowHz = settleSlowHz
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
+        self.envelopeMode = envelopeMode
+        self.envelopeDecayTauMs = envelopeDecayTauMs
     }
 }
 
@@ -345,7 +454,10 @@ public struct SignalChain: Sendable, Equatable {
     private var hpY: OnePoleHighPass
     private var hpZ: OnePoleHighPass
     private var previousSquared: Double = 0
+    private let mode: EnvelopeMode
     private var peak: SlidingMax
+    private var median: SlidingMedian
+    private var hold: DecayingPeakHold
     private var floorTracker: NoiseFloorTracker
     private var settledMagnitude: OnePoleLowPass
     private var fastMagnitude: OnePoleLowPass
@@ -381,7 +493,13 @@ public struct SignalChain: Sendable, Equatable {
         hpX = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
         hpY = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
         hpZ = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
+        mode = tuning.envelopeMode
         peak = SlidingMax(length: tuning.envelopePeakSamples)
+        median = SlidingMedian(length: tuning.envelopePeakSamples)
+        // A tau of zero would hold the peak forever and the detector would never
+        // re-arm, so it degenerates to "no hold" rather than to a latch.
+        hold = DecayingPeakHold(tauSeconds: max(tuning.envelopeDecayTauMs, 0) / 1000.0,
+                                sampleRateHz: tuning.sampleRateHz)
         floorTracker = NoiseFloorTracker(riseTauSeconds: tuning.noiseRiseTauSeconds,
                                          fallTauSeconds: tuning.noiseFallTauSeconds,
                                          sampleRateHz: tuning.sampleRateHz)
@@ -397,6 +515,8 @@ public struct SignalChain: Sendable, Equatable {
         hpZ.reset()
         previousSquared = 0
         peak.reset()
+        median.reset()
+        hold.reset()
         floorTracker.reset()
         settledMagnitude.reset()
         fastMagnitude.reset()
@@ -421,7 +541,12 @@ public struct SignalChain: Sendable, Equatable {
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
-        envelope = peak.process(pair)
+        switch mode {
+        case .slidingMax: envelope = peak.process(pair)
+        case .sample: envelope = pair
+        case .median: envelope = median.process(pair)
+        case .decayHold: envelope = hold.process(pair)
+        }
         if !holdNoiseFloor { floorTracker.update(envelope) }
         return envelope
     }

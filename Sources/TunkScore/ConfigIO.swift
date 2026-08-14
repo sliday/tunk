@@ -8,16 +8,34 @@ import TunkCore
 /// key is validated, and an unknown key is an error rather than a silent no-op —
 /// a typo in a sweep script must never masquerade as a result.
 enum ConfigIO {
+    /// A config file may also carry front-end keys, which live in `DSPTuning`
+    /// rather than `DetectorConfig`. They are kept apart on purpose:
+    /// `DetectorConfig` is what the settings panel writes and the user owns,
+    /// `DSPTuning` is filter design. The harness needs to reach both from one
+    /// file so a front-end variant can be graded the same way a threshold is.
     static func load(url: URL) throws -> DetectorConfig {
+        try loadFull(url: url).config
+    }
+
+    static func loadFull(url: URL) throws -> (config: DetectorConfig, tuning: DSPTuning) {
         let data = try Data(contentsOf: url)
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw CLIError.usage("config file \(url.path) is not a JSON object")
         }
         var cfg = DetectorConfig.default
+        var tuning = DSPTuning.default
         for (key, value) in obj {
+            if let t = TuningParam(rawValue: key) {
+                guard let n = (value as? NSNumber)?.doubleValue else {
+                    throw CLIError.usage("config key '\(key)' must be a number")
+                }
+                try t.set(&tuning, n)
+                continue
+            }
             guard let param = ConfigParam(name: key) else {
                 throw CLIError.usage("unknown config key '\(key)'. Known keys: "
-                                     + ConfigParam.allNames.joined(separator: ", "))
+                                     + (ConfigParam.allNames + TuningParam.allNames)
+                                        .joined(separator: ", "))
             }
             if value is NSNull {
                 if param == .calibratedThreshold { cfg.calibratedThreshold = nil; continue }
@@ -32,7 +50,7 @@ enum ConfigIO {
             param.set(&cfg, n * ConfigParam.scale(forName: key))
         }
         try validate(cfg)
-        return cfg
+        return (cfg, tuning)
     }
 
     static func validate(_ c: DetectorConfig) throws {
@@ -54,6 +72,46 @@ enum ConfigIO {
         }
         out += "  \(Reporter.pad("effectiveThreshold", 22)) \(String(format: "%.4f", c.effectiveThreshold))\n"
         return out
+    }
+}
+
+/// A front-end tunable, addressable by name in the same config file.
+///
+/// Deliberately a short list. `DSPTuning` holds a dozen filter constants and
+/// most of them have no business being swept from a JSON file; these are the
+/// ones the envelope-stage experiment needs, and every one of them defaults to
+/// the shipped value, so a file that names none of them runs the shipped chain.
+enum TuningParam: String, CaseIterable {
+    /// 0 sliding max (shipped), 1 no dilation, 2 median, 3 decaying peak hold.
+    case envelopeMode
+    case envelopePeakSamples
+    case envelopeDecayTauMs
+
+    static var allNames: [String] { allCases.map(\.rawValue) }
+
+    func set(_ t: inout DSPTuning, _ v: Double) throws {
+        switch self {
+        case .envelopeMode:
+            guard let m = EnvelopeMode(rawValue: Int(v.rounded())) else {
+                throw CLIError.usage("envelopeMode must be one of "
+                    + EnvelopeMode.allCases.map { "\($0.rawValue) (\($0))" }.joined(separator: ", "))
+            }
+            t.envelopeMode = m
+        case .envelopePeakSamples:
+            let n = Int(v.rounded())
+            guard n >= 1 else { throw CLIError.usage("envelopePeakSamples must be at least 1") }
+            t.envelopePeakSamples = n
+        case .envelopeDecayTauMs:
+            guard v >= 0 else { throw CLIError.usage("envelopeDecayTauMs must not be negative") }
+            t.envelopeDecayTauMs = v
+        }
+    }
+
+    static func describe(_ t: DSPTuning) -> String? {
+        guard t != .default else { return nil }
+        return "  envelopeMode           \(t.envelopeMode) (\(t.envelopeMode.rawValue))\n"
+             + "  envelopePeakSamples    \(t.envelopePeakSamples)\n"
+             + "  envelopeDecayTauMs     \(String(format: "%g", t.envelopeDecayTauMs))\n"
     }
 }
 
