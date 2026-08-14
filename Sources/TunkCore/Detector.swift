@@ -28,7 +28,9 @@ import Foundation
 /// the bar exactly when the surface is alive. After a crossing the detector
 /// disarms and re-arms only once the envelope falls back under
 /// `releaseFraction * T` **and** `onsetDebounceNs` has passed, so one strike is
-/// one onset.
+/// one onset. On a damped surface that first condition can hold the detector
+/// disarmed straight through the second half of a gesture; `config.tailRearmNs`
+/// re-arms on the clock alone and ships off. See its doc comment.
 ///
 /// The floor keeps tracking the whole time, apart from a bounded
 /// `tuning.noiseFloorHoldNs` after each crossing. It has to: it describes the
@@ -159,6 +161,19 @@ public final class TapDetector: TapDetecting {
     private var lastOnsetNs: Int64?
     private var pending: PendingOnset?
 
+    /// Peak envelope of the strike that last disarmed the detector, measured
+    /// over the same `tuning.peakHoldNs` window `pending` uses. The reference
+    /// both tail-re-arm guards are stated against; 0 while no strike has landed.
+    private var strikePeak: Double = 0
+    /// True while the detector is listening only because `config.tailRearmNs`
+    /// put it back on watch. It goes false the moment the shipped release
+    /// condition holds, so the guard covers exactly the crossings this
+    /// mechanism made possible and nothing else.
+    private var armedOnTail: Bool = false
+    /// Whether the envelope has fallen to `config.tailRearmDipFraction` of
+    /// `strikePeak` since that strike.
+    private var sawDipSinceOnset: Bool = false
+
     /// Members of the live group, kept only while the group could still fire.
     /// A rhythmic disturbance can chain hundreds of onsets, and once the count
     /// is past `DetectorConfig.supportedTapCounts` the members are dead weight,
@@ -213,9 +228,28 @@ public final class TapDetector: TapDetecting {
         envelopeForTesting = envelope
         var onsetTrigger: Trigger?
 
+        // Tail bookkeeping. Pure recording: what the envelope did relative to
+        // the strike that last disarmed us. Nothing reads it unless
+        // `tailRearmNs` is set, so with the knob off this changes no decision.
+        if let onset = lastOnsetNs, sample.tNs - onset <= tuning.peakHoldNs {
+            strikePeak = max(strikePeak, envelope)
+        }
+        if strikePeak > 0, envelope <= effectiveConfig.tailRearmDipFraction * strikePeak {
+            sawDipSinceOnset = true
+        }
+        // The shipped re-arm condition, evaluated whatever the arm state is.
+        // Armed or not, the moment it holds the detector is listening on the
+        // terms it has always listened on, and any tail-re-arm guard stops.
+        let released = envelope <= threshold * tuning.releaseFraction
+            && (lastOnsetNs.map { sample.tNs - $0 >= tuning.onsetDebounceNs } ?? true)
+
         if armed {
-            if sampleIndex > tuning.warmupSamples && envelope >= threshold {
+            if released { armedOnTail = false }
+            if sampleIndex > tuning.warmupSamples && envelope >= onsetBar(threshold: threshold) {
                 armed = false
+                armedOnTail = false
+                strikePeak = envelope
+                sawDipSinceOnset = false
                 lastOnsetNs = sample.tNs
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
 
@@ -234,10 +268,20 @@ public final class TapDetector: TapDetecting {
                     onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
                 }
             }
-        } else if envelope <= threshold * tuning.releaseFraction,
-                  let onset = lastOnsetNs,
-                  sample.tNs - onset >= tuning.onsetDebounceNs {
-            armed = true
+        } else if let onset = lastOnsetNs {
+            if released {
+                armed = true
+                armedOnTail = false
+            } else if effectiveConfig.tailRearmNs > 0,
+                      sample.tNs - onset >= effectiveConfig.tailRearmNs,
+                      effectiveConfig.tailRearmDipFraction <= 0 || sawDipSinceOnset {
+                // The tail never came back under the release line, and on a
+                // damped surface it may not for hundreds of ms. Start listening
+                // again on the clock alone; `onsetBar` is what keeps the tail
+                // itself from being read as the next strike.
+                armed = true
+                armedOnTail = true
+            }
         }
 
         // Onsets first, deadlines second: an onset landing on the same sample as
@@ -294,6 +338,7 @@ public final class TapDetector: TapDetecting {
         armed = true
         lastOnsetNs = nil
         pending = nil
+        clearTailState()
         clearGroup()
         lastGroupingOnsetNs = nil
         refractoryUntilNs = Int64.min
@@ -362,6 +407,22 @@ public final class TapDetector: TapDetecting {
         return base * tuning.inGestureThresholdFraction
     }
 
+    /// The level this sample must reach to be an onset.
+    ///
+    /// Normally the threshold, exactly as before. The exception is the state
+    /// only `config.tailRearmNs` can produce: listening again while the shipped
+    /// release condition has still never held since the last strike. There the
+    /// tail can sit above the threshold the whole time, so the threshold alone
+    /// would declare a phantom onset on the first sample after re-arming.
+    /// `tailRearmPeakFraction` asks the crossing to be a reasonable fraction of
+    /// the strike that caused the tail instead.
+    private func onsetBar(threshold: Double) -> Double {
+        guard effectiveConfig.tailRearmNs > 0,
+              effectiveConfig.tailRearmPeakFraction > 0,
+              armedOnTail, strikePeak > 0 else { return threshold }
+        return max(threshold, strikePeak * effectiveConfig.tailRearmPeakFraction)
+    }
+
     /// Drop everything derived from the sample stream, keeping gate and
     /// refractory (they are driven by wall-order events, not by the filters).
     private func dropSignalState() {
@@ -370,6 +431,7 @@ public final class TapDetector: TapDetecting {
         armed = true
         lastOnsetNs = nil
         lastGroupingOnsetNs = nil
+        clearTailState()
         noiseFloorHoldUntilNs = Int64.min
         publishPending()
         clearGroup()
@@ -494,6 +556,12 @@ public final class TapDetector: TapDetecting {
     /// so an over-long group is still recognisably over-long.
     private static let groupOnsetRetentionLimit =
         DetectorConfig.supportedTapCounts.upperBound + 1
+
+    private func clearTailState() {
+        strikePeak = 0
+        armedOnTail = false
+        sawDipSinceOnset = false
+    }
 
     private func clearGroup() {
         group.removeAll(keepingCapacity: true)

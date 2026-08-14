@@ -65,6 +65,51 @@ during typing, which stayed at zero.
 | Wider join window | lap 65 → 70 %, **latency p95 209 → 389 ms** |
 | Per-surface calibration | desk 95.65 %, soft 100 %, **lap 82.5 % at its own best** |
 | Learned join window (235 ms) | held-out lap **80 % → 80 %**, latency 208.9 → 223.9 ms |
+| Re-arm on the debounce alone (200 ms) | training lap 73.75 → 77.50 %, soft and desk unmoved, FP 3 → 1 |
+
+### Re-arming on a ringing tail
+
+The shipped re-arm needs the envelope back under `0.4 × threshold` **and** the
+100 ms debounce. On a damped surface the case rings for hundreds of ms, so the
+detector is still disarmed when the second strike lands: measured over every
+training tap deck, desk 0 deaf second taps, soft 3 deaf and 0 weak, lap 12 deaf
+and 13 weak.
+
+`DetectorConfig.tailRearmNs` re-arms on the clock alone. Swept on `data/raw`:
+
+```
+  tailRearm   pooled            desk     soft      lap        FP   deaf desk/soft/lap
+     off      101/123  82.11 %  95.65 %  100.00 %   73.75 %    3    0 / 3 / 12
+      60 ms    49/123  39.84 %  13.04 %    0.00 %   57.50 %    0    0 / 0 /  0
+     100 ms    79/123  64.23 %  95.65 %   40.00 %   61.25 %    1    0 / 0 /  2
+     140 ms    97/123  78.86 %  95.65 %   85.00 %   72.50 %    2    0 / 1 /  7
+     160 ms   102/123  82.93 %  95.65 %   90.00 %   77.50 %    2    0 / 3 / 10
+     200 ms   104/123  84.55 %  95.65 %  100.00 %   77.50 %    1    0 / 3 / 10
+     210 ms   103/123  83.74 %  95.65 %  100.00 %   76.25 %    1
+```
+
+**Deafness and detection point opposite ways below about 160 ms.** At 60 ms the
+deaf count is zero on every surface — the mechanism cures the thing it was built
+for, completely — and pooled detection collapses to 39.84 %, because the tail
+that the detector is now listening to crosses its own threshold. `explain` on a
+soft deck at 60 ms: *"ungated onsets at 5 points, spacings [61, 88, 61, 71] ms,
+none inside the accepted [100, 220] ms inter-tap window"*. Every phantom inside
+`minInterTapNs` aborts the group outright.
+
+Both compensating guards were built and measured. Requiring the envelope to dip
+to a fraction of the previous strike's peak (`tailRearmDipFraction`) and
+requiring a tail crossing to beat a fraction of that peak
+(`tailRearmPeakFraction`) each recover a couple of gestures at 100–140 ms and
+neither gets soft back: best short-re-arm result was soft 15/20 at 100 ms with
+the peak guard at 0.8. At 200 ms both guards are inert or cost a gesture, so
+**the shipped setting needs neither — a longer debounce is the whole mechanism.**
+
+The plateau is 190–206 ms, which is a narrow slot: the join window closes at
+220 ms, so re-arming at 200 ms buys 20 ms in which a formerly deaf second tap can
+still land legally. It is worth three lap gestures and two fewer false triggers,
+lap deafness 12 → 10, latency and typing false triggers unmoved. Three gestures
+out of eighty is not a lap fix and is not far outside the noise; the knob ships
+**off**.
 
 ### What the learned window does and does not fix
 

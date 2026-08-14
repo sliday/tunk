@@ -91,6 +91,9 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "tailRearmNs":         return "Re-arm on a ringing tail"
+        case "tailRearmDipFraction": return "Tail re-arm dip"
+        case "tailRearmPeakFraction": return "Tail re-arm peak"
         default:                    return field
         }
     }
@@ -130,6 +133,20 @@ extension DetectorConfig {
         out.confirmWindowNs = clampWindow(out.confirmWindowNs, "confirmWindowNs")
         out.maxInterTapNs = clampWindow(out.maxInterTapNs, "maxInterTapNs")
         out.minInterTapNs = clampWindow(out.minInterTapNs, "minInterTapNs")
+        out.tailRearmNs = clampWindow(out.tailRearmNs, "tailRearmNs")
+
+        // A fraction is of a measured peak, so it is a ratio and it cannot be
+        // negative. Above 1 is legal and meaningful for the peak guard (ask the
+        // next strike to be bigger than the last), so only the floor is clamped.
+        func clampFraction(_ value: Double, _ field: String) -> Double {
+            guard !(value.isFinite && value >= 0) else { return value }
+            issues.append(CoherenceIssue(field: field,
+                                         reason: "not a fraction of a peak",
+                                         applied: "0 (off)"))
+            return 0
+        }
+        out.tailRearmDipFraction = clampFraction(out.tailRearmDipFraction, "tailRearmDipFraction")
+        out.tailRearmPeakFraction = clampFraction(out.tailRearmPeakFraction, "tailRearmPeakFraction")
 
         if out.maxInterTapNs > out.confirmWindowNs {
             issues.append(CoherenceIssue(

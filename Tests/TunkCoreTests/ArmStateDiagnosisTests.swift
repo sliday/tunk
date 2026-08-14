@@ -11,7 +11,46 @@ final class ArmStateDiagnosisTests: XCTestCase {
     /// should drive `deaf` down, and that must pass, while any change that makes
     /// the detector deafer must fail here loudly.
     func testDeafSecondTapsDoNotGrow() throws {
-        let root = "/Users/stas/Playground/tunk/data/raw/"
+        let tally = try Self.tally(config: .default, label: "shipped")
+        XCTAssertEqual(tally["desk"]?.deaf, 0, "a hard desk has never been deaf")
+        XCTAssertLessThanOrEqual(tally["soft"]?.deaf ?? 99, 3)
+        XCTAssertLessThanOrEqual(tally["lap"]?.deaf ?? 99, 12)
+        // The point of the split: on soft, EVERY miss is deafness, not weakness.
+        XCTAssertEqual(tally["soft"]?.weak, 0)
+    }
+
+    /// The same tally with `tailRearmNs` on at its best measured setting. Every
+    /// bound here is the shipped number, so this fails the moment the mechanism
+    /// stops paying for itself in the currency it was built for.
+    func testTailRearmDrivesDeafnessDown() throws {
+        var cfg = DetectorConfig.default
+        cfg.tailRearmNs = 200_000_000
+        let tally = try Self.tally(config: cfg, label: "tailRearm 200 ms")
+        XCTAssertEqual(tally["desk"]?.deaf, 0)
+        XCTAssertLessThanOrEqual(tally["soft"]?.deaf ?? 99, 3)
+        // Was 12 with the shipped re-arm rule; measured 10 at 200 ms.
+        XCTAssertLessThanOrEqual(tally["lap"]?.deaf ?? 99, 10)
+        // Deafness must not have been traded for weakness: a second tap the
+        // detector now hears must not be reclassified rather than recovered.
+        XCTAssertEqual(tally["soft"]?.weak, 0)
+        XCTAssertLessThanOrEqual(tally["lap"]?.weak ?? 99, 13)
+    }
+
+    /// data/raw in whichever checkout this test file lives in. It used to be an
+    /// absolute path into the main working copy, which meant a worktree scored
+    /// somebody else's bytes.
+    static var rawRoot: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // TunkCoreTests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // repo root
+            .appendingPathComponent("data/raw").path + "/"
+    }
+
+    static func tally(config: DetectorConfig, label: String)
+        throws -> [String: (deaf: Int, weak: Int, hit: Int)]
+    {
+        let root = rawRoot
         let fm = FileManager.default
         let dirs = try fm.contentsOfDirectory(atPath: root)
             .filter { $0.hasPrefix("tap_deck__") }.sorted()
@@ -25,7 +64,7 @@ final class ArmStateDiagnosisTests: XCTestCase {
             guard !samples.isEmpty, !groups.isEmpty else { continue }
 
             // Replay once, recording arm-state and envelope at every sample.
-            let d = TapDetector(config: .default)
+            let d = TapDetector(config: config)
             var armedAt: [Bool] = []; armedAt.reserveCapacity(samples.count)
             var envAt: [Double] = []; envAt.reserveCapacity(samples.count)
             var thrAt: [Double] = []; thrAt.reserveCapacity(samples.count)
@@ -61,15 +100,12 @@ final class ArmStateDiagnosisTests: XCTestCase {
             }
             tally[String(surface)] = t
         }
+        print("  [\(label)]")
         for (surface, t) in tally.sorted(by: { $0.key < $1.key }) {
             let total = t.deaf + t.weak + t.hit
             print(String(format: "  %-5@  gestures %3d   2nd tap seen %3d   DEAF %3d   weak %3d",
                          surface as NSString, total, t.hit, t.deaf, t.weak))
         }
-        XCTAssertEqual(tally["desk"]?.deaf, 0, "a hard desk has never been deaf")
-        XCTAssertLessThanOrEqual(tally["soft"]?.deaf ?? 99, 3)
-        XCTAssertLessThanOrEqual(tally["lap"]?.deaf ?? 99, 12)
-        // The point of the split: on soft, EVERY miss is deafness, not weakness.
-        XCTAssertEqual(tally["soft"]?.weak, 0)
+        return tally
     }
 }

@@ -224,6 +224,47 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// shipped constant can cover. Nil until calibrated.
     public var calibratedInterTapNs: Int64?
 
+    /// Re-arm this long after an onset even if the envelope is still above the
+    /// release line. **0 = off, and off is what ships.**
+    ///
+    /// The shipped re-arm needs BOTH the envelope back under
+    /// `releaseFraction * threshold` AND `DSPTuning.onsetDebounceNs` elapsed. On
+    /// a damped surface the case rings for hundreds of ms, so between the two
+    /// halves of one gesture the envelope never returns to baseline and the
+    /// detector is still disarmed when the second strike lands. Measured over
+    /// every training tap deck, splitting each missed second tap into "disarmed
+    /// though the transient was big enough to cross" and "genuinely under the
+    /// bar": desk 0 deaf, soft 3 deaf and 0 weak, lap 12 deaf and 13 weak.
+    ///
+    /// Setting this re-arms on the clock alone. It can only make the detector
+    /// listen more, never less: the shipped condition still re-arms whenever it
+    /// would have. What it buys back in deafness it can spend on phantom onsets,
+    /// since a decaying tail still over the threshold crosses the instant the
+    /// detector starts listening — that is what `tailRearmDipFraction` and
+    /// `tailRearmPeakFraction` are for.
+    public var tailRearmNs: Int64
+
+    /// Guard on `tailRearmNs`: the envelope must have fallen to this fraction of
+    /// the previous strike's peak at some point since that strike before the
+    /// clock alone may re-arm. **0 = off.**
+    ///
+    /// Hysteresis measured against the strike instead of against the threshold.
+    /// A ring decays relative to the strike that caused it even while it stays
+    /// far above an absolute release line, so this keeps "one strike is one
+    /// onset" on a surface where the absolute line is unreachable.
+    public var tailRearmDipFraction: Double
+
+    /// Guard on `tailRearmNs`: while still on a tail — re-armed by the clock and
+    /// the envelope not yet under the release line — an onset must also beat
+    /// this fraction of the previous strike's peak. **0 = off.**
+    ///
+    /// The second tap of a gesture runs a median 0.85 of the first, so a
+    /// fraction near that is a real bar for a fresh strike and a high one for a
+    /// tail that has already decayed. It applies to nothing else: once the
+    /// envelope has been under the release line the ordinary threshold is the
+    /// only bar, exactly as it is today.
+    public var tailRearmPeakFraction: Double
+
     /// Legacy single-count accessor. Reads the lowest armed count; writing it
     /// replaces the armed set. Kept so existing call sites keep working while
     /// callers migrate to `armedTapCounts` — there is still exactly one stored
@@ -269,7 +310,13 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
-                calibratedInterTapNs: Int64? = nil) {
+                calibratedInterTapNs: Int64? = nil,
+                tailRearmNs: Int64 = 0,
+                tailRearmDipFraction: Double = 0,
+                tailRearmPeakFraction: Double = 0) {
+        self.tailRearmNs = tailRearmNs
+        self.tailRearmDipFraction = tailRearmDipFraction
+        self.tailRearmPeakFraction = tailRearmPeakFraction
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
         self.defaultThreshold = defaultThreshold
@@ -303,6 +350,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case tailRearmNs, tailRearmDipFraction, tailRearmPeakFraction
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +368,11 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        tailRearmNs = try c.decodeIfPresent(Int64.self, forKey: .tailRearmNs) ?? d.tailRearmNs
+        tailRearmDipFraction = try c.decodeIfPresent(Double.self, forKey: .tailRearmDipFraction)
+            ?? d.tailRearmDipFraction
+        tailRearmPeakFraction = try c.decodeIfPresent(Double.self, forKey: .tailRearmPeakFraction)
+            ?? d.tailRearmPeakFraction
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +396,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(tailRearmNs, forKey: .tailRearmNs)
+        try c.encode(tailRearmDipFraction, forKey: .tailRearmDipFraction)
+        try c.encode(tailRearmPeakFraction, forKey: .tailRearmPeakFraction)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
