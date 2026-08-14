@@ -432,17 +432,22 @@ final class DetectorTests: XCTestCase {
 
     func testConfirmWindowSetsTheLatency() {
         // The confirm window is also the join window, so a short one needs a
-        // brisk gesture to have anything to fire on.
+        // brisk gesture to have anything to fire on. Both are now scaled above
+        // the 100 ms onset debounce: a 100 ms window with 90 ms spacing became
+        // unreachable when the debounce moved there, because two onsets closer
+        // than the debounce merge into one and a window of 100 ms cannot admit a
+        // spacing greater than 100 ms. The property under test — latency equals
+        // the confirm window — does not depend on the particular value.
         var config = DetectorConfig.default
-        config.confirmWindowNs = 100_000_000
-        config.maxInterTapNs = 100_000_000
-        let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 90_000_000)
+        config.confirmWindowNs = 160_000_000
+        config.maxInterTapNs = 160_000_000
+        let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 130_000_000)
         guard let trigger = run(stream, config: config).triggers.first else {
             return XCTFail("expected a trigger")
         }
         let latency = trigger.tNs - trigger.tapOnsets[1]
-        XCTAssertGreaterThanOrEqual(latency, 100_000_000)
-        XCTAssertLessThan(latency, 110_000_000)
+        XCTAssertGreaterThanOrEqual(latency, 160_000_000)
+        XCTAssertLessThan(latency, 170_000_000)
     }
 
     func testTapCountToFireOfOneArmsTheSingleTap() {
