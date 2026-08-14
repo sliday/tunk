@@ -81,6 +81,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         engine.setEnabled(false)
+        // Drain the emit queue before the process goes away. A pair holds its
+        // key down for 8 ms on that queue, and macOS does NOT clean up after a
+        // posting process dies: measured, a child that posted a key-down with
+        // maskControl and exited left the session at 0x40000 at t+0.5 s and
+        // t+2.5 s, cleared only by a later keyless flagsChanged. The window is
+        // small — a few hundred microseconds to 8 ms — but a crash, a logout or
+        // a killall landing inside it leaves a chord asserted with nothing left
+        // running to release it.
+        engine.drainPendingEmissions()
     }
 
     // MARK: - menu

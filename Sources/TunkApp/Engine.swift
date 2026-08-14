@@ -623,6 +623,10 @@ final class Engine: ObservableObject {
         return result != nil
     }
 
+    /// Blocks until any in-flight key pair has finished posting. See
+    /// `HotkeyEmitter.drainPending`.
+    func drainPendingEmissions() { runner.drainPending() }
+
     // MARK: - sleep, wake, and a stuck sensor
 
     @objc private func willSleep() {

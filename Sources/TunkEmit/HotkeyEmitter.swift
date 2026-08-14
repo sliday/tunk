@@ -136,6 +136,17 @@ public final class HotkeyEmitter: @unchecked Sendable {
     /// `.userInteractive` because this is a keystroke the user is waiting on.
     private let postQueue = DispatchQueue(label: "dev.tunk.emit.post", qos: .userInteractive)
 
+    /// Blocks until any in-flight pair has finished posting.
+    ///
+    /// A pair holds its key down for 8 ms on `postQueue`, and macOS does not
+    /// clean up after a posting process dies — measured, a child that posted a
+    /// key-down with maskControl and exited left the session at 0x40000 at
+    /// t+0.5 s and t+2.5 s. Called from `applicationWillTerminate` so a normal
+    /// quit cannot leave a chord asserted with nothing running to release it.
+    public func drainPending() {
+        postQueue.sync {}
+    }
+
     /// Called after every emission attempt, outside the lock, on whichever
     /// thread ran the emission — the post queue for `emitAsync`, the caller's
     /// thread for `emit`. The menubar uses it to refresh the "fired N s ago" line.

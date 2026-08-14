@@ -101,6 +101,9 @@ public struct BrokenBinding: Sendable, Equatable {
 ///    user on every stray knock. Checking means reading the list. It never means
 ///    running the shortcut to see what happens.
 public final class ActionRunner: @unchecked Sendable {
+    /// See `HotkeyEmitter.drainPending`.
+    public func drainPending() { emitter.drainPending() }
+
     private let emitter: HotkeyEmitter
     private let spawner: ShortcutSpawning
     private let resolver: ShortcutNameResolving

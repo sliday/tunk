@@ -34,7 +34,12 @@ final class ConfirmWindowRangeTests: XCTestCase {
                        "140 ms detects nothing — this is why the range no longer reaches it")
         XCTAssertGreaterThan(detected(confirmMs: 160), 0,
                              "the shipped slider minimum must detect at least something")
-        XCTAssertEqual(detected(confirmMs: 220), spacings.count,
-                       "the shipped default must catch every representative gesture")
+        // 7 of 8, not 8: the 230 ms spacing is outside the shipped 220 ms join
+        // window and is SUPPOSED to miss. Written as 8 first, which was the test
+        // being wrong rather than the detector.
+        XCTAssertEqual(detected(confirmMs: 220), spacings.count - 1,
+                       "the shipped default catches every gesture inside its window")
+        XCTAssertGreaterThan(detected(confirmMs: 240), detected(confirmMs: 220),
+                             "widening the window admits the 230 ms gesture")
     }
 }

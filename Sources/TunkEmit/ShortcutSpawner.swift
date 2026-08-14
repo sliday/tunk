@@ -103,6 +103,18 @@ public final class ShortcutsProcessSpawner: ShortcutSpawning, @unchecked Sendabl
                 }
             }
             process.standardError = errPipe
+            // Whoever fires the completion first — real termination or the
+            // watchdog — must also detach the reader and close the pipe. Firing
+            // alone left both ends open for as long as the child lived, and a
+            // child that trips the watchdog is by definition one that does not
+            // exit. Measured: 60 hung spawns took /dev/fd from 4 to 124 and it
+            // stayed there after every completion had fired; 200 clean spawns
+            // leaked nothing. A Shortcut waiting on user input plus a user who
+            // keeps tapping walks the app to its file-descriptor limit.
+            once.onFire = {
+                errPipe.fileHandleForReading.readabilityHandler = nil
+                try? errPipe.fileHandleForReading.close()
+            }
             process.standardOutput = FileHandle.nullDevice
             process.standardInput = FileHandle.nullDevice
 
@@ -150,16 +162,27 @@ public final class ShortcutsProcessSpawner: ShortcutSpawning, @unchecked Sendabl
 final class OneShot: @unchecked Sendable {
     private let lock = NSLock()
     private var handler: (@Sendable (ShortcutOutcome) -> Void)?
+    private var cleanup: (@Sendable () -> Void)?
 
     init(_ handler: @escaping @Sendable (ShortcutOutcome) -> Void) {
         self.handler = handler
     }
 
+    /// Runs once, whichever path fires first. Used to close the stderr pipe:
+    /// the watchdog path used to fire the completion and leave the pipe open.
+    var onFire: (@Sendable () -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return cleanup }
+        set { lock.lock(); cleanup = newValue; lock.unlock() }
+    }
+
     func fire(_ outcome: ShortcutOutcome) {
         lock.lock()
         let h = handler
+        let c = cleanup
         handler = nil
+        cleanup = nil
         lock.unlock()
+        c?()
         h?(outcome)
     }
 }
