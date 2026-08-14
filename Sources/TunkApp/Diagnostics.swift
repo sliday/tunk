@@ -806,6 +806,13 @@ extension Diagnostics {
     ///
     /// This also exercises the release itself: an over-release would crash here
     /// rather than in somebody's menubar.
+    ///
+    /// **Known limit: n above roughly 10 stops producing output on this
+    /// machine.** The sensor is fine afterwards — `--sensor-props` answers and
+    /// `tunk-capture record` gets 3188 samples at 794.8 Hz with zero gaps
+    /// immediately after — so it is this probe, not the hardware, and the cause
+    /// is not understood. Use n <= 10, and treat a hang as an unexplained
+    /// result rather than a passing one.
     static func sensorCycles(_ n: Int) {
         func ports() -> Int {
             var nameCount = mach_msg_type_number_t(0)
@@ -816,19 +823,33 @@ extension Diagnostics {
                                   &types, &typeCount) == KERN_SUCCESS else { return -1 }
             return Int(nameCount)
         }
-        let before = ports()
         let source = AccelSource()
-        for i in 0..<n {
-            do { try source.start(onSample: { _ in }) }
-            catch { print("cycle \(i): start failed: \(error)"); exit(1) }
-            usleep(60_000)
-            source.stop()
+        func cycle(_ times: Int) {
+            for i in 0..<times {
+                do { try source.start(onSample: { _ in }) }
+                catch { print("cycle \(i): start failed: \(error)"); exit(1) }
+                usleep(60_000)
+                source.stop()
+            }
         }
+        // Warm up first, then measure. Opening the sensor the first time costs
+        // a fixed number of ports for queues and machinery that are never freed
+        // and never grow — measured, roughly 6 to 14 regardless of whether 10 or
+        // 30 cycles followed. Counting from a cold process made this probe read
+        // "+0.80 per cycle" at n=10 and "+0.23" at n=30 for identical
+        // behaviour, which says the probe was measuring startup, not the leak.
+        cycle(5)
+        let before = ports()
+        cycle(n)
         let after = ports()
-        line(String(format: "  %d cycles: mach ports %d -> %d  (%+.2f per cycle)",
-                    n, before, after, Double(after - before) / Double(max(1, n))))
-        line(after - before <= n / 4 ? "  no meaningful leak" : "  LEAKING")
-        exit(after - before <= n / 4 ? 0 : 1)
+        let perCycle = Double(after - before) / Double(max(1, n))
+        line(String(format: "  %d cycles after warm-up: mach ports %d -> %d  (%+.2f per cycle)",
+                    n, before, after, perCycle))
+        // The leak this probe exists for was exactly 5 per cycle and monotone.
+        // Half a port per cycle is comfortably below it and above measurement
+        // noise on this machine.
+        line(perCycle < 0.5 ? "  no meaningful leak" : "  LEAKING")
+        exit(perCycle < 0.5 ? 0 : 1)
     }
 
     /// `tunk --sensor-props`

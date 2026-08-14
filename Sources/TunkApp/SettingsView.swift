@@ -656,10 +656,24 @@ struct SettingsView: View {
              caption: "Coupling changes with the machine and the surface, so the threshold "
                     + "comes from your own taps rather than a shipped constant.") {
             HStack(spacing: 12) {
-                Readout(label: "current threshold",
+                // "learned from your taps", not "current threshold". The raw
+                // calibrated value is NOT what the detector runs: the
+                // sensitivity slider multiplies it, so at 1.35x this card read
+                // 0.043 while the detector ran 0.058. Naming a number after
+                // what it is beats showing a number that is not in force, and
+                // the effective bar already has its own readout on the
+                // Detection card.
+                Readout(label: "learned from your taps",
                         value: settings.config.calibratedThreshold
                             .map { String(format: "%.3f", $0) } ?? "uncalibrated",
                         accent: settings.config.calibratedThreshold == nil ? .orange : .primary)
+                if let learned = settings.config.calibratedThreshold,
+                   abs(engine.effectiveConfig.effectiveThreshold - learned) > 0.0005 {
+                    Readout(label: "in force",
+                            value: String(format: "%.3f",
+                                          engine.effectiveConfig.effectiveThreshold),
+                            accent: .accentColor)
+                }
                 Spacer()
                 Button("Calibrate…") { panel.showCalibration = true }
                     .buttonStyle(TunkButtonStyle(prominent: settings.config.calibratedThreshold == nil))

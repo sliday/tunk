@@ -137,6 +137,20 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   222 ms fired normally. Groups are now closed and take their confirm decision.
   `DetectorJoinBoundaryTests`.
 
+## Owned by TunkIMU
+
+- **`--sensor-cycles` hangs above roughly ten cycles.** Added while fixing the
+  client leak. At n = 10 it reports and exits; at n = 12 and above it produces
+  no output and does not return. The sensor is NOT wedged by it: immediately
+  afterwards `--sensor-props` answers normally and `tunk-capture record` gets
+  3188 samples at 794.8 Hz with zero gaps. So it is the probe, and the cause is
+  unknown — most likely something in repeated `stop()`/`start()` around the
+  `queue.sync {}` teardown, which would matter beyond the probe because the
+  watchdog reacquires that way.
+  
+  Recorded rather than quietly capped, because a diagnostic that hangs is worth
+  less than no diagnostic and this one may be pointing at something real.
+
 ## Owned by TunkEmit
 
 All three of these were fixed and the list was never updated. Checked against

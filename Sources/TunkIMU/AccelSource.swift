@@ -114,8 +114,19 @@ public final class AccelSource {
         ] as CFDictionary
         IOHIDEventSystemClientSetMatching(c, match)
 
+        // Release the client on every failure path from here down. `stop()` is
+        // guarded on `running`, which is set only after both property writes
+        // succeed, so a throw used to strand the client with nothing able to
+        // free it — and Engine's retry loop overwrites it each time, at the same
+        // five mach ports per attempt as the leak fixed in `stop()`.
+        func abandon() {
+            Unmanaged<AnyObject>.fromOpaque(UnsafeRawPointer(c)).release()
+            client = nil
+            service = nil
+        }
         guard let services = IOHIDEventSystemClientCopyServices(c),
               CFArrayGetCount(services) > 0 else {
+            abandon()
             throw AccelSourceError.noMatchingService
         }
         let svc = unsafeBitCast(CFArrayGetValueAtIndex(services, 0), to: TunkHIDServiceClientRef.self)
@@ -124,6 +135,7 @@ public final class AccelSource {
         var interval = reportIntervalUs
         let intervalRef = CFNumberCreate(nil, .sInt64Type, &interval)!
         guard IOHIDServiceClientSetProperty(svc, "ReportInterval" as CFString, intervalRef) else {
+            abandon()
             throw AccelSourceError.activationRejected
         }
         // Ask for immediate delivery rather than batched. Best effort: the

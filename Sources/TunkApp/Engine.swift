@@ -624,10 +624,27 @@ final class Engine: ObservableObject {
         }
     }
 
+    /// Clears everything `beginCalibration` clears. It used to clear three of
+    /// five, so "Start over" kept the abandoned attempt's ring ratios and they
+    /// kept voting in the median.
+    ///
+    /// Modelled on the panel's own scenario — a first attempt with a forearm on
+    /// the case, abandoned, then a clean attempt with the arm lifted:
+    ///
+    ///     no restart          35 %  "settles quickly ... most reliable"
+    ///     after 1 Start over  39 %  "settles quickly"
+    ///     after 2 Start over  60 %  "rings loudly ... expect some misses"
+    ///     after 3 Start over  61 %  "rings loudly"
+    ///
+    /// Two restarts flipped the verdict, and the advice the user then got
+    /// described taps they had thrown away. My own bug, from the commit that
+    /// added the ring measurement.
     func clearCalibrationSamples() {
         detectorLock.lock()
         calibrationStrengths.removeAll(keepingCapacity: true)
         calibrationOnsetTimes.removeAll(keepingCapacity: true)
+        calibrationRingRatios.removeAll(keepingCapacity: true)
+        ringPending = nil
         calibrationSuppressed = 0
         detectorLock.unlock()
     }
