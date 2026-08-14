@@ -268,6 +268,48 @@ make-or-break metric has nothing behind it. The gap is real, and it is reported
 rather than hidden — which is the difference between an unmeasured metric and a
 false green.
 
+## Correction: the ranking yardstick below was wrong
+
+The section that follows estimated that a pick-the-largest ranker could reach
+about 90 % on lap. That estimate was wrong, in two ways that both inflated it,
+and three critics found the consequence independently before the arithmetic
+error was found.
+
+| the estimate assumed | the detector actually enforces |
+|---|---|
+| candidates collapsed 40 ms apart | `minInterTapNs` / `onsetDebounceNs` = **100 ms** |
+| a [100, 450] ms search window | legal join window **[100, 220] ms** |
+
+Redone inside the window the detector can actually use, on lap training data at
+a 0.8x bar:
+
+```
+debounce 100 ms:  0 cand  2   1 cand 76   2+ cand  2 ( 2.5 %)   2nd tap present 64/80 (80 %)
+debounce  70 ms:  0 cand  2   1 cand 71   2+ cand  7 ( 8.8 %)   2nd tap present 65/80 (81 %)
+debounce  50 ms:  0 cand  2   1 cand 68   2+ cand 10 (12.5 %)   2nd tap present 65/80 (81 %)
+debounce  35 ms:  0 cand  2   1 cand 66   2+ cand 12 (15.0 %)   2nd tap present 65/80 (81 %)
+```
+
+Two consequences:
+
+1. **Ranking cannot engage.** Only 2.5 % of lap gestures offer more than one
+   legal candidate. Measured in the built mechanisms: 9 selection attempts all
+   held exactly one eligible candidate; one prunable group in 49 minutes of
+   training data; zero on held-out. What shipped in all three was the second-tap
+   threshold reduction already recorded as measured shut, wearing a ranking
+   name.
+2. **Lowering the bar buys nothing inside the legal window.** 80 % presence at
+   0.8x against 81.2 % at full bar. The information is not under the bar; it is
+   outside the window.
+
+Shortening the debounce does not rescue it: at 35 ms only 15 % of gestures offer
+a choice and presence stays at 81 %. That combination is measured shut without
+needing to be built.
+
+**This is why lap sits at exactly 80 %.** For about a fifth of lap gestures
+there is no second transient inside the legal join window at any threshold, and
+widening the window saturates at 77.5 % (see the latency table above).
+
 ## Ranking, not admission — and the yardstick it must beat
 
 Every one of the eleven mechanisms used a statistic to ADMIT an onset: "is this
