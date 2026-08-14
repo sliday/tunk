@@ -104,40 +104,33 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// uncalibrated; the detector then falls back to `defaultThreshold`.
     public var calibratedThreshold: Double?
 
-    /// Pre-calibration threshold, in g. **0.030, fitted to real taps.**
+    /// Pre-calibration threshold, in g. **0.032, fitted across three surfaces.**
     ///
-    /// It was 0.30 — invented before any recording existed — and the first real
-    /// session showed that value missing every onset. Measured over 40 labelled
-    /// onsets, one operator, hard desk: amplitude 0.0456 to 0.1326 g, median
-    /// 0.0842, noise floor 0.00101 g. The weakest deliberate tap is 45x the
-    /// floor, so the signal was never marginal; the threshold was in the wrong
-    /// place.
+    /// Swept against every recorded tap session — 23 desk, 20 soft, 80 lap, plus
+    /// a 20-tap held-out desk set the threshold has never been fitted on:
     ///
-    /// Swept against 29.9 minutes of real ambient and confound recordings, so
-    /// detection and false triggers move together rather than one being traded
-    /// blindly for the other:
+    ///     threshold  desk      soft      lap       held-out  FP/20min
+    ///     0.036      95.65 %   95.00 %   52.50 %   100 %     1.22
+    ///     0.032      95.65 %  100.00 %   73.75 %   100 %     1.22
+    ///     0.030      95.65 %   95.00 %   76.25 %   100 %     2.04
+    ///     0.028      95.65 %   85.00 %   81.25 %   100 %     1.63
+    ///     0.024      95.65 %   70.00 %   81.25 %   100 %     2.44
     ///
-    ///     threshold  detection        false triggers      margin below
-    ///                                                     weakest real tap
-    ///     0.300      0.00 % (0/22)    0.00                —
-    ///     0.060      95.45 %          0.00                —
-    ///     0.045      100.00 %         0.00                 1 %
-    ///     0.035      100.00 %         0.00                23 %
-    ///     0.030      100.00 %         0.00                34 %
-    ///     0.025      100.00 %         0.00                45 %
-    ///     0.020      100.00 %         0.67 per 20 min     56 %
+    /// **Soft and lap pull in opposite directions.** Every step down that helps
+    /// lap costs soft about twice as much, and there is no value that satisfies
+    /// both. That is the case for per-surface calibration rather than a shipped
+    /// constant, and it is why the PRD asks for a learn-my-tap step at all.
     ///
-    /// 0.045 was chosen first and was a mistake: it sits 1 % under the weakest
-    /// tap ever observed, so a single slightly softer tap is missed and there is
-    /// no headroom at all. The honest reading of the sweep is that the usable
-    /// band runs from just above 0.020, where false triggers appear, to about
-    /// 0.045, where detection headroom runs out. 0.030 sits near the middle of
-    /// it: a third of the way below the weakest real tap, and half again above
-    /// where the ambient recordings start firing.
+    /// 0.032 is chosen because it dominates the 0.030 it replaces: soft goes
+    /// 95 % to 100 %, false triggers fall, held-out desk stays at 100 %, and lap
+    /// gives up two and a half points it was never close to passing with anyway.
     ///
-    /// Still one person, one surface, one tap location, one session. Calibration
-    /// should replace it per user, and soft and lap surfaces will very likely
-    /// move it — coupling is the thing that changes most between surfaces.
+    /// A caution, since this number has now moved four times in one day as data
+    /// arrived — 0.30 invented, 0.045 with 1 % margin, 0.030, now 0.032. Each
+    /// move was justified by more evidence than the last, and the last one was
+    /// caught overfitting: 0.024 looked best on two lap sessions and collapsed
+    /// soft from 95 % to 70 % when scored against everything. Sweep the whole
+    /// corpus, never a subset.
     public var defaultThreshold: Double
 
     /// Suppress onsets for this long after any gating input event.
@@ -259,7 +252,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     public static let `default` = DetectorConfig(
         sensitivity: 1.0,
         calibratedThreshold: nil,
-        defaultThreshold: 0.030,
+        defaultThreshold: 0.032,
         gateWindowNs: 180_000_000,
         minInterTapNs: 100_000_000,
         maxInterTapNs: 220_000_000,
