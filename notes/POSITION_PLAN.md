@@ -92,3 +92,49 @@ easier to fool than a threshold:
 Coupling changes per surface, so a positional model trained on a desk will very
 likely not transfer to a lap. That is worth knowing early and is an argument for
 doing the surface work before the positional work, not after.
+
+
+## Feasibility, measured on the existing corpus
+
+The proposal was to tap clockwise around the keyboard frame and learn to predict
+WHERE a tap landed, not just that one happened. Before recording a thousand taps
+it is worth asking whether the signal could carry position at all.
+
+Every recording in the corpus is `tap_deck` — one location. That cannot test
+across positions, but it bounds the answer from the other side: if taps at ONE
+location already scatter across all directions, then direction cannot separate
+different locations, and no amount of recording changes that.
+
+Lateral (x, y) direction of the first strike, all sessions, both data roots:
+
+| surface | n | circular SD | resultant R |
+|---|---|---|---|
+| desk | 43 | 83° | 0.353 |
+| soft | 40 | 71° | 0.464 |
+| lap | 100 | 93° | 0.265 |
+
+Near-uniform. Separating eight positions 45° apart needs within-location scatter
+well under about 20°; this is three to four times that. The direction of a strike
+is dominated by something other than where it landed — most likely the angle of
+the knuckle on each individual tap.
+
+This is the second statistic to fail: the note above already records axis ratios
+as too weak. Two independent measures, both near-uniform within one location.
+
+### The physical reason to expect this
+
+There is **one** accelerometer. Locating an impact normally needs several, so
+that time-of-arrival differences can be triangulated. A single sensor can only
+infer position from how differently the strike excites the chassis modes — and
+the sensor is band-limited near 50 Hz, so most of the modal structure that would
+differ between locations never arrives.
+
+### What would still be worth testing, and what would not
+
+Not worth recording: anything that leans on direction or axis ratios.
+
+Possibly worth it, but only after the detection bar is settled: whether the
+LOW-frequency mode mix differs by location — the 25-50 Hz band is the only part
+of the spectrum that reaches the file with any energy. That is a different
+statistic from the two now measured shut, and it would need the clockwise deck to
+test. It is a research question, not a feature.
