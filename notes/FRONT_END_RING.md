@@ -143,7 +143,9 @@ mechanisms is a property of the front end, not of the threshold.
 - **False triggers inside lap tap decks double: 3 to 6**, 6.54 to 13.08 per
   20 min. Lap live false triggers already failed the bar; they now fail it
   harder. Desk, soft, both confound sessions, 25 minutes of idle and all
-  11.7 minutes of typing stay at **zero**.
+  11.7 minutes of typing stay at **zero**. The motion gate and the onset
+  ceiling were re-swept against these six and both are negatives — see
+  `notes/MOTION_GATE_AT_RESONATOR.md`.
 - **Typing false triggers across the whole threshold sweep** at this front end:
   0 at every value from 0.005 to 0.022, and **1 at 0.004**. The headroom is
   finite and the operating point sits well inside it, but it is not unlimited.
