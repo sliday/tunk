@@ -127,9 +127,17 @@ final class DetectorNoiseFloorTests: XCTestCase {
 
         XCTAssertLessThan(after - beforeStrike, 0.002,
                           "a 0.9 g strike must not lift its own reference")
+        // This used to demand the adaptive term stay under 10% of the absolute
+        // one, which held only against a 0.30 g default invented before any
+        // recording existed. At the fitted 0.045 g the adaptive term is about a
+        // quarter of it, and that is worth knowing rather than hiding: on a
+        // surface only a little livelier than this desk, the adaptive term will
+        // take over as the governing bar. What must remain true is the ordering
+        // — on a quiet desk the calibrated absolute threshold governs, so
+        // calibration means something.
         XCTAssertLessThan(DSPTuning.default.noiseSnrMultiple * after,
-                          DetectorConfig.default.defaultThreshold * 0.1,
-                          "the adaptive term stays a rounding error next to the absolute one")
+                          DetectorConfig.default.defaultThreshold,
+                          "on a quiet desk the absolute threshold must still govern")
     }
 
     func testAQuietSurfaceCostsNothing() {

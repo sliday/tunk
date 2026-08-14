@@ -128,24 +128,31 @@ final class CalibrationTests: XCTestCase {
     }
 
     func testCalibrationOnASoftSurfaceLowersTheBar() {
-        // Same gesture, half the coupling. Out of the box the default 0.30 g
-        // threshold misses it; after calibration on that surface it lands.
-        let (weak, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000, amplitude: 0.30)
+        // Amplitudes here used to be 0.30 g, chosen when the shipped default was
+        // also 0.30 g so that a "weak" tap sat right on the bar. The default is
+        // now 0.045 g, fitted to 40 real onsets, and 0.30 g is a firm tap rather
+        // than a weak one — the fixture's premise inverted. Rescaled so "weak"
+        // is genuinely below the shipped bar. Measured mapping through the
+        // filter chain: synthetic amplitude 0.05 yields a 0.0333 g envelope —
+        // under the 0.045 g default so it is missed, over DSPTuning's 0.02 g
+        // hard floor so calibration can still reach it. Real desk taps measured
+        // 0.046 to 0.133 g of envelope, i.e. synthetic amplitude 0.08 to 0.20.
+        let (weak, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000, amplitude: 0.05)
         XCTAssertTrue(TapDetector.replay(samples: weak.samples(), inputs: []).triggers.isEmpty,
                       "uncalibrated default is too high for this coupling")
 
         var learning = DetectorConfig.default
-        learning.calibratedThreshold = 0.03
+        learning.calibratedThreshold = 0.021
         var stream = SyntheticStream(durationNs: SyntheticStream.leadInNs + 10_000_000_000)
         for i in 0..<10 {
             stream.taps.append(.init(tNs: SyntheticStream.leadInNs + Int64(i) * 1_000_000_000,
-                                     amplitude: 0.30))
+                                     amplitude: 0.05))
         }
         let learned = TapDetector.replay(samples: stream.samples(), inputs: [], config: learning)
         XCTAssertEqual(learned.onsets.count, 10)
 
         let result = TapCalibration.calibrate(tapStrengths: learned.onsets.map(\.strength),
-                                              noiseFloor: 0.004)!
+                                              noiseFloor: 0.0005)!
         let tuned = TapCalibration.apply(result, to: DetectorConfig.default)
         XCTAssertLessThan(tuned.effectiveThreshold, DetectorConfig.default.effectiveThreshold)
         XCTAssertEqual(TapDetector.replay(samples: weak.samples(), inputs: [],

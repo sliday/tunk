@@ -224,8 +224,19 @@ final class DetectorTests: XCTestCase {
         stream.wobbleAmplitude = 0.5
         stream.wobbleHz = 3
         let result = run(stream)
-        XCTAssertTrue(result.triggers.isEmpty)
-        XCTAssertTrue(result.onsets.isEmpty, "and it should not even look like an onset")
+        XCTAssertTrue(result.triggers.isEmpty, "a sway must never fire")
+        // It used to assert no onset at all. That held only because the shipped
+        // threshold was 0.30 g, a number invented before any recording existed;
+        // at the fitted 0.045 g a 0.5 g sway leaks enough past the one-pole
+        // 20 Hz high pass to cross it. Harmless — an onset that never joins a
+        // group fires nothing, and the monitor showing it is honest. The
+        // property worth pinning is that it does not become a gesture.
+        // This helper reports triggers and onsets, not groups, and a trigger is
+        // what a group becoming a gesture produces — so the assertion above
+        // already covers it.
+        XCTAssertLessThan(result.onsets.filter { !$0.suppressedByGate }.count, 4,
+                          "a sway may leak the odd onset past a 0.045 g bar, but "
+                          + "not a stream of them")
     }
 
     func testQuietStreamProducesNothing() {
