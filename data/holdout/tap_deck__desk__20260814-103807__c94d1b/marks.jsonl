@@ -1,0 +1,46 @@
+{"kind":"input_tap","t_ns":1275334,"text":"active"}
+{"kind":"phase","t_ns":1613917,"text":"start:tap_deck"}
+{"kind":"phase","t_ns":4439250,"text":"Deliberate double taps on the keyboard deck."}
+{"kind":"prompt","t_ns":4477375,"text":"After each beep, double tap the deck beside the keyboard. Two firm taps, then hands off."}
+{"group":0,"kind":"prompt","t_ns":12000936209,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":0,"kind":"beep","t_ns":12000981459}
+{"group":1,"kind":"prompt","t_ns":14790531042,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":1,"kind":"beep","t_ns":14790627209}
+{"group":2,"kind":"prompt","t_ns":18782791625,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":2,"kind":"beep","t_ns":18782904667}
+{"group":3,"kind":"prompt","t_ns":21935975375,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":3,"kind":"beep","t_ns":21936083500}
+{"group":4,"kind":"prompt","t_ns":26481433209,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":4,"kind":"beep","t_ns":26481536500}
+{"group":5,"kind":"prompt","t_ns":29283732500,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":5,"kind":"beep","t_ns":29283822750}
+{"group":6,"kind":"prompt","t_ns":32029665500,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":6,"kind":"beep","t_ns":32029734000}
+{"group":7,"kind":"prompt","t_ns":36570918167,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":7,"kind":"beep","t_ns":36571035084}
+{"group":8,"kind":"prompt","t_ns":39912131500,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":8,"kind":"beep","t_ns":39912252167}
+{"group":9,"kind":"prompt","t_ns":43920279542,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":9,"kind":"beep","t_ns":43920350084}
+{"group":10,"kind":"prompt","t_ns":48405711875,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":10,"kind":"beep","t_ns":48405782084}
+{"group":11,"kind":"prompt","t_ns":51722214125,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":11,"kind":"beep","t_ns":51722339750}
+{"group":12,"kind":"prompt","t_ns":54472312125,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":12,"kind":"beep","t_ns":54472380334}
+{"group":13,"kind":"prompt","t_ns":58548775167,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":13,"kind":"beep","t_ns":58548931209}
+{"group":14,"kind":"prompt","t_ns":62072799250,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":14,"kind":"beep","t_ns":62072899500}
+{"group":15,"kind":"prompt","t_ns":66242659417,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":15,"kind":"beep","t_ns":66242721792}
+{"group":16,"kind":"prompt","t_ns":70998366917,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":16,"kind":"beep","t_ns":70998425167}
+{"group":17,"kind":"prompt","t_ns":74221813792,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":17,"kind":"beep","t_ns":74221881500}
+{"group":18,"kind":"prompt","t_ns":77577466875,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":18,"kind":"beep","t_ns":77577565667}
+{"group":19,"kind":"prompt","t_ns":82405429375,"text":"double-tap: double-taps on the keyboard deck"}
+{"group":19,"kind":"beep","t_ns":82405524000}
+{"kind":"phase","t_ns":88781573875,"text":"stop"}
+{"kind":"phase","t_ns":88781670875,"text":"end:script"}
