@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "title": "Tunk — gauntlet loop",
-  "generated_at": "2026-08-14T07:15:04Z",
+  "generated_at": "2026-08-14T08:09:43Z",
   "stale_after_s": 900,
   "cold_after_s": 7200,
   "primary_tap_count": "2",
@@ -1140,6 +1140,114 @@
                 },
                 "latency_max_ms": {
                   "value": 222.6,
+                  "n": 22
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 10,
+      "label": "threshold corrected 0.045 -> 0.030",
+      "timestamp": "2026-08-14T08:09:43Z",
+      "status": "scored",
+      "headline": "incomplete — 6 session(s) graded across 1 surface(s)",
+      "biggest_gap": "desk: false triggers, typing sessions has no data (no typing sessions). Unmeasured is not passing.",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "train",
+        "data_root": "/Users/stas/Playground/tunk/data/raw",
+        "is_stub": false,
+        "warnings": [
+          "tap_deck__desk__20260814-090700__8f0079: group 0 has 1 onset(s) but intent 'double'. Scored as a 1-tap gesture (onset count wins)."
+        ]
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 6,
+            "tap_groups": {
+              "1": 0,
+              "2": 22
+            }
+          },
+          "taps": {
+            "1": {
+              "metrics": {
+                "detection_rate": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no labelled tap groups in this scope"
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 6
+                },
+                "latency_p50_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_p95_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "latency_max_ms": {
+                  "value": null,
+                  "n": 0
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            },
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 22
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": 0,
+                  "n": 2
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 6
+                },
+                "latency_p50_ms": {
+                  "value": 198.9,
+                  "n": 22
+                },
+                "latency_p95_ms": {
+                  "value": 210.1,
+                  "n": 22
+                },
+                "latency_max_ms": {
+                  "value": 221.4,
                   "n": 22
                 },
                 "stuck_modifiers": {

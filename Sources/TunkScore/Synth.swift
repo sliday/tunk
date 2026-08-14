@@ -38,9 +38,31 @@ enum Synth {
 
     struct Burst {
         var tNs: Int64
+        /// Peak deviation in g. Fixtures state these as MULTIPLES of the shipped
+        /// threshold via `Synth.times(_:)` rather than as bare numbers.
         var amplitude: Double
         var freqHz: Double = 180
         var tauMs: Double = 6
+    }
+
+    /// A burst amplitude expressed as a multiple of the shipped onset threshold.
+    ///
+    /// Fixture amplitudes used to be absolute, which tied every planted session
+    /// to whatever `defaultThreshold` happened to be. Moving that default from
+    /// the invented 0.30 g to a fitted value broke five tests the first time and
+    /// ten the second — none of them because behaviour regressed, all of them
+    /// because "a tap" and "a tap too weak to count" had been written down as
+    /// numbers that only meant anything next to the old threshold.
+    ///
+    /// Stating them as multiples makes a fixture say what it means: `times(3)`
+    /// is comfortably a tap at any threshold, `times(0.6)` is comfortably not.
+    ///
+    /// The measured envelope is roughly 0.68x the burst amplitude through the
+    /// filter chain (synthetic amplitude 0.05 -> 0.0333 g envelope, 0.08 ->
+    /// 0.0534 g), so the conversion accounts for that gain.
+    static func times(_ multiple: Double,
+                      of threshold: Double = DetectorConfig.default.defaultThreshold) -> Double {
+        threshold * multiple / 0.68
     }
 
     struct Plan {
@@ -157,7 +179,7 @@ enum Synth {
             let t0 = firstAtNs + Int64(g) * spacingNs
             for k in 0..<tapsPerGesture {
                 let t = t0 + Int64(k) * interTapNs
-                p.bursts.append(Burst(tNs: t, amplitude: k == 0 ? 2.0 : 1.8))
+                p.bursts.append(Burst(tNs: t, amplitude: k == 0 ? times(3.0) : times(2.7)))
                 p.labels.append(TapLabel(tNs: t, group: g, indexInGroup: k,
                                          intent: intent, confidence: .autoRefined))
             }
@@ -207,8 +229,8 @@ enum Synth {
         for g in 0..<count {
             let knock = firstAtNs + Int64(g) * spacingNs
             let tap = knock + leadNs
-            p.bursts.append(Burst(tNs: knock, amplitude: 1.9))
-            p.bursts.append(Burst(tNs: tap, amplitude: 2.1))
+            p.bursts.append(Burst(tNs: knock, amplitude: times(2.85)))
+            p.bursts.append(Burst(tNs: tap, amplitude: times(3.15)))
             // Only the deliberate tap is labelled, and it is labelled `single`.
             p.labels.append(TapLabel(tNs: tap, group: g, indexInGroup: 0,
                                      intent: .single, confidence: .humanVerified))
@@ -219,7 +241,7 @@ enum Synth {
 
     /// Typing: hard key strikes that would pair up into "double-taps" if the gate
     /// were not there. Each strike carries its `key_down` / `key_up`.
-    static func typing(strikes: Int, surface: Surface = .desk, amplitude: Double = 0.9) -> Plan {
+    static func typing(strikes: Int, surface: Surface = .desk, amplitude: Double = times(1.35)) -> Plan {
         var p = Plan(category: .typing, surface: surface, durationSec: 0, expectedTriggers: 0, seed: 23)
         var rng = RNG(seed: 77)
         var t: Int64 = 2_000_000_000
@@ -269,7 +291,7 @@ enum Synth {
         var p = Plan(category: .confoundMug, surface: surface,
                      durationSec: Double(count) * 2 + 4, expectedTriggers: 0, seed: 53)
         for i in 0..<count {
-            p.bursts.append(Burst(tNs: 2_000_000_000 + Int64(i) * 2_000_000_000, amplitude: 2.5, tauMs: 9))
+            p.bursts.append(Burst(tNs: 2_000_000_000 + Int64(i) * 2_000_000_000, amplitude: times(3.75), tauMs: 9))
         }
         p.notes = "\(count) isolated hard thumps 2 s apart. No pairing is possible: planted triggers = 0."
         return p

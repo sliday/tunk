@@ -133,20 +133,21 @@ final class CalibrationTests: XCTestCase {
         // now 0.045 g, fitted to 40 real onsets, and 0.30 g is a firm tap rather
         // than a weak one — the fixture's premise inverted. Rescaled so "weak"
         // is genuinely below the shipped bar. Measured mapping through the
-        // filter chain: synthetic amplitude 0.05 yields a 0.0333 g envelope —
-        // under the 0.045 g default so it is missed, over DSPTuning's 0.02 g
-        // hard floor so calibration can still reach it. Real desk taps measured
-        // 0.046 to 0.133 g of envelope, i.e. synthetic amplitude 0.08 to 0.20.
-        let (weak, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000, amplitude: 0.05)
+        // is genuinely below the shipped bar, stated as a multiple of it so the
+        // fixture keeps meaning the same thing when the bar moves. 0.8x is under
+        // the threshold, and still above DSPTuning's 0.02 g hard floor, so
+        // calibration can reach down to it. Real desk taps measured 0.046 to
+        // 0.133 g of envelope.
+        let (weak, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000, amplitude: SyntheticStream.amplitude(timesThreshold: 0.8))
         XCTAssertTrue(TapDetector.replay(samples: weak.samples(), inputs: []).triggers.isEmpty,
                       "uncalibrated default is too high for this coupling")
 
         var learning = DetectorConfig.default
-        learning.calibratedThreshold = 0.021
+        learning.calibratedThreshold = 0.0205
         var stream = SyntheticStream(durationNs: SyntheticStream.leadInNs + 10_000_000_000)
         for i in 0..<10 {
             stream.taps.append(.init(tNs: SyntheticStream.leadInNs + Int64(i) * 1_000_000_000,
-                                     amplitude: 0.05))
+                                     amplitude: SyntheticStream.amplitude(timesThreshold: 0.8)))
         }
         let learned = TapDetector.replay(samples: stream.samples(), inputs: [], config: learning)
         XCTAssertEqual(learned.onsets.count, 10)

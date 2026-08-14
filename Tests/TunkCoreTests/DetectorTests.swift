@@ -247,7 +247,11 @@ final class DetectorTests: XCTestCase {
     }
 
     func testWeakTapsBelowThresholdDoNotTrigger() {
-        let (stream, _) = SyntheticStream.gesture(count: 2, spacingNs: 150_000_000, amplitude: 0.05)
+        // 0.8x the shipped threshold: unambiguously under the bar whatever that
+        // bar is currently set to.
+        let (stream, _) = SyntheticStream.gesture(
+            count: 2, spacingNs: 150_000_000,
+            amplitude: SyntheticStream.amplitude(timesThreshold: 0.8))
         XCTAssertTrue(run(stream).triggers.isEmpty)
     }
 

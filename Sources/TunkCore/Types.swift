@@ -104,30 +104,40 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// uncalibrated; the detector then falls back to `defaultThreshold`.
     public var calibratedThreshold: Double?
 
-    /// Pre-calibration threshold, in g. **0.045, fitted to real taps.**
+    /// Pre-calibration threshold, in g. **0.030, fitted to real taps.**
     ///
-    /// It was 0.30 — a number invented before any recording existed — and the
-    /// first real session showed that value missing every onset. Measured over
-    /// 40 labelled onsets from one operator on a hard desk: amplitude ranges
-    /// 0.0456 to 0.1326 g, median 0.0842, against a 0.00101 g noise floor. The
-    /// weakest deliberate tap is 45x the floor, so the signal is not marginal;
-    /// the threshold was simply in the wrong place.
+    /// It was 0.30 — invented before any recording existed — and the first real
+    /// session showed that value missing every onset. Measured over 40 labelled
+    /// onsets, one operator, hard desk: amplitude 0.0456 to 0.1326 g, median
+    /// 0.0842, noise floor 0.00101 g. The weakest deliberate tap is 45x the
+    /// floor, so the signal was never marginal; the threshold was in the wrong
+    /// place.
     ///
-    /// Swept against 29.9 minutes of real ambient and confound recordings:
+    /// Swept against 29.9 minutes of real ambient and confound recordings, so
+    /// detection and false triggers move together rather than one being traded
+    /// blindly for the other:
     ///
-    ///     threshold   detection        false triggers
-    ///     0.300       0.00 % (0/22)    0.00
-    ///     0.100       22.73 %          0.00
-    ///     0.060       95.45 %          0.00
-    ///     0.039       100.00 % (22/22) 0.00
-    ///     0.025       100.00 %         0.00
-    ///     0.015       100.00 %         0.67 per 20 min
+    ///     threshold  detection        false triggers      margin below
+    ///                                                     weakest real tap
+    ///     0.300      0.00 % (0/22)    0.00                —
+    ///     0.060      95.45 %          0.00                —
+    ///     0.045      100.00 %         0.00                 1 %
+    ///     0.035      100.00 %         0.00                23 %
+    ///     0.030      100.00 %         0.00                34 %
+    ///     0.025      100.00 %         0.00                45 %
+    ///     0.020      100.00 %         0.67 per 20 min     56 %
     ///
-    /// 0.045 sits inside that window with margin on both sides: comfortably
-    /// under the weakest observed tap, and three times above where false
-    /// triggers begin. It is still one person, one surface, one tap location —
-    /// calibration should replace it per user, and the soft and lap surfaces
-    /// may well move it.
+    /// 0.045 was chosen first and was a mistake: it sits 1 % under the weakest
+    /// tap ever observed, so a single slightly softer tap is missed and there is
+    /// no headroom at all. The honest reading of the sweep is that the usable
+    /// band runs from just above 0.020, where false triggers appear, to about
+    /// 0.045, where detection headroom runs out. 0.030 sits near the middle of
+    /// it: a third of the way below the weakest real tap, and half again above
+    /// where the ambient recordings start firing.
+    ///
+    /// Still one person, one surface, one tap location, one session. Calibration
+    /// should replace it per user, and soft and lap surfaces will very likely
+    /// move it — coupling is the thing that changes most between surfaces.
     public var defaultThreshold: Double
 
     /// Suppress onsets for this long after any gating input event.
@@ -243,7 +253,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     public static let `default` = DetectorConfig(
         sensitivity: 1.0,
         calibratedThreshold: nil,
-        defaultThreshold: 0.045,
+        defaultThreshold: 0.030,
         gateWindowNs: 180_000_000,
         minInterTapNs: 80_000_000,
         maxInterTapNs: 220_000_000,

@@ -85,6 +85,20 @@ struct SyntheticStream {
 }
 
 extension SyntheticStream {
+    /// A tap amplitude expressed as a multiple of the shipped onset threshold.
+    ///
+    /// Fixtures used to state amplitudes absolutely, which tied them to whatever
+    /// `defaultThreshold` happened to be. Moving that default from an invented
+    /// 0.30 g to a fitted value broke five tests, then ten. None of them because
+    /// behaviour regressed — because "a tap" and "a tap too weak to count" had
+    /// been written as numbers that only meant something beside the old bar.
+    ///
+    /// Measured gain through the filter chain: envelope is about 0.68x the tap
+    /// amplitude (0.05 -> 0.0333 g, 0.08 -> 0.0534 g).
+    static func amplitude(timesThreshold multiple: Double) -> Double {
+        DetectorConfig.default.defaultThreshold * multiple / 0.68
+    }
+
     /// Quiet lead-in so the high pass settles and the noise floor converges
     /// before the first tap. 1.5 s at 796 Hz is ~1200 samples.
     static let leadInNs: Int64 = 1_500_000_000
