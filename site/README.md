@@ -314,6 +314,17 @@ Nothing automated reads the harness today, and writing that consumer against a
 report with empty denominators would be guessing at its shape under load. The
 mapping above is the handover.
 
+## The closing section now carries the measured numbers
+
+The page promised that the numbers would appear "whatever they say". They are
+there, including lap at 80 % against a 98 % bar, the reason (a sensor that
+reports 796 times a second and carries nothing above ~50 Hz), and the caveat that
+the typing zero rests on 1.6 minutes of un-gated exposure rather than the 11.7
+minutes recorded.
+
+Anyone updating them should take them from `tunk-score run --data data/holdout
+--i-am-a-critic`, not from memory, and should not quietly drop the lap row.
+
 ## Open decisions for the owner
 
 - **The call to action.** It points at `https://github.com/sliday/tunk`, which is

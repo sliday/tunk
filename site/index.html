@@ -635,7 +635,41 @@
     <p class="section-lede enter beat-2">
       The sensor works, the actions fire, the recordings are stacking up. What is left is the part
       that decides whether the thing is any good: proving the detector answers a real tap and
-      ignores a real day. When those numbers exist, they go on this page, whatever they say.
+      ignores a real day. That page said the numbers would go here when they existed, whatever they
+      said. They exist, and one of them is bad.
+    </p>
+
+    <dl class="metrics enter beat-3">
+      <div>
+        <dt>Detection, hard desk &mdash; held out, 20 gestures</dt>
+        <dd>100%</dd>
+      </div>
+      <div>
+        <dt>Detection, soft surface &mdash; held out, 20 gestures</dt>
+        <dd>100%</dd>
+      </div>
+      <div>
+        <dt>Detection, on a lap &mdash; held out, 20 gestures. The bar is 98%.</dt>
+        <dd>80%</dd>
+      </div>
+      <div>
+        <dt>Response time, 95th percentile, every surface. The bar is 250&nbsp;ms.</dt>
+        <dd>209&nbsp;ms</dd>
+      </div>
+      <div>
+        <dt>False triggers while typing, 11.7 minutes recorded</dt>
+        <dd>0</dd>
+      </div>
+    </dl>
+
+    <p class="cta-note enter beat-3">
+      Measured by replaying real recordings the tuning never saw, on one operator and one machine.
+      Lap fails and the reason is the sensor rather than the code: it reports 796 times a second but
+      carries nothing above about 50&nbsp;Hz, so a knuckle strike and the chassis ringing afterwards
+      arrive the same shape. On a lap the second tap lands on the first one's echo. Twenty separate
+      approaches were built and graded against recordings their author could not see; none closed it.
+      The typing zero is real, but 86% of that time the detector is deliberately muted by keyboard
+      activity, so the honest exposure is 1.6&nbsp;minutes, not 11.7.
     </p>
     <div class="cta-row enter beat-2">
       <a class="btn btn--primary" href="https://github.com/sliday/tunk">
