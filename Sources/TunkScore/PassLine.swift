@@ -29,6 +29,14 @@ enum PassLine {
     static let requiredSurfaces: [Surface] = [.desk, .soft, .lap]
 
     /// Build the checks for one scope (a surface, or the pooled set).
+    /// " — 2 of 19 credits disagree by > 40 ms", or empty when none do.
+    static func cleanSuffix(for agg: Aggregate) -> String {
+        let loose = agg.perCount.reduce(0) { $0 + $1.creditsOver40ms }
+        guard loose > 0 else { return "" }
+        return String(format: " — %d of %d credits disagree with the label by > 40 ms",
+                      loose, agg.detectedGroups)
+    }
+
     static func checks(for agg: Aggregate, scope: String) -> [Check] {
         var out: [Check] = []
 
@@ -36,9 +44,18 @@ enum PassLine {
             name: "detection rate, all armed gestures",
             scope: scope,
             requirement: "≥ 98 %",
+            // The contract rate decides pass or fail, per FORMAT.md. The clean
+            // count rides alongside it because the contract credits a trigger on
+            // the strength of ONE number — its last onset against the label's
+            // last — and a lap ring lobe sits about 25 ms from its strike, so a
+            // credit disagreeing by 40-60 ms can be firing on the wrong
+            // transient and still count. Printing only the contract rate is how
+            // a front-end change once read as three recovered gestures when one
+            // was clean.
             actual: agg.armedGroups == 0 ? "no labelled groups for an armed tap count"
-                : String(format: "%.2f %% (%d/%d)", (agg.detectionRate ?? 0) * 100,
-                         agg.detectedGroups, agg.armedGroups),
+                : String(format: "%.2f %% (%d/%d)%@", (agg.detectionRate ?? 0) * 100,
+                         agg.detectedGroups, agg.armedGroups,
+                         Self.cleanSuffix(for: agg)),
             status: agg.armedGroups == 0 ? .noData
                 : ((agg.detectionRate ?? 0) + 1e-9 >= detectionRateFloor ? .pass : .fail)
         ))
