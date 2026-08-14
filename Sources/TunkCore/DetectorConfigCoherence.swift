@@ -50,6 +50,11 @@ extension DetectorConfig {
     /// computed as `onset + window`.
     public static let maxWindowNs: Int64 = 10_000_000_000
 
+    /// Most onsets `groupPruneMaxDrop` may ask to discard. One less than the
+    /// largest group the detector retains members for, so at least one onset
+    /// besides the anchor always survives.
+    public static let maxGroupPruneDrop: Int = supportedTapCounts.upperBound - 1
+
     /// One thing `madeCoherent()` had to change, in words the settings panel can
     /// show without translating.
     public struct CoherenceIssue: Sendable, Equatable, CustomStringConvertible {
@@ -192,6 +197,28 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // An unknown ranker id must mean OFF, never "some other ranker". A config
+        // naming a statistic this build does not have is a config whose intent
+        // cannot be honoured, and quietly running a different statistic under the
+        // user's chosen number is the worst available answer.
+        let rankers = GroupPrune.Ranker.allCases.map(\.rawValue)
+        if !rankers.contains(abs(out.groupPruneRanker)) {
+            issues.append(CoherenceIssue(
+                field: "groupPruneRanker",
+                reason: "no ranker \(abs(out.groupPruneRanker)) in this build "
+                      + "(known: \(rankers.sorted()), negate to invert)",
+                applied: "off"))
+            out.groupPruneRanker = 0
+        }
+        if out.groupPruneMaxDrop < 0 || out.groupPruneMaxDrop > maxGroupPruneDrop {
+            let clamped = min(max(out.groupPruneMaxDrop, 0), maxGroupPruneDrop)
+            issues.append(CoherenceIssue(
+                field: "groupPruneMaxDrop",
+                reason: "a group never holds more than \(supportedTapCounts.upperBound + 1) onsets",
+                applied: "\(clamped)"))
+            out.groupPruneMaxDrop = clamped
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

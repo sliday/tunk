@@ -214,6 +214,128 @@ on one setting while detection *fell* by 21 gestures; the onset trace shows the
 detector firing at 16.713, 16.820, 16.921, 17.021 — a metronome at the debounce
 period, re-arming on ripple rather than on strikes.
 
+## Group pruning: ranking instead of gating, built and rejected
+
+The reading above says the information was there and nothing was choosing: a
+re-arm mechanism heard real second taps, the ripple pushed the group past two,
+and the grouper fires on exactly two. So the twelfth mechanism changes nothing
+about onset admission. At the confirm deadline, when a group holds more onsets
+than any armed count, it ranks the candidates, keeps the first plus the best of
+the rest, and fires the pruned group. It is behind `groupPruneRanker`, which
+defaults to 0 (off), and `GroupPruneTests` proves off is byte-identical.
+
+Ranking is a weaker requirement than gating, and the confirm window has already
+elapsed, so selection costs no latency. Both of those hold. The mechanism still
+fails, for a reason that has nothing to do with the statistic:
+
+**The shipped detector produces one prunable group in the entire training
+corpus.** Arm 2 and 3 together and the whole of `data/raw` reports a single
+3-onset group, in one lap session. There is nothing to choose between, because
+the deafness the last round measured means the ripple is never heard either.
+
+Swept over every ranker on `data/raw`, detection does not move once:
+
+| ranker | detected | FP | FP typing |
+|---|---|---|---|
+| off | 101/123 | 3 | 0 |
+| cos_first_xy | 101/123 | 3 | 0 |
+| crest | 101/123 | 4 | 0 |
+| crest inverted | 101/123 | 3 | 0 |
+| decay residual | 101/123 | 4 | 0 |
+| combined | 101/123 | 4 | 0 |
+| keep-the-latest (control) | 101/123 | 3 | 0 |
+| keep-the-strongest (control) | 101/123 | 3 | 0 |
+
+The one group it can act on is unwinnable. Lap session 1 holds onsets at 29.763,
+29.877 and 30.029 while the labelled gesture is (29.958, 30.453), and the real
+second tap at 30.435 heads the NEXT group. No ordering of those three onsets
+produces a detection; the pruned pair lands 424 ms from the labelled last onset,
+outside the 150 ms match window, so the only thing pruning can buy there is a
+false trigger, which is exactly what three of the rankers bought.
+
+### The ranking itself, measured against two controls
+
+Because the harness could only offer n = 1, the ranking was measured separately,
+on recorded training data, by manufacturing the condition the mechanism was
+designed for: re-arm early (release 0.6, 0.75, 0.9 against the shipped 0.4) so
+ripple onsets chain at the debounce period, then ask whether the ranker keeps the
+candidate nearest the labelled second tap. 41 contests, every one a straight
+choice between two candidates, so chance is 50 %:
+
+| ranker | pooled | lap | soft | amplitude-matched |
+|---|---|---|---|---|
+| cos_first_xy | 56.1 % (23/41) | 45.5 % | 68.4 % | 52.9 % |
+| crest | 24.4 % | 36.4 % | 10.5 % | 29.4 % |
+| crest inverted | 75.6 % | 63.6 % | 89.5 % | 70.6 % |
+| decay residual | 39.0 % | 22.7 % | 57.9 % | 35.3 % |
+| combined | 39.0 % | 27.3 % | 52.6 % | 35.3 % |
+| CONTROL keep-the-latest | 75.6 % | 90.9 % | 57.9 % | 70.6 % |
+| CONTROL keep-the-strongest | 100 % (41/41) | 100 % | 100 % | 100 % |
+
+Desk contributes nothing: it never produces an over-long group at any of these
+re-arm levels.
+
+`cos_first_xy`, the statistic that survived amplitude stratification and an
+independent rebuild, is a coin flip here, and a ranker reading no signal at all
+beats it. Crest only looks good inverted, and its inverted score matches
+keep-the-latest exactly, which is what a statistic correlated with recency rather
+than with strike-ness looks like.
+
+**And the contests amplitude wins 41 out of 41 are not the contests these
+statistics were measured in.** Early re-arm declares onsets on small dips, so the
+ripple in this regime is much weaker than the strike, while the whole lap problem
+is that a real second strike and the first strike's tail are the SAME size. So
+this measurement cannot validate a shape ranker. What it does establish is
+negative and solid: in the only over-long groups this corpus can produce, the
+shape statistics do not rank better than chance, and there is no evidence that
+adding a ranker to the confirm window recovers anything.
+
+### What pruning costs
+
+Two costs, both measured rather than argued.
+
+1. **A deliberate triple becomes a double.** With triple unarmed, a 3-onset group
+   fires nothing today; with pruning on it fires the double action.
+   `GroupPruneTests.testATripleBecomesADoubleWhenPruningIsOn` holds that as a
+   fact, and pruning stands down when the user has actually bound triple.
+2. **A false trigger per prunable group that is not a gesture.** Lap FP went 3 to
+   4 on the shipped config for three of the five rankers.
+
+What it does not cost: **zero typing false triggers and zero confound false
+triggers in every configuration measured**, which is the property the mechanism
+was picked for. Pruning cannot admit an onset, so it cannot fire in quiet. It can
+only ever turn a group the detector already had into a shorter one.
+
+A guard is worth recording, since it decides half the numbers above. Dropping a
+middle onset can leave a pair wider than `maxInterTapNs`, which fires on a gesture
+the grouper would have refused, i.e. a silent widening of the join window.
+`groupPruneRequireSpacing` defaults to true and refuses those, and with it on
+`cos_first_xy` changes nothing at all rather than buying a false trigger.
+
+### Where it would pay, and why that is not shippable
+
+At `defaultThreshold` 0.028, where the lower bar produces three prunable groups
+instead of one, pruning with the spacing rule relaxed recovers two gestures:
+
+| config | pooled | desk | soft | lap | FP | FP typing |
+|---|---|---|---|---|---|---|
+| 0.032, prune off (shipped) | 82.11 % | 95.65 % | 100 % | 73.75 % | 3 | 0 |
+| 0.028, prune off | 84.55 % | 95.65 % | 85.00 % | 81.25 % | 4 | 0 |
+| 0.028, prune on, spacing off | 86.18 % | 95.65 % | 85.00 % | 83.75 % | 5 | 0 |
+
+Every ranker recovers the same two gestures, including both controls, so the
+recovery is the pruning and not the statistic. And it is bought on top of a
+threshold that has already cost soft 100 % to 85 %, with the false-trigger rate
+going the wrong way. On the shipped threshold the same setting recovers nothing.
+
+**Verdict: do not ship.** Not because ranking inside the confirm window is a bad
+idea (it costs nothing and it is the right shape of question), but because this
+detector does not produce the groups it would act on. Pruning is a fix for the
+failure mode a WORKING re-arm mechanism would create. Nothing in eleven previous
+rounds produced one, so this is a fix waiting on a cure that does not exist. If a
+future front end starts hearing second strikes on a lap, the knob is here, it is
+measured, and it is off.
+
 ## The latency budget, priced
 
 `BAR_ASSESSMENT` previously offered "a latency budget above 250 ms" as a way to
@@ -390,6 +512,10 @@ three re-arm, plus threshold, debounce and window sweeps. None reached the bar
 on lap. The evidence that this is structural rather than a tuning failure is no
 longer one measurement; it is ten, from agents that did not see each other's
 work, every one graded on data its builder could not touch.
+
+Group pruning (above) is the one mechanism that attacked the *selection* problem
+rather than the detection problem. It recovered nothing for a new reason: the
+detector never produces the over-long groups it exists to rescue.
 
 ## Coverage limits
 

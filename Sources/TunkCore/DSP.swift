@@ -354,6 +354,17 @@ public struct SignalChain: Sendable, Equatable {
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
 
+    /// The per-axis high-passed acceleration of the CURRENT sample, in g, before
+    /// the quadrature pair and before the sliding maximum.
+    ///
+    /// Read only by the group-prune ranker (see GroupPrune.swift). Both later
+    /// stages exist to make the envelope readable as peak g and both destroy
+    /// waveform shape and direction, which is exactly what ranking candidates
+    /// inside one group needs.
+    public private(set) var highPassX: Double = 0
+    public private(set) var highPassY: Double = 0
+    public private(set) var highPassZ: Double = 0
+
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
     ///
     /// The high-passed envelope above answers "did something ring". This answers
@@ -402,6 +413,9 @@ public struct SignalChain: Sendable, Equatable {
         fastMagnitude.reset()
         magnitude = 0
         envelope = 0
+        highPassX = 0
+        highPassY = 0
+        highPassZ = 0
     }
 
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
@@ -418,6 +432,9 @@ public struct SignalChain: Sendable, Equatable {
         let ax = hpX.process(x)
         let ay = hpY.process(y)
         let az = hpZ.process(z)
+        highPassX = ax
+        highPassY = ay
+        highPassZ = az
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared

@@ -71,6 +71,9 @@ enum ConfigParam: String, CaseIterable {
     case tapCountToFire
     case onsetCeilingG
     case motionGateG
+    case groupPruneRanker
+    case groupPruneMaxDrop
+    case groupPruneRequireSpacing
 
     /// Accepts the canonical name or its `...Ms` alias for the ns fields.
     init?(name: String) {
@@ -113,6 +116,10 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .groupPruneRanker: c.groupPruneRanker = Int(v.rounded())
+        case .groupPruneMaxDrop: c.groupPruneMaxDrop = Int(v.rounded())
+        // A sweep can only write numbers, so the spacing rule is 0 or 1 here.
+        case .groupPruneRequireSpacing: c.groupPruneRequireSpacing = v != 0
         }
     }
 
@@ -129,6 +136,9 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .groupPruneRanker: return Double(c.groupPruneRanker)
+        case .groupPruneMaxDrop: return Double(c.groupPruneMaxDrop)
+        case .groupPruneRequireSpacing: return c.groupPruneRequireSpacing ? 1 : 0
         }
     }
 

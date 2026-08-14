@@ -184,6 +184,17 @@ public final class TapDetector: TapDetecting {
     private var groupLog: [TapGroupEvent] = []
     private var firingCounts: Set<Int>
 
+    /// Recent high-passed samples, kept ONLY while `groupPruneRanker` is
+    /// non-zero. With pruning off nothing is written here and the detector is
+    /// byte-identical to the build before it existed.
+    ///
+    /// Long enough to reach back from a group's confirm deadline to the peak of
+    /// its first onset: three join windows of members plus one confirm window is
+    /// 880 ms at the shipped numbers, and this holds ~1.3 s at 796 Hz.
+    private var shapeSamples: [GroupPrune.ShapeSample] = []
+    private static let shapeCapacity = 1024
+    private static let shapeTrimChunk = 256
+
     // MARK: - TapDetecting
 
     public func ingest(sample: AccelSample) -> Trigger? {
@@ -203,6 +214,16 @@ public final class TapDetector: TapDetecting {
                                      y: Double(sample.y),
                                      z: Double(sample.z),
                                      holdNoiseFloor: sample.tNs < noiseFloorHoldUntilNs)
+
+        if effectiveConfig.groupPruneRanker != 0 {
+            shapeSamples.append(GroupPrune.ShapeSample(tNs: sample.tNs,
+                                                       x: chain.highPassX,
+                                                       y: chain.highPassY,
+                                                       z: chain.highPassZ))
+            if shapeSamples.count > Self.shapeCapacity {
+                shapeSamples.removeFirst(Self.shapeTrimChunk)
+            }
+        }
 
         if pending != nil {
             pending!.peak = max(pending!.peak, envelope)
@@ -301,6 +322,7 @@ public final class TapDetector: TapDetecting {
         noiseFloorHoldUntilNs = Int64.min
         onsetLog.removeAll(keepingCapacity: true)
         groupLog.removeAll(keepingCapacity: true)
+        shapeSamples.removeAll(keepingCapacity: true)
     }
 
     // MARK: - Readouts for the tap monitor and the harness
@@ -373,6 +395,9 @@ public final class TapDetector: TapDetecting {
         noiseFloorHoldUntilNs = Int64.min
         publishPending()
         clearGroup()
+        // The shape buffer spans the seam too, and a ranker fitted across a
+        // sensor dropout would be fitting the filters' ring-in.
+        shapeSamples.removeAll(keepingCapacity: true)
     }
 
     private func publishPending() {
@@ -519,17 +544,29 @@ public final class TapDetector: TapDetecting {
         // Normally the peak window closed long ago; it only bites if someone
         // configures a confirm window shorter than the peak hold.
         if pending?.joinedGroup == true { publishPending() }
-        let members = group
+        var members = group
         let count = groupCount
         clearGroup()
+
+        // The whole gesture is in hand and the confirm window has elapsed, so
+        // this is the last moment at which anything can be decided and the first
+        // at which every candidate can be compared against the others.
+        var firedCount = count
+        var prunedFrom: Int?
+        if let kept = prune(members: members, count: count) {
+            members = kept
+            firedCount = kept.count
+            prunedFrom = count
+        }
 
         // Score is the weakest tap in the gesture, in g. The harness can sweep a
         // score cutoff offline and get exactly what raising the threshold would
         // have done.
         let score = members.map(\.strength).min() ?? 0
-        let fires = firingCounts.contains(count) && members.count == count
+        let fires = firingCounts.contains(firedCount) && members.count == firedCount
         append(TapGroupEvent(tNs: tNs, tapOnsets: members.map(\.tNs),
-                             tapCount: count, score: score, fired: fires))
+                             tapCount: firedCount, score: score, fired: fires,
+                             prunedFrom: prunedFrom))
 
         guard fires else {
             // Either nothing is bound to this count, or the group ran past the
@@ -540,6 +577,53 @@ public final class TapDetector: TapDetecting {
 
         refractoryUntilNs = tNs + effectiveConfig.refractoryNs
         return Trigger(tNs: tNs, tapOnsets: members.map(\.tNs), score: score)
+    }
+
+    /// The members to fire on instead of this over-long group, or nil to leave
+    /// the group exactly as it is.
+    ///
+    /// Returning nil is the shipped behaviour and the default, so with
+    /// `groupPruneRanker == 0` this function is one comparison and the rest of
+    /// the detector cannot tell it exists.
+    ///
+    /// Refuses in every case where the choice would be uninformed:
+    /// - the group already fires a count that is armed
+    /// - no armed count of 2 or more sits below this one. Pruning down to a
+    ///   SINGLE tap is a different risk class — one mug set down is one
+    ///   transient — and it is not something a ranker should be allowed to
+    ///   decide on the user's behalf.
+    /// - more onsets would have to go than `groupPruneMaxDrop` allows
+    /// - the group ran past `groupOnsetRetentionLimit`, so the members are a
+    ///   truncated view and the ranking would be over the wrong candidates
+    /// - the sample history the ranker needs is not in the buffer
+    private func prune(members: [GroupOnset], count: Int) -> [GroupOnset]? {
+        guard effectiveConfig.groupPruneRanker != 0 else { return nil }
+        guard members.count == count else { return nil }
+        guard !firingCounts.contains(count) else { return nil }
+        guard let target = firingCounts.filter({ $0 >= 2 && $0 < count }).max() else { return nil }
+        guard count - target <= effectiveConfig.groupPruneMaxDrop else { return nil }
+
+        guard let keptIndices = GroupPrune.select(onsets: members.map(\.tNs),
+                                                  strengths: members.map(\.strength),
+                                                  target: target,
+                                                  samples: shapeSamples,
+                                                  peakHoldNs: tuning.peakHoldNs,
+                                                  ranker: effectiveConfig.groupPruneRanker)
+        else { return nil }
+        let kept = keptIndices.map { members[$0] }
+
+        // What survives has to be a gesture the grouper would have accepted on
+        // its own. Dropping a middle onset can leave a pair wider than the join
+        // window, and firing on that is a silent widening of the window rather
+        // than a selection among candidates.
+        if effectiveConfig.groupPruneRequireSpacing {
+            for i in 1..<kept.count {
+                let gap = kept[i].tNs - kept[i - 1].tNs
+                guard gap >= effectiveConfig.minInterTapNs,
+                      gap <= effectiveConfig.maxInterTapNs else { return nil }
+            }
+        }
+        return kept
     }
 }
 
@@ -556,13 +640,19 @@ public struct TapGroupEvent: Sendable, Equatable {
     public var score: Double
     /// Whether this group produced a `Trigger`.
     public var fired: Bool
+    /// How many onsets the group held before `groupPruneRanker` discarded some,
+    /// nil when nothing was discarded. The tap monitor should say "saw three,
+    /// fired two" rather than reporting a clean double that never happened.
+    public var prunedFrom: Int?
 
-    public init(tNs: Int64, tapOnsets: [Int64], tapCount: Int, score: Double, fired: Bool) {
+    public init(tNs: Int64, tapOnsets: [Int64], tapCount: Int, score: Double, fired: Bool,
+                prunedFrom: Int? = nil) {
         self.tNs = tNs
         self.tapOnsets = tapOnsets
         self.tapCount = tapCount
         self.score = score
         self.fired = fired
+        self.prunedFrom = prunedFrom
     }
 }
 

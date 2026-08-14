@@ -219,6 +219,34 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Which statistic ranks the onsets of an over-long group, so the group can
+    /// be pruned down to an armed count instead of thrown away. **0, disabled.**
+    ///
+    /// A group holding more onsets than any armed count fires nothing today. The
+    /// gesture is lost even when the real second tap is one of those onsets and
+    /// the extras are the first strike's ring ripple. Non-zero turns on the
+    /// selection in `GroupPrune`: keep the first onset, keep the best-ranked of
+    /// the rest, discard the remainder, and give the pruned group its confirm
+    /// decision.
+    ///
+    /// Values are `GroupPrune.Ranker`; a negative value inverts that ranker.
+    /// Nothing is admitted, only discarded, so this cannot invent a trigger out
+    /// of quiet — every candidate was declared by the unchanged front end.
+    public var groupPruneRanker: Int
+    /// The most onsets pruning may discard from one group. **1.**
+    ///
+    /// A cap, not a target: dropping two onsets means claiming to know which
+    /// three of five candidates were ring, on evidence measured at AUC ~0.8.
+    public var groupPruneMaxDrop: Int
+    /// Whether the surviving onsets must still sit `minInterTapNs ...
+    /// maxInterTapNs` apart. **true.**
+    ///
+    /// With it on, pruning can only ever produce a gesture the grouper would have
+    /// accepted anyway. With it off, dropping a middle onset can leave a pair
+    /// wider than the join window, which is a latency-free way of widening that
+    /// window and needs its own measurement before it ships.
+    public var groupPruneRequireSpacing: Bool
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -269,7 +297,13 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                groupPruneRanker: Int = 0,
+                groupPruneMaxDrop: Int = 1,
+                groupPruneRequireSpacing: Bool = true,
                 calibratedInterTapNs: Int64? = nil) {
+        self.groupPruneRanker = groupPruneRanker
+        self.groupPruneMaxDrop = groupPruneMaxDrop
+        self.groupPruneRequireSpacing = groupPruneRequireSpacing
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
         self.defaultThreshold = defaultThreshold
@@ -303,6 +337,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case groupPruneRanker, groupPruneMaxDrop, groupPruneRequireSpacing
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +355,13 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        // Absent in every settings file written before pruning existed, and the
+        // default is OFF, so an upgrade changes nothing about how the detector
+        // behaves for someone who never asked for it.
+        groupPruneRanker = try c.decodeIfPresent(Int.self, forKey: .groupPruneRanker) ?? d.groupPruneRanker
+        groupPruneMaxDrop = try c.decodeIfPresent(Int.self, forKey: .groupPruneMaxDrop) ?? d.groupPruneMaxDrop
+        groupPruneRequireSpacing = try c.decodeIfPresent(Bool.self, forKey: .groupPruneRequireSpacing)
+            ?? d.groupPruneRequireSpacing
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +385,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(groupPruneRanker, forKey: .groupPruneRanker)
+        try c.encode(groupPruneMaxDrop, forKey: .groupPruneMaxDrop)
+        try c.encode(groupPruneRequireSpacing, forKey: .groupPruneRequireSpacing)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
