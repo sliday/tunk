@@ -312,12 +312,31 @@ struct SettingsView: View {
                            value: msBinding(\.maxInterTapNs), range: 200...700, step: 10,
                            readout: msReadout(settings.config.maxInterTapNs,
                                               inForce: inForce.maxInterTapNs), help: nil)
+                    // Range starts at 160, not 100. Below that the app cannot
+                    // detect a double-tap AT ALL, because madeCoherent() clamps
+                    // maxInterTapNs down to the confirm window, so lowering this
+                    // silently narrows the join window with it. Driven over the
+                    // real detector at the spacings this project has measured on
+                    // itself (desk 168-199 ms, soft 149-371 ms):
+                    //
+                    //   confirm 100/120/140 ms -> 0 of 8 double-taps detected
+                    //   confirm 160 ms         -> 2 of 8
+                    //   confirm 180 ms         -> 4 of 8
+                    //   confirm 220 ms         -> 8 of 8   (shipped)
+                    //
+                    // The help text said the opposite: that this only governed
+                    // room for a future third tap. A slider whose own minimum
+                    // breaks the product is worse than no slider.
                     slider(title: "Confirm window",
-                           value: msBinding(\.confirmWindowNs), range: 100...300, step: 10,
+                           value: msBinding(\.confirmWindowNs), range: 160...300, step: 10,
                            readout: msReadout(settings.config.confirmWindowNs,
                                               inForce: inForce.confirmWindowNs),
-                           help: "Tunk waits this long after the second tap so a third tap "
-                               + "can be added later without changing how double feels.")
+                           help: "How long Tunk waits after your second tap before acting. "
+                               + "It is also the widest gap allowed between the two taps, so "
+                               + "lowering it makes a slower double-tap stop registering: "
+                               + "measured on this machine, 180 ms catches about half the "
+                               + "gestures 220 ms catches. Raising it adds the same delay to "
+                               + "every tap.")
                     slider(title: "Refractory",
                            value: msBinding(\.refractoryNs), range: 200...1500, step: 50,
                            readout: ms(settings.config.refractoryNs), help: nil)

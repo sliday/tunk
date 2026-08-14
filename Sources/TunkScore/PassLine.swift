@@ -1,4 +1,5 @@
 import Foundation
+import TunkCore
 import TunkFormat
 
 /// The pass line from FORMAT.md, as code. A check with no data behind it is never
@@ -37,6 +38,18 @@ enum PassLine {
                       loose, agg.detectedGroups)
     }
 
+    /// The filter coefficients are computed once, from `DSPTuning.sampleRateHz`.
+    /// A recording at a materially different rate is therefore replayed through
+    /// a chain tuned for a rate it does not have, and nothing downstream notices:
+    /// the gap check compares against the session's OWN measured cadence, so a
+    /// uniformly half-rate stream has no gaps at all.
+    ///
+    /// Measured by decimating the corpus 2:1 to 398 Hz: pooled detection falls
+    /// 82.11 % to 72.36 %, soft 100 % to 50 %, p95 latency unchanged, gapCount
+    /// zero on every session. Every existing check passes while the detector is
+    /// quietly crippled. This is that check.
+    static let sampleRateTolerance = 0.10
+
     static func checks(for agg: Aggregate, scope: String) -> [Check] {
         var out: [Check] = []
 
@@ -58,6 +71,21 @@ enum PassLine {
                          Self.cleanSuffix(for: agg)),
             status: agg.armedGroups == 0 ? .noData
                 : ((agg.detectionRate ?? 0) + 1e-9 >= detectionRateFloor ? .pass : .fail)
+        ))
+
+        // Sample rate against the rate the filters were designed for.
+        let expected = DSPTuning.default.sampleRateHz
+        let measured = agg.durationSeconds > 0
+            ? Double(agg.sampleCount) / agg.durationSeconds : 0
+        let ratio = expected > 0 ? measured / expected : 0
+        out.append(Check(
+            name: "sample rate matches the filter design",
+            scope: scope,
+            requirement: String(format: "%.0f Hz ± %.0f %%", expected, sampleRateTolerance * 100),
+            actual: agg.durationSeconds <= 0 ? "no samples"
+                : String(format: "%.1f Hz (%.0f %% of design)", measured, ratio * 100),
+            status: agg.durationSeconds <= 0 ? .noData
+                : (abs(ratio - 1) <= sampleRateTolerance ? .pass : .fail)
         ))
 
         out.append(contentsOf: perCountChecks(for: agg, scope: scope))

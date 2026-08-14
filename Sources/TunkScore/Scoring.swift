@@ -589,6 +589,9 @@ struct Aggregate: Codable {
     var typingSessions: Int = 0
     var confoundSessions: Int = 0
     var durationSeconds: Double = 0
+    /// Samples behind `durationSeconds`, so the pass line can derive the actual
+    /// rate and compare it against the one the filters were designed for.
+    var sampleCount: Int = 0
     var typingSeconds: Double = 0
     /// Of `typingSeconds`, the part where the input gate was NOT muting the
     /// detector. This is the real exposure behind "zero false triggers while
@@ -644,6 +647,7 @@ struct Aggregate: Codable {
         let c = s.perCount.first { $0.count == n } ?? CountStats(count: n, armed: isArmed)
         sessions += 1
         durationSeconds += s.durationSeconds
+        sampleCount += s.sampleCount
         labelledGroups += c.labelledGroups
         // A count that must never fire has no detection target, so it gets no
         // denominator either. The page then shows "no data" instead of 0 %, which
@@ -680,6 +684,7 @@ struct Aggregate: Codable {
     mutating func add(_ s: SessionScore) {
         sessions += 1
         durationSeconds += s.durationSeconds
+        sampleCount += s.sampleCount
         labelledGroups += s.perCount.reduce(0) { $0 + $1.labelledGroups }
         armedGroups += s.armedGroups
         detectedGroups += s.detectedGroups
