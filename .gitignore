@@ -11,3 +11,6 @@ dist/
 .tunk-*/
 design/png/
 design/AppIcon.iconset/
+
+# Workflow agent worktrees — transient, and each is its own git repo.
+.claude/worktrees/
