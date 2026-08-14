@@ -156,6 +156,9 @@ final class Engine: ObservableObject {
     private var lastSampleCount: UInt64 = 0
     private var lastTickNs: Int64 = 0
     private var starvedTicks = 0
+    /// Consecutive healthy watchdog ticks. Gates the backoff reset; see the
+    /// watchdog switch.
+    private var healthyTicks = 0
     private var reacquireBackoff = 1
     private var wantsRunning = false
     private var catalogTicks = 0
@@ -675,17 +678,40 @@ final class Engine: ObservableObject {
         if permissions != PermissionState.current() { permissions = .current() }
         guard wantsRunning else { return }
 
+        // A stream that is running but far off its nominal rate is worse than a
+        // dead one, because everything downstream keeps reporting success. The
+        // filter coefficients are computed once from DSPTuning.sampleRateHz, so
+        // a half-rate stream runs through a chain designed for a rate it does
+        // not have: measured on a decimated corpus, pooled detection falls
+        // 82.11 % to 72.36 % and soft 100 % to 50 %, with latency unchanged.
+        let nominal = DSPTuning.default.sampleRateHz
+        let rateIsWrong = delta > 0 && (sampleRateHz < nominal * 0.75
+                                        || sampleRateHz > nominal * 1.25)
+
         switch status {
-        case .running where delta == 0:
+        case .running where delta == 0 || rateIsWrong:
             starvedTicks += 1
             if starvedTicks >= 2 {
-                status = .sensorLost("no samples for \(starvedTicks) s")
-                reacquireBackoff = 1
+                status = delta == 0
+                    ? .sensorLost("no samples for \(starvedTicks) s")
+                    : .sensorLost(String(format: "%.0f Hz, expected %.0f", sampleRateHz, nominal))
+                // Deliberately NOT resetting reacquireBackoff here. It used to
+                // reset on every entry, and a reacquire that opens the service
+                // but gets no data always passes through .running first — so the
+                // backoff never grew. Measured against a real source held idle:
+                // 13 reacquires in 40 s, backoff pinned at 1, status flapping
+                // every 3 s, against a comment promising "1, 2, 4 … 32 s. Never
+                // a spin." It was a fixed 3.08 s spin, forever.
             }
         case .running:
             starvedTicks = 0
+            // Reset the backoff only once the stream has actually been healthy
+            // for a while, not merely because we reached .running.
+            healthyTicks += 1
+            if healthyTicks >= 5 { reacquireBackoff = 1 }
         case .sensorLost:
             // Bounded backoff: 1, 2, 4 … 32 s. Never a spin.
+            healthyTicks = 0
             starvedTicks += 1
             if starvedTicks >= reacquireBackoff {
                 starvedTicks = 0

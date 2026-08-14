@@ -15,6 +15,11 @@ if let index = arguments.firstIndex(of: "--dump-glyphs") {
     GlyphDump.run(into: directory)
     exit(0)
 }
+if let i = arguments.firstIndex(of: "--sensor-cycles") {
+    let n = i + 1 < arguments.count ? Int(arguments[i + 1]) ?? 20 : 20
+    app.setActivationPolicy(.accessory)
+    Diagnostics.sensorCycles(n)
+}
 if arguments.contains("--sensor-props") {
     app.setActivationPolicy(.accessory)
     Diagnostics.sensorProperties()

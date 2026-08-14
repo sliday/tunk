@@ -795,6 +795,42 @@ extension Diagnostics {
 }
 
 extension Diagnostics {
+    /// `tunk --sensor-cycles [n]`
+    ///
+    /// Starts and stops the accelerometer `n` times and reports the process's
+    /// mach port count either side. `AccelSource.stop` used to leak the
+    /// `IOHIDEventSystemClient` — the type is an opaque struct pointer, so
+    /// `client = nil` released nothing — at exactly 5 ports per cycle, measured
+    /// 22 -> 525 over 100 cycles and never reclaimed. The watchdog reacquires on
+    /// a wedged sensor, so a stuck stream leaked about 5,800 ports an hour.
+    ///
+    /// This also exercises the release itself: an over-release would crash here
+    /// rather than in somebody's menubar.
+    static func sensorCycles(_ n: Int) {
+        func ports() -> Int {
+            var nameCount = mach_msg_type_number_t(0)
+            var typeCount = mach_msg_type_number_t(0)
+            var names: mach_port_name_array_t?
+            var types: mach_port_type_array_t?
+            guard mach_port_names(mach_task_self_, &names, &nameCount,
+                                  &types, &typeCount) == KERN_SUCCESS else { return -1 }
+            return Int(nameCount)
+        }
+        let before = ports()
+        let source = AccelSource()
+        for i in 0..<n {
+            do { try source.start(onSample: { _ in }) }
+            catch { print("cycle \(i): start failed: \(error)"); exit(1) }
+            usleep(60_000)
+            source.stop()
+        }
+        let after = ports()
+        line(String(format: "  %d cycles: mach ports %d -> %d  (%+.2f per cycle)",
+                    n, before, after, Double(after - before) / Double(max(1, n))))
+        line(after - before <= n / 4 ? "  no meaningful leak" : "  LEAKING")
+        exit(after - before <= n / 4 ? 0 : 1)
+    }
+
     /// `tunk --sensor-props`
     ///
     /// The recorded stream carries no measurable power above ~100 Hz (9 orders
