@@ -53,8 +53,12 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   becomes the value, the detector prefers it over `maxInterTapNs` and the
   `<= confirmWindowNs` invariant still binds) or delete the field. Leaving it
   implies a per-person window that nobody is measuring.
-- **Re-run the trigger-storm sweep at 220 ms.** The 0-triggers result was
-  measured at 180 ms and does not carry automatically.
+- ~~Re-run the trigger-storm sweep at 220 ms.~~ **Done, and it carries.** A
+  periodic thump train fires **0 triggers in 60 s** at every spacing swept —
+  120, 160, 200, 210, 220, 230, 260, 300, 400 ms — with the shipped
+  `confirmWindowNs` of 220 ms and only double armed. The spacings deliberately
+  straddle the window, since that is where chaining either holds or does not.
+  Pinned by `testAPeriodicTrainCannotStormAtTheShippedWindow`.
 - ~~Measure the single-tap prediction.~~ **Measured, and it holds.** On the
   39.7 minutes of training recordings where the operator is NOT tapping — 26 min
   idle, 11.7 typing, 2.1 confound:

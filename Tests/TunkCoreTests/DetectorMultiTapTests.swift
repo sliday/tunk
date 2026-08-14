@@ -140,6 +140,31 @@ final class DetectorMultiTapTests: XCTestCase {
         }
     }
 
+    /// The storm sweep at the SHIPPED window, not the one it was found at.
+    ///
+    /// `testTheOldIncoherentConfigCannotStormAnyMore` pins `confirmWindowNs` at
+    /// 180 ms, which is what shipped when the storm was found. It is 220 ms now,
+    /// and notes/OPEN_ITEMS has carried "the 0-triggers result does not carry
+    /// automatically" ever since. This is that result, measured.
+    ///
+    /// A periodic thump train is the easy case: with `maxInterTapNs ==
+    /// confirmWindowNs`, every thump inside the window chains into one
+    /// over-long group, which reaches its confirm deadline with a count nothing
+    /// is armed for and fires nothing. Spacings are swept either side of the
+    /// window so the chaining boundary itself is covered.
+    func testAPeriodicTrainCannotStormAtTheShippedWindow() {
+        let config = DetectorConfig.default
+        XCTAssertEqual(config.confirmWindowNs, 220_000_000, "this test is about the shipped window")
+
+        for spacingMs in [120, 160, 200, 210, 220, 230, 260, 300, 400] {
+            let spacing = Int64(spacingMs) * 1_000_000
+            let (stream, _) = thumpStream(spacingNs: spacing, durationNs: 60_000_000_000)
+            let fired = run(stream, config: config, armed: Self.double).triggers.count
+            XCTAssertEqual(fired, 0, "\(spacingMs) ms periodic train fired \(fired) times "
+                           + "in 60 s at the shipped 220 ms window")
+        }
+    }
+
     func testConfigCannotBeSetIncoherentlyThroughTheSetter() {
         let detector = TapDetector()
         detector.config.maxInterTapNs = 900_000_000
