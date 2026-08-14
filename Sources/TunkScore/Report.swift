@@ -80,6 +80,14 @@ enum Reporter {
         let (verdict, checks) = PassLine.verdict(perSurface: surfaces, pooled: pooled)
         var warn = warnings
         for s in scores { warn.append(contentsOf: s.labelIssues) }
+        // A non-shipped front end cannot be read off `config`: the filter design
+        // lives in `DSPTuning`, which the report's config block does not carry.
+        // Name it, or a resonator run and a shipped run produce reports that
+        // differ only in their numbers.
+        if DetectorFactory.tuning != DSPTuning.default {
+            warn.insert("FRONT END IS NOT THE SHIPPED ONE: "
+                        + ConfigIO.describeFrontEnd(DetectorFactory.tuning), at: 0)
+        }
         if DetectorFactory.isStub {
             warn.insert("Graded the HARNESS STUB detector, not a shipping detector. "
                         + "These numbers say nothing about the real build.", at: 0)

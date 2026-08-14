@@ -14,6 +14,9 @@ enum ConfigIO {
             throw CLIError.usage("config file \(url.path) is not a JSON object")
         }
         var cfg = DetectorConfig.default
+        // A config file describes a whole front end too, so start from the
+        // shipped filter design rather than whatever a previous load left here.
+        DetectorFactory.tuning = .default
         for (key, value) in obj {
             guard let param = ConfigParam(name: key) else {
                 throw CLIError.usage("unknown config key '\(key)'. Known keys: "
@@ -55,6 +58,22 @@ enum ConfigIO {
         out += "  \(Reporter.pad("effectiveThreshold", 22)) \(String(format: "%.4f", c.effectiveThreshold))\n"
         return out
     }
+
+    /// One line naming the front end, for the report's warnings. Only ever
+    /// printed when the front end is NOT the shipped one — a run that says
+    /// nothing about the front end ran the shipped one.
+    static func describeFrontEnd(_ t: DSPTuning) -> String {
+        var parts: [String] = []
+        let d = DSPTuning.default
+        if t.highPassHz != d.highPassHz { parts.append(String(format: "highPass %.1f Hz", t.highPassHz)) }
+        if t.resonatorHz != d.resonatorHz || t.resonatorQ != d.resonatorQ {
+            parts.append(t.resonatorHz > 0
+                         ? String(format: "resonator %.1f Hz Q %.2f", t.resonatorHz, t.resonatorQ)
+                         : "resonator off")
+        }
+        if t.minThresholdG != d.minThresholdG { parts.append(String(format: "minThreshold %.4f g", t.minThresholdG)) }
+        return parts.isEmpty ? "shipped" : parts.joined(separator: ", ")
+    }
 }
 
 /// One tunable, addressable by name. Millisecond aliases exist because nobody
@@ -71,6 +90,26 @@ enum ConfigParam: String, CaseIterable {
     case tapCountToFire
     case onsetCeilingG
     case motionGateG
+    // Front-end filter design. These live in `DSPTuning`, not `DetectorConfig`,
+    // so they write `DetectorFactory.tuning` rather than the config struct —
+    // see `isFrontEnd`. They ship at their default values, and a run that does
+    // not name one is a run of the shipped front end.
+    case highPassHz
+    case resonatorHz
+    case resonatorQ
+    case minThresholdG
+
+    /// Whether this parameter belongs to the front end rather than to
+    /// `DetectorConfig`. The distinction is real: a `DetectorConfig` written by
+    /// the settings panel cannot express these, and a report's `config` block
+    /// does not carry them, which is why `Reporter.build` names a non-default
+    /// front end in the warnings instead.
+    var isFrontEnd: Bool {
+        switch self {
+        case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG: return true
+        default: return false
+        }
+    }
 
     /// Accepts the canonical name or its `...Ms` alias for the ns fields.
     init?(name: String) {
@@ -113,6 +152,11 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .highPassHz: DetectorFactory.tuning.highPassHz = v
+        // Zero means the stage is absent, so a sweep can start at "shipped".
+        case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
+        case .resonatorQ: DetectorFactory.tuning.resonatorQ = v
+        case .minThresholdG: DetectorFactory.tuning.minThresholdG = v
         }
     }
 
@@ -129,6 +173,10 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .highPassHz: return DetectorFactory.tuning.highPassHz
+        case .resonatorHz: return DetectorFactory.tuning.resonatorHz
+        case .resonatorQ: return DetectorFactory.tuning.resonatorQ
+        case .minThresholdG: return DetectorFactory.tuning.minThresholdG
         }
     }
 

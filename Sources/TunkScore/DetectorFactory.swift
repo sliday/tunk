@@ -16,6 +16,16 @@ enum DetectorFactory {
     /// Set once from `--detector`. Single-threaded CLI; no locking needed.
     nonisolated(unsafe) static var backend: DetectorBackend = .real
 
+    /// Front-end filter constants. `DetectorConfig` holds what the settings panel
+    /// exposes; these are the filter design, and until now the harness could not
+    /// reach them at all — `Replay` built every detector on `DSPTuning.default`.
+    ///
+    /// A config file or a sweep naming one of the DSP keys writes here, and this
+    /// is the single place a detector is built, so nothing can be graded against
+    /// a front end other than the one named. Untouched it is `.default`, which
+    /// is what ships.
+    nonisolated(unsafe) static var tuning: DSPTuning = .default
+
     /// Printed in every report so nobody mistakes a stub run for a real one.
     static var backendName: String {
         switch backend {
@@ -28,7 +38,7 @@ enum DetectorFactory {
 
     static func make(config: DetectorConfig) -> TapDetecting {
         switch backend {
-        case .real: return TapDetector(config: config)
+        case .real: return TapDetector(config: config, tuning: tuning)
         case .stub: return StubTapDetector(config: config)
         }
     }

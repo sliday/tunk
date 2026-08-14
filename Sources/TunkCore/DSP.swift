@@ -86,6 +86,64 @@ public struct SlidingMax: Sendable, Equatable {
     }
 }
 
+/// One complex pole pair: a narrow band around a chosen frequency, whose output
+/// is the MAGNITUDE of the pole's complex state.
+///
+/// Two properties earn it a place in front of the envelope, and both are
+/// measured rather than assumed (see `notes/FRONT_END_RING.md`):
+///
+/// 1. **It suppresses the tail a second lap strike lands on.** In the 12-45 ms
+///    before a real second strike, the lap signal carries 43-46 % of its power
+///    below 20 Hz against 28-38 % for the strike itself. A one-pole 20 Hz high
+///    pass rolls off at 6 dB/oct and passes most of that shoulder; a pole pair
+///    rejects it from both sides.
+/// 2. **Its output does not ripple.** A real-valued narrow band dips to zero
+///    twice per cycle, and the detector re-arms on those dips — the exact
+///    "metronome at the debounce period" failure three earlier re-arm
+///    mechanisms hit. The complex state carries its own quadrature, so `|s|` is
+///    a smooth envelope: no zero crossings to re-arm on.
+///
+/// `y[n] = p * y[n-1] + x[n]` with `p = r * e^{jw}`, output `(1-r) * |y[n]|`, so
+/// the peak gain is 1 and a broadband strike still loses amplitude to the
+/// narrow band — that loss is real and the threshold has to be refitted with it.
+///
+/// Causal and index-domain like everything else here: two state variables, one
+/// multiply-add pair per sample, no lookahead.
+public struct Resonator: Sendable, Equatable {
+    /// `r * cos(w)` and `r * sin(w)`, the pole in rectangular form.
+    public let poleRe: Double
+    public let poleIm: Double
+    /// `1 - r`. Normalises the peak gain to 1.
+    public let gain: Double
+    private var stateRe: Double = 0
+    private var stateIm: Double = 0
+
+    public init(centreHz: Double, q: Double, sampleRateHz: Double) {
+        let fs = max(sampleRateHz, 1.0)
+        let f0 = min(max(centreHz, 0.000_1), fs / 2)
+        let quality = max(q, 0.1)
+        let r = exp(-Double.pi * f0 / (quality * fs))
+        let w = 2.0 * Double.pi * f0 / fs
+        poleRe = r * cos(w)
+        poleIm = r * sin(w)
+        gain = 1.0 - r
+    }
+
+    public mutating func reset() {
+        stateRe = 0
+        stateIm = 0
+    }
+
+    @inline(__always)
+    public mutating func process(_ x: Double) -> Double {
+        let nextRe = poleRe * stateRe - poleIm * stateIm + x
+        let nextIm = poleIm * stateRe + poleRe * stateIm
+        stateRe = nextRe
+        stateIm = nextIm
+        return gain * (nextRe * nextRe + nextIm * nextIm).squareRoot()
+    }
+}
+
 /// One-pole low pass. Used to track where the accelerometer settles, so
 /// "the machine is being moved" can be told apart from "the case rang".
 public struct OnePoleLowPass: Sendable, Equatable {
@@ -264,6 +322,28 @@ public struct DSPTuning: Sendable, Equatable {
     /// fresh strike differ in rise time even when they match in height.
     public var inGestureThresholdFraction: Double
 
+    /// Centre of the optional `Resonator` stage, in Hz. **0 ships, which means
+    /// the stage is absent and the chain is byte-identical to the one graded in
+    /// `notes/BAR_ASSESSMENT.md`.**
+    ///
+    /// Non-zero inserts one complex pole pair per axis between the high pass and
+    /// the vector magnitude. It exists because on a lap the second strike lands
+    /// on a tail whose power sits lower in frequency than the strike's, and a
+    /// one-pole high pass cannot tell them apart. Measured on `data/raw`, second
+    /// strike peak over the tail level in the 12-45 ms before it, p25 per lap
+    /// session: 1.68 / 1.92 / 2.06 shipped, 2.96 / 3.44 / 3.45 at 32 Hz Q 2.
+    ///
+    /// The stage costs amplitude: a broadband strike loses roughly 3x through a
+    /// narrow band, so `minThresholdG` and the calibrated threshold BOTH have to
+    /// be refitted whenever this is non-zero. Turning it on alone deafens the
+    /// detector, because `minThresholdG` (0.02 g) then sits above every tap.
+    public var resonatorHz: Double
+    /// Quality factor of that stage. Higher is narrower and rings longer: the
+    /// impulse response decays with time constant `q / (pi * f0)`, which is
+    /// 20 ms at 32 Hz Q 2 and must stay far below the 100 ms onset debounce or
+    /// the filter's own ring becomes the thing being detected.
+    public var resonatorQ: Double
+
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
@@ -286,6 +366,8 @@ public struct DSPTuning: Sendable, Equatable {
         inGestureThresholdFraction: 1.0,
         settleFastHz: 6.0,
         settleSlowHz: 0.3,
+        resonatorHz: 0.0,
+        resonatorQ: 2.0,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -299,6 +381,8 @@ public struct DSPTuning: Sendable, Equatable {
                 inGestureThresholdFraction: Double = 1.0,
                 settleFastHz: Double = 6.0,
                 settleSlowHz: Double = 0.3,
+                resonatorHz: Double = 0.0,
+                resonatorQ: Double = 2.0,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
@@ -317,6 +401,8 @@ public struct DSPTuning: Sendable, Equatable {
         self.inGestureThresholdFraction = inGestureThresholdFraction
         self.settleFastHz = settleFastHz
         self.settleSlowHz = settleSlowHz
+        self.resonatorHz = resonatorHz
+        self.resonatorQ = resonatorQ
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }
@@ -344,6 +430,11 @@ public struct SignalChain: Sendable, Equatable {
     private var hpX: OnePoleHighPass
     private var hpY: OnePoleHighPass
     private var hpZ: OnePoleHighPass
+    /// Optional narrow band between the high pass and the magnitude. Absent
+    /// unless `DSPTuning.resonatorHz` is non-zero, which is not what ships.
+    private var resX: Resonator?
+    private var resY: Resonator?
+    private var resZ: Resonator?
     private var previousSquared: Double = 0
     private var peak: SlidingMax
     private var floorTracker: NoiseFloorTracker
@@ -381,6 +472,11 @@ public struct SignalChain: Sendable, Equatable {
         hpX = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
         hpY = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
         hpZ = OnePoleHighPass(cutoffHz: tuning.highPassHz, sampleRateHz: tuning.sampleRateHz)
+        if tuning.resonatorHz > 0 {
+            let make = { Resonator(centreHz: tuning.resonatorHz, q: tuning.resonatorQ,
+                                   sampleRateHz: tuning.sampleRateHz) }
+            resX = make(); resY = make(); resZ = make()
+        }
         peak = SlidingMax(length: tuning.envelopePeakSamples)
         floorTracker = NoiseFloorTracker(riseTauSeconds: tuning.noiseRiseTauSeconds,
                                          fallTauSeconds: tuning.noiseFallTauSeconds,
@@ -395,6 +491,9 @@ public struct SignalChain: Sendable, Equatable {
         hpX.reset()
         hpY.reset()
         hpZ.reset()
+        resX?.reset()
+        resY?.reset()
+        resZ?.reset()
         previousSquared = 0
         peak.reset()
         floorTracker.reset()
@@ -415,9 +514,16 @@ public struct SignalChain: Sendable, Equatable {
         settledMagnitude.process(magnitude)
         fastMagnitude.process(magnitude)
 
-        let ax = hpX.process(x)
-        let ay = hpY.process(y)
-        let az = hpZ.process(z)
+        var ax = hpX.process(x)
+        var ay = hpY.process(y)
+        var az = hpZ.process(z)
+        // Optional narrow band. Off by default, and the three optionals are nil
+        // together, so the shipped path costs one branch and no arithmetic.
+        if resX != nil {
+            ax = resX!.process(ax)
+            ay = resY!.process(ay)
+            az = resZ!.process(az)
+        }
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
