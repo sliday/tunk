@@ -1,4 +1,5 @@
 {"confidence":"prompt_window","group":0,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":11946565500}
-{"confidence":"prompt_window","group":1,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":15855778625}
+{"confidence":"auto_refined","group":1,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":17383342292}
+{"confidence":"auto_refined","group":1,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":17568432292}
 {"confidence":"auto_refined","group":2,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":20918815417}
 {"confidence":"auto_refined","group":2,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":21092649417}

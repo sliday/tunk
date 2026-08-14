@@ -103,6 +103,31 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Absolute onset threshold derived from the "learn my tap" step. Nil means
     /// uncalibrated; the detector then falls back to `defaultThreshold`.
     public var calibratedThreshold: Double?
+
+    /// Pre-calibration threshold, in g. **0.045, fitted to real taps.**
+    ///
+    /// It was 0.30 — a number invented before any recording existed — and the
+    /// first real session showed that value missing every onset. Measured over
+    /// 40 labelled onsets from one operator on a hard desk: amplitude ranges
+    /// 0.0456 to 0.1326 g, median 0.0842, against a 0.00101 g noise floor. The
+    /// weakest deliberate tap is 45x the floor, so the signal is not marginal;
+    /// the threshold was simply in the wrong place.
+    ///
+    /// Swept against 29.9 minutes of real ambient and confound recordings:
+    ///
+    ///     threshold   detection        false triggers
+    ///     0.300       0.00 % (0/22)    0.00
+    ///     0.100       22.73 %          0.00
+    ///     0.060       95.45 %          0.00
+    ///     0.039       100.00 % (22/22) 0.00
+    ///     0.025       100.00 %         0.00
+    ///     0.015       100.00 %         0.67 per 20 min
+    ///
+    /// 0.045 sits inside that window with margin on both sides: comfortably
+    /// under the weakest observed tap, and three times above where false
+    /// triggers begin. It is still one person, one surface, one tap location —
+    /// calibration should replace it per user, and the soft and lap surfaces
+    /// may well move it.
     public var defaultThreshold: Double
 
     /// Suppress onsets for this long after any gating input event.
@@ -218,7 +243,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     public static let `default` = DetectorConfig(
         sensitivity: 1.0,
         calibratedThreshold: nil,
-        defaultThreshold: 0.30,
+        defaultThreshold: 0.045,
         gateWindowNs: 180_000_000,
         minInterTapNs: 80_000_000,
         maxInterTapNs: 220_000_000,
