@@ -246,3 +246,33 @@ can never exceed it.
 Centre and Q were swept 10-60 Hz and 1.0-4.0 by the builder that found the
 resonator. 2.61 is the best available, it is a 23 % improvement on what it
 replaced, and it converts to one clean held-out lap gesture.
+
+
+## The joint sweep: the resonator point is a real optimum
+
+Earlier sweeps moved one axis at a time — resonator centre and Q against
+threshold, high-pass corner against threshold. The 60 Hz side finding raised the
+obvious question of whether the two interact, since a 60 Hz HIGH PASS recovers
+lap while a 40 Hz RESONATOR keeps soft. Swept jointly on training data:
+
+```
+hp    res    thr      desk     soft     lap      lapFP
+20    40     0.011    22/23    20/20    73/80    13.08   <- shipped resonator point
+20    60     0.011    22/23    20/20    65/80    10.90
+30    40     0.011    22/23    20/20    51/80     6.54
+20    80     0.011    22/23    19/20    47/80     4.36
+30    60     0.011    22/23    18/20    41/80     4.36
+40    40     0.011    22/23    18/20    22/80     2.18
+40    80     0.014    21/23     6/20     0/80     0.00
+```
+
+Three cells hold soft at 20/20 and the shipped resonator point has the most lap
+gestures of the three by a margin of eight. Every other cell trades soft away,
+and the trade steepens with both corner and centre.
+
+So the front-end geometry is exhausted: one-at-a-time and jointly, at both
+amplitude scales, above and below 50 Hz. The resonator at 40 Hz behind the
+shipped 20 Hz high pass is the best available, and its remaining cost is not
+detection but **lap false triggers at 13.08 per 20 minutes against a bar of 1**.
+That is the one number keeping it off by default, and the audited label
+correction would take it to 4.36 — better, and still four times the bar.
