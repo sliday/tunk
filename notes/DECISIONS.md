@@ -156,6 +156,43 @@ real `CGEventPost`, observed by an event tap). Two methods that share no code
 agreeing to a millisecond is worth more than either alone, and it is the only
 pass-line number currently backed that way.
 
+## D9 — One tap is not one lobe, and that is why damped surfaces are hard
+
+The raw high-passed magnitude around a single real tap on a soft surface, from
+`tap_deck__soft__20260814-104124`, 1.256 ms per sample:
+
+```
+   0.0 ms  0.1093  <- peak
+  +5.0 ms  0.0769
+ +10.0 ms  0.0276
+ +12.6 ms  0.0194  <- trough
+ +20.1 ms  0.0684
+ +26.4 ms  0.0875  <- second lobe, 80 % of the original peak
+```
+
+**One strike, two lobes.** The envelope does not decay monotonically; it dips
+around 12 ms and climbs back to four fifths of the peak by 26 ms. On a hard desk
+the whole thing is over in about 5 ms and the question never arises.
+
+This single fact explains every damped-surface failure chased in this run:
+
+- The labeller merged both taps of a gesture into one plateau, because the
+  envelope never dropped under the bar between them. Fixed with local maxima
+  plus a prominence test.
+- The detector declared a spurious third onset on the second lobe, turning a
+  double into an un-armed triple. Fixed by moving the onset debounce from 30 ms
+  to 100 ms, which spans the lobe spacing.
+- Lowering the threshold for the second tap of a gesture, which should have
+  recovered the ~10 % of lap second-taps sitting under the bar, instead took
+  soft from 100 % to 55 %: a lower bar lets the second lobe through.
+
+It also says where the remaining headroom is not. Rise time cannot separate a
+strike from a lobe with the current front end, because `SignalChain` finishes
+with a 3-sample sliding maximum that flattens the leading edge — measured rise
+from 20 % to peak came out as 0.0 ms for almost every real tap. Any shape
+discrimination has to read the raw magnitude before that dilation, which is a
+front-end change rather than a tuning change.
+
 ## D5 — Stale shortcut bindings fail passively
 
 A bound Shortcut can be renamed or deleted long after binding. Resolution is
