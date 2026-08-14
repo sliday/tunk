@@ -123,6 +123,79 @@ the project has.
 other about twice as much. Even with perfect per-surface calibration — the PRD's
 own remedy for coupling that varies by surface — lap tops out at 82.5 %.
 
+## Correction: the lap failure is deafness, not weakness
+
+Everything above this line that attributes lap misses to weak second taps is
+wrong, and the four mechanisms built on that premise are recorded below as
+measured negatives.
+
+`tunk-score` reports a missed gesture as *"only 1 ungated onset near this label"*.
+That was read as "the second tap was too weak to cross the bar". Tracing the
+detector's own arm state says otherwise. On the three held-out lap gestures that
+defeated every amplitude mechanism:
+
+```
+group   disarms   re-arms   second tap   deaf by
+g1      16.713    17.073    17.003        70 ms
+g3      23.496    23.879    23.759       120 ms
+g6      35.821    35.956    35.889        67 ms
+```
+
+Those second taps measure 1.20x, 1.35x and 2.01x the threshold. They are strong.
+The detector was still disarmed.
+
+Re-arming requires the envelope to fall back under `releaseFraction` (0.4) times
+the threshold. A damped chassis rings for hundreds of milliseconds, so between
+the two halves of one gesture the envelope never returns to baseline and the
+detector stays deaf straight through the second strike.
+
+Split across every training tap deck — "disarmed, and the transient was big
+enough to have crossed" against "genuinely under the bar":
+
+| surface | gestures | 2nd tap seen | deaf | weak |
+|---|---|---|---|---|
+| desk | 23 | 23 | 0 | 0 |
+| soft | 20 | 17 | **3** | 0 |
+| lap | 80 | 55 | **12** | 13 |
+
+Every soft miss and half the lap misses are deafness. This also explains the
+soft-versus-lap tug of war that defeated every earlier lever: lowering the bar
+cannot help a detector that is not listening, and it does buy false triggers.
+`ArmStateDiagnosisTests` holds these counts as upper bounds.
+
+## Four amplitude mechanisms, built and rejected
+
+Each was built by one agent and graded by a separate critic with fresh context,
+who rebuilt from source and ran the harness on held-out data.
+
+| mechanism | held-out lap | critic |
+|---|---|---|
+| reduced bar gated on return-to-baseline | 80 % -> 85 % | do not ship; strictly dominated |
+| bar proportional to first tap's strength | 80 % -> 85 % | do not ship; p = 1.0 |
+| shape discriminator before the sliding max | 80 % -> 85 % | do not ship; noise |
+| envelope stage rework | 80 % -> 85 % | do not ship; effect was the bundled threshold |
+
+All four recovered **the same single gesture** and left the same three missed.
+Four independent mechanisms converging on one gesture is not four weak results;
+it is one result, and it is the signature of a mispecified problem. Train gains
+of 6 to 8 gestures did not transfer, and per-session effects ranged from -2 to
++5, which is an overfit signature on n=80.
+
+## Two gaps in the measurement itself
+
+Named independently by all four critics, and neither is fixable by code:
+
+1. **`data/holdout` has no typing and no confound sessions.** It is 4.5 minutes
+   of tap decks. The zero-false-triggers-while-typing bar — the make-or-break
+   metric — has never been graded out of sample. The held-out "0.00 FP/20 min"
+   is close to vacuous.
+2. **n = 20 per surface.** At that size the 98 % bar can only be met by 20/20;
+   19/20 reads 95 %. One gesture is five percentage points, so the held-out set
+   cannot distinguish a real fix from luck at the resolution the bar demands.
+
+Both need recordings, not engineering: held-out typing and confound sessions on
+all three surfaces, and a larger held-out lap tap deck.
+
 ## The physical reason
 
 One tap is not one lobe. The raw magnitude around a single real soft-surface tap:
