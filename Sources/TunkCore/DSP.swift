@@ -241,6 +241,29 @@ public struct DSPTuning: Sendable, Equatable {
     /// against. Slow enough to ignore a movement entirely while it happens.
     public var settleSlowHz: Double
 
+    /// Multiplier on the onset threshold while a gesture is already in flight,
+    /// i.e. within `maxInterTapNs` of an accepted onset. **1.0, disabled.**
+    ///
+    /// The idea was sound and the measurement killed it. A first onset is
+    /// evidence a second is coming, and ~10 % of lap second-taps fall under the
+    /// shipped threshold, matching exactly the ten lap gestures missed with both
+    /// onsets inside the join window. Lowering the bar to 0.6 for the second
+    /// strike should have recovered them.
+    ///
+    /// Measured instead: lap 73.75 % to 75.00 %, and soft 100 % to 55 %.
+    ///
+    /// The reason is the same mechanism that caused the original soft-surface
+    /// bug. A damped chassis rings for tens of milliseconds; drop the bar during
+    /// that ring and the decay itself crosses it, declaring spurious onsets that
+    /// turn a double into an un-armed triple. The evidence a first onset gives
+    /// you about a second is real, but it cannot be spent on amplitude while
+    /// ring-down is the thing competing for the same headroom.
+    ///
+    /// Kept as a tunable rather than deleted, because the idea is worth
+    /// revisiting once onsets can be told apart by SHAPE — a decaying tail and a
+    /// fresh strike differ in rise time even when they match in height.
+    public var inGestureThresholdFraction: Double
+
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
@@ -260,6 +283,7 @@ public struct DSPTuning: Sendable, Equatable {
         gapResetNs: 20_000_000,
         preGateNs: 25_000_000,
         noiseFloorHoldNs: 30_000_000,
+        inGestureThresholdFraction: 1.0,
         settleFastHz: 6.0,
         settleSlowHz: 0.3,
         onsetLogCapacity: 512,
@@ -272,6 +296,7 @@ public struct DSPTuning: Sendable, Equatable {
                 onsetDebounceNs: Int64, peakHoldNs: Int64, warmupSamples: Int,
                 gapResetNs: Int64, preGateNs: Int64,
                 noiseFloorHoldNs: Int64 = 30_000_000,
+                inGestureThresholdFraction: Double = 1.0,
                 settleFastHz: Double = 6.0,
                 settleSlowHz: Double = 0.3,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
@@ -289,6 +314,7 @@ public struct DSPTuning: Sendable, Equatable {
         self.gapResetNs = gapResetNs
         self.preGateNs = preGateNs
         self.noiseFloorHoldNs = noiseFloorHoldNs
+        self.inGestureThresholdFraction = inGestureThresholdFraction
         self.settleFastHz = settleFastHz
         self.settleSlowHz = settleSlowHz
         self.onsetLogCapacity = onsetLogCapacity

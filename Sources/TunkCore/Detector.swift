@@ -334,8 +334,25 @@ public final class TapDetector: TapDetecting {
     }
 
     private func currentThreshold() -> Double {
-        max(effectiveConfig.effectiveThreshold,
-            max(tuning.noiseSnrMultiple * chain.noiseFloor, tuning.minThresholdG))
+        let base = max(effectiveConfig.effectiveThreshold,
+                       max(tuning.noiseSnrMultiple * chain.noiseFloor, tuning.minThresholdG))
+        // While a gesture is in flight, the bar for the NEXT onset comes down.
+        //
+        // A first onset is strong evidence that a second is about to arrive, and
+        // asking the second strike to clear the same bar as the first throws
+        // away that evidence. Measured across 80 lap onsets, roughly one second
+        // tap in ten falls under the shipped threshold, which matched exactly
+        // the ten lap gestures missed with both onsets inside the join window
+        // and the reason given as "only 1 ungated onset; a 2-tap needs 2".
+        //
+        // Cheap in false positives because it costs nothing on its own: the
+        // reduction only exists inside `maxInterTapNs` of an onset that already
+        // cleared the full bar, and a lone reduced-threshold onset still fires
+        // nothing unless single-tap is armed.
+        guard !group.isEmpty, let last = groupLastOnsetNs else { return base }
+        let openUntil = last + effectiveConfig.maxInterTapNs
+        guard let now = lastSampleNs, now <= openUntil else { return base }
+        return base * tuning.inGestureThresholdFraction
     }
 
     /// Drop everything derived from the sample stream, keeping gate and
