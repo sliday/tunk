@@ -376,6 +376,59 @@ direction is not hopeless.
 
 Even at 90 %, lap does not reach 98 %.
 
+## The high-pass corner: the first lever that is not a straight trade
+
+The chain opens with a 20 Hz one-pole high pass whose only job is removing
+gravity. It was never shaped for discrimination. But the one spectral difference
+that survived amplitude matching lives right at that corner:
+
+```
+lap, amplitude-matched   real second strikes  centroid p50  31.4 Hz
+                         ring lobes           centroid p50  26.1 Hz
+```
+
+Raising the corner suppresses the ring more than the strike, and the noise floor
+faster than either. Measured on lap training data:
+
+| HP corner | strike/ring | strike/noise |
+|---|---|---|
+| 20 Hz (shipped) | 2.13 | 28.1 |
+| 30 Hz | 2.37 | 29.3 |
+| 40 Hz | 2.56 | 30.7 |
+
+Both improve together, which was not expected — tilting away from the tap's own
+energy peak was supposed to cost absolute SNR.
+
+Replayed through the real detector with the threshold refitted per corner
+(the corner changes the scale of everything downstream, so holding the threshold
+fixed would measure the rescaling instead of the filter):
+
+```
+                        desk     soft      lap    typingFP
+HP 20 Hz  thr x1.00     95.7 %  100.0 %   73.8 %      0     <- shipped
+HP 30 Hz  thr x0.75     95.7 %  100.0 %   83.8 %      0
+HP 28 Hz  thr x0.80     95.7 %  100.0 %   81.2 %      0
+HP 35 Hz  thr x0.65     95.7 %   90.0 %   87.5 %      0
+```
+
+**The lap gain is a broad plateau** — 80-86 % across the whole region 26-34 Hz by
+x0.65-0.75 — so it is not a fitted cell. Desk never moves. Typing false triggers
+stay at zero throughout.
+
+**Soft's 100 % is not a plateau.** It appears in three cells and reads 85-95 %
+elsewhere, and soft training data is one session of 20 gestures, so that spread
+is two gestures either way. The honest summary is that the corner buys lap about
+ten points and costs soft between nothing and ten, depending where you sit.
+
+That is still a trade, but it is a far better curve than every earlier lever,
+which cost soft 30-45 points to buy lap seven. It is the only change measured so
+far that moves lap materially without collapsing soft.
+
+Held-out has not graded this yet. These are training numbers and the same
+caution applies as to every other training number in this file: the four-round
+pattern has been that train gains of six to eight gestures deliver one on
+held-out.
+
 ## Root cause: the sensor is band-limited near 50 Hz
 
 This is the finding that explains all eleven failed mechanisms, and it was found
