@@ -36,7 +36,14 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkCore / detector
 
-- **`DetectorConfig.calibratedInterTapNs` is dead.** Grepped across `Sources`,
+- ~~`DetectorConfig.calibratedInterTapNs` is dead.~~ **Wired.** Calibration now
+  records onset TIMES as well as strengths, groups them into gestures, fits the
+  join window to the operator's own p90 x 1.15, clamps it to a latency-safe
+  235 ms, and reports the clamp to the user rather than deciding for them. See
+  `TapCalibration.fitInterTap` and `CalibrationTimingTests`. The original text
+  follows.
+
+- ~~**`DetectorConfig.calibratedInterTapNs` is dead.**~~ Grepped across `Sources`,
   `Tests`, `bin` and `web`: nothing writes it, nothing reads it, it only
   round-trips through `Codable`. D7 leans on it — it is the stated answer to the
   220 ms join window being a guess — but the learn-my-tap step collects onset
@@ -48,11 +55,22 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   implies a per-person window that nobody is measuring.
 - **Re-run the trigger-storm sweep at 220 ms.** The 0-triggers result was
   measured at 180 ms and does not carry automatically.
-- **Measure the single-tap prediction**: a knock train spaced wider than the join
-  window gives every thump its own group of one — harmless while only count 2 is
-  armed, fires on every thump once count 1 is armed. If it holds, it is the
-  strongest evidence that single tap cannot ship armed by default. Wanted as a
-  measured number, not as the lead's speculation.
+- ~~Measure the single-tap prediction.~~ **Measured, and it holds.** On the
+  39.7 minutes of training recordings where the operator is NOT tapping — 26 min
+  idle, 11.7 typing, 2.1 confound:
+
+  ```
+  single armed   7 triggers   3.50 per 20 min
+  double armed   0 triggers   0.00 per 20 min
+  ```
+
+  **Four of the seven are during typing** (desk 3, soft 1), which breaks the
+  make-or-break metric outright. Single tap cannot ship armed by default, and
+  the prediction was right.
+
+  The settings panel already warned, but told the user to "check the harness's
+  false-trigger rate" — deferring to a measurement they would never run. It now
+  carries the number.
 - **Aperiodic knocks still fire.** The `maxInterTapNs <= confirmWindowNs` fix
   kills a *periodic* train by chaining it into one over-long group; a jittered
   one does not chain. Measured on a SYNTHETIC 60 s train with gaps drawn
