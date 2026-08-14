@@ -8,6 +8,21 @@ recordings; nothing is synthetic.
 The PRD asks that a target proved physically unreachable be reported **with the
 data, not quietly relaxed**. This is that report.
 
+## Finding the rejected mechanisms
+
+Every mechanism built for this project is preserved as an annotated tag, with
+its verdict in the tag message:
+
+```bash
+git tag -l 'rejected/*' 'shipped/*' 'audit/*'
+git show rejected/rearm-valley-rise      # what it did and why it was rejected
+git diff main...rejected/ring-subtraction
+```
+
+Sixteen rejected, one shipped (`shipped/resonator-front-end`), one audit of the
+scorer itself. The worktrees they were built in held 20 GB and are gone; the
+commits are not.
+
 ## The scoreboard
 
 | Criterion | Bar | desk | soft | lap | held-out desk |
