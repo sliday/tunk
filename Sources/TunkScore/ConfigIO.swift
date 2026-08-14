@@ -98,6 +98,16 @@ enum ConfigParam: String, CaseIterable {
     case resonatorHz
     case resonatorQ
     case minThresholdG
+    // The re-arm condition, in full. `Detector.swift` re-arms when the envelope
+    // falls under `releaseFraction * threshold` AND `onsetDebounceNs` has
+    // passed, and neither was reachable here. Four separate critics ran into
+    // that wall and reported it: both constants were fitted when the chain gain
+    // was 0.68 and the threshold 0.032 g, and at the resonator operating point
+    // the gain is 0.0789 and the threshold 0.011 g, so 0.4 sits at a different
+    // place on the envelope than where it was chosen. A referee that cannot
+    // grade the constant its own root-cause analysis names is not a referee.
+    case releaseFraction
+    case onsetDebounceNs
 
     /// Whether this parameter belongs to the front end rather than to
     /// `DetectorConfig`. The distinction is real: a `DetectorConfig` written by
@@ -106,7 +116,8 @@ enum ConfigParam: String, CaseIterable {
     /// front end in the warnings instead.
     var isFrontEnd: Bool {
         switch self {
-        case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG: return true
+        case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG,
+             .releaseFraction, .onsetDebounceNs: return true
         default: return false
         }
     }
@@ -152,6 +163,8 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .releaseFraction: DetectorFactory.tuning.releaseFraction = v
+        case .onsetDebounceNs: DetectorFactory.tuning.onsetDebounceNs = Int64(v)
         case .highPassHz: DetectorFactory.tuning.highPassHz = v
         // Zero means the stage is absent, so a sweep can start at "shipped".
         case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
@@ -173,6 +186,8 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .releaseFraction: return DetectorFactory.tuning.releaseFraction
+        case .onsetDebounceNs: return Double(DetectorFactory.tuning.onsetDebounceNs)
         case .highPassHz: return DetectorFactory.tuning.highPassHz
         case .resonatorHz: return DetectorFactory.tuning.resonatorHz
         case .resonatorQ: return DetectorFactory.tuning.resonatorQ

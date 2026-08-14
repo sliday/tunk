@@ -635,55 +635,84 @@ and the corpus cannot currently distinguish "the operator tapped 597 ms apart"
 from "the labeller mispaired". Settling it needs a recording where the operator
 confirms each gesture, not a cleverer rule.
 
-## Root cause: the sensor is band-limited near 50 Hz
+## WITHDRAWN: "the sensor is band-limited near 50 Hz"
 
-This is the finding that explains all eleven failed mechanisms, and it was found
-by accident while measuring whether spectral content could separate a strike
-from a ring.
+**This section was wrong. It measured gravity.**
 
-Power spectral density of the raw z axis, no filtering applied, six windows of
-512 samples from a desk tap deck:
+The PSD table below computed power without removing the mean, so the 0-25 Hz bin
+held the DC term — mean |z| over that session is 0.9808 g — and every "nine to
+ten orders of magnitude down" figure was a ratio against gravity, not against
+signal. Two independent critics found this and agree to three decimal places.
+
+Recomputed on the same desk deck, tap-aligned windows, **mean removed**:
 
 ```
-sample rate 799.6 Hz, Nyquist 399.8 Hz
-
-    0- 25 Hz : 99.9841 %
-   25- 50 Hz :  0.0127 %
-   50-100 Hz :  0.0032 %
-  100-150 Hz :  0.0000 %   (6.4e-10)
-  150-200 Hz :  0.0000 %   (1.1e-11)
-  200-398 Hz :  0.0000 %   (1.4e-11)
+   0- 25 Hz    0.67 %
+  25- 50 Hz   76.62 %
+  50-100 Hz   22.71 %
 ```
 
-The stream reports at 796 Hz and carries nothing above about 50 Hz. Content
-above 100 Hz sits nine to ten orders of magnitude down, at numerical noise.
+Tap windows against quiet windows from the same session: 1014x at 25-50 Hz,
+**5828x at 50-100 Hz, 590x at 100-150 Hz**, falling to 3.3x by 150-200 Hz.
+Brick-walling the same tap windows at 50 Hz and re-measuring 100-150 Hz gives a
+ratio of 3.6e7, so that content is signal and not window leakage. The flat
+ceiling above ~190 Hz is the quantiser: the smallest non-zero step in z is
+1.525879e-05 g, exactly 1/65536 g.
 
-It is not naive upsampling: consecutive samples are identical 0.0 % of the time
-(7 of 69,567), so the ADC really is producing distinct values at 796 Hz. The
-part has an internal filter, which is the normal configuration for a MEMS
-accelerometer intended for orientation and motion rather than vibration.
+**The sensor is usable to about 150 Hz and floor-limited above it.** It is not
+deaf at 50 Hz, and "the content that would separate a strike from the chassis
+ringing never reaches the file" is not a fact about this hardware.
 
-### Why this explains everything
+### The consequence was wrong in the more damaging direction
 
-A knuckle striking aluminium is broadband to several kHz. The energy that makes
-an impulse *look* like an impulse — and therefore distinguishable from the
-chassis resonance that follows it — is removed before the data reaches us. What
-arrives is the low-frequency rigid-body response, and a strike and its own ring
-produce the same shape there.
+"On a lap the second tap lands on the first one's ring and the two are the same
+size in the envelope" is half right. They are the same size. The second one is
+**not landing on the ring.**
 
-Every consequence already measured follows from this one fact:
+An independent onset instrument finds two clean contacts in every one of the four
+held-out lap gestures the detector misses:
 
-- **Rise time could not separate them** (13.8 ms vs 12.6 ms). A 50 Hz-limited
-  signal cannot rise faster than about 10 ms. That measurement was of the
-  filter, not of the taps.
-- **Spectral flatness ran backwards** on lap (AUC 0.173, strikes more *tonal*)
-  and the band ratio above 200 Hz had an empty numerator. There is no broadband
-  part left to find.
-- **The best spectral statistic was a 25 Hz versus 50 Hz bin ratio in a
-  two-live-bin spectrum**, which is why it inverted between surfaces.
-- **Ring lobes sit at crest factor 1.41** — exactly the sinusoid value — while
-  strikes reach 1.78. The ring hypothesis is right; there is simply not enough
-  bandwidth left to act on it reliably.
+```
+g1  16.7101 / 16.9177   207.6 ms apart
+g3  23.5018 / 23.6644   162.6 ms
+g5  32.1121 / 32.2960   183.9 ms
+g6  35.6368 / 35.7969   160.1 ms
+```
+
+Every interval is **inside** the legal [100, 220] ms join window. The second
+contact measures 0.83x, 1.14x, 0.75x and 1.19x the first — it is *larger* than
+the first in two of the four. The envelope between them falls to 7-55 % of the
+first peak and crosses the re-arm line within 2.5 to 6.2 ms. The ring is gone in
+under ten milliseconds, and 150 to 200 ms of quiet separates the two strikes.
+
+### What this leaves
+
+The operational sentence survives: **on this corpus, lap does not reach 98 %
+inside a 250 ms latency budget.** Four independent attempts, including three
+critics who tried to refute it, produced no better than 19/20 on held-out lap,
+and at n=20 nothing short of 20/20 clears 98 %.
+
+The word **unreachable** does not survive, and has been removed everywhere.
+What was called a fact about the hardware was an artifact of my own arithmetic.
+
+The re-arm constants were the obvious next suspect — `releaseFraction` and
+`onsetDebounceNs` were fitted when the chain gain was 0.68 and the threshold
+0.032 g, and at the resonator point they are 0.0789 and 0.011 g. Neither was
+reachable from the harness; four critics in a row reported that wall. Both are
+now exposed as config keys and swept:
+
+```
+release  debounce   lap             soft
+0.3      60 ms      90.00 %         90.00 %
+0.4      60 ms      91.25 %        100.00 %   <- shipped
+0.4      100 ms     91.25 %        100.00 %
+0.5      100 ms     91.25 %         95.00 %
+0.6      100 ms     91.25 %         80.00 %
+```
+
+0.4 survives re-measurement at the new operating point. It was not the missing
+lever either — but it is now gradeable, which it was not when this document
+claimed to know why lap failed.
 
 ### Is the ceiling tied to the report rate?
 

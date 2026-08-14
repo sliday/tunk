@@ -68,13 +68,17 @@ Then:
 
 ## Why lap is stuck, in one paragraph
 
-The sensor is band-limited near 50 Hz. It reports at 796 Hz — a hard cap, and
-`ReportInterval` does not move the bandwidth — but carries nothing above about
-50 Hz, with power in 100–398 Hz sitting nine to ten orders down at numerical
-noise. A knuckle strike on aluminium is broadband to several kHz, so the content
-that would distinguish a strike from the chassis ringing afterwards never reaches
-the file. On a lap the second strike and the first strike's ring are therefore
-the same size in the envelope. `notes/BAR_ASSESSMENT.md` has the full ledger.
+**Not known.** The bandwidth explanation that stood here was withdrawn: the
+spectrum measurement behind it left gravity in the DC bin, and corrected, the
+sensor is usable to about 150 Hz. Three critics were commissioned to refute the
+unreachability claim and two broke it — see the adjudication in
+`notes/BAR_ASSESSMENT.md`.
+
+What survives is operational, not physical: on this corpus lap does not reach
+98 % inside a 250 ms budget, and four attempts produced no better than 19/20 on
+held-out lap. The best current suspect is the re-arm state machine, since two
+clean contacts sit inside the legal join window in every held-out lap miss while
+the detector reports only one onset.
 
 Twenty-one mechanisms have been built and independently graded, each by a critic
 with fresh context who rebuilt from source and graded on data the builder could

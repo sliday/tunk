@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "title": "Tunk — gauntlet loop",
-  "generated_at": "2026-08-14T15:31:25Z",
+  "generated_at": "2026-08-14T16:15:29Z",
   "stale_after_s": 900,
   "cold_after_s": 7200,
   "primary_tap_count": "2",
@@ -5550,6 +5550,173 @@
       "status": "scored",
       "headline": "fail — 3 session(s) graded across 3 surface(s)",
       "biggest_gap": "lap: detection rate, all armed gestures — needs ≥ 98 %, got 80.00 % (16/20) — 2 of 16 credits disagree with the label by > 40 ms.",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "test",
+        "data_root": "/Users/stas/Playground/tunk/data/holdout",
+        "is_stub": false,
+        "warnings": [
+          "\n┌──────────────────────────────────────────────────────────────────────┐\n│  HOLDOUT RUN — CRITIC MODE                                           │\n│  Grading against held-out test data. These numbers are the verdict.  │\n│  Do not feed them back into tuning.                                  │\n└──────────────────────────────────────────────────────────────────────┘\nReason: the path /Users/stas/Playground/tunk/data/holdout is held-out test data."
+        ]
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 187.6,
+                  "n": 20
+                },
+                "latency_p95_ms": {
+                  "value": 198.9,
+                  "n": 20
+                },
+                "latency_max_ms": {
+                  "value": 210.1,
+                  "n": 20
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 197.6,
+                  "n": 20
+                },
+                "latency_p95_ms": {
+                  "value": 207.6,
+                  "n": 20
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 20
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "lap": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 80.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 183.9,
+                  "n": 16
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 16
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 16
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 40,
+      "label": "the unreachability claim was refuted — by my own arithmetic",
+      "timestamp": "2026-08-14T16:15:29Z",
+      "status": "scored",
+      "headline": "My bandwidth measurement measured gravity. The sensor is usable to ~150 Hz, not 50.",
+      "biggest_gap": "The PRD requires a CRITIC to rule that a target is unreachable. I had written that ruling myself. Commissioned three critics to refute it: two broke the physics. The PSD left gravity in the DC bin, so every '9-10 orders down' figure was a ratio against gravity. Worse, the consequence was wrong too - two clean contacts sit INSIDE the legal join window in every held-out lap miss, 150-200 ms apart, the second LARGER than the first in two of four. The ring is gone in under 10 ms. The detector reports one onset where two exist, so the suspect is the re-arm state machine, not the sensor.",
       "source": {
         "tool": "tunk-score 0.1.0",
         "detector": "TunkCore.TapDetector",

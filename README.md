@@ -134,13 +134,16 @@ mutes the detector for 86 % of that, so the honest exposure is 1.6 minutes.
 
 **Tunk meets the bar on a hard desk and on a soft surface, and does not on a lap.**
 
-Lap fails for a reason that is not tuning. The sensor reports 796 times a second
-but carries nothing above about 50 Hz — power in the 100–398 Hz band sits nine to
-ten orders down, at numerical noise — and the report rate is a hard cap that does
-not move the bandwidth. A knuckle strike on aluminium is broadband to several
-kHz, so the content that would tell a strike apart from the chassis ringing
-afterwards never reaches the file. On a lap the second tap of a gesture lands on
-the first one's echo, and the two are the same size in the envelope.
+Lap fails, and **the reason is not yet known.** An earlier version of this file
+blamed the sensor, on a spectrum measurement that turned out to have left gravity
+in the DC bin; corrected, the sensor is usable to about 150 Hz. Three independent
+critics were then asked to refute the claim that lap is physically unreachable
+and two of them broke it. The word has been withdrawn.
+
+What is measured: on this corpus lap does not reach 98 % inside a 250 ms latency
+budget, and four attempts — including three critics trying to break the finding —
+produced no better than 19/20 on held-out lap. At twenty gestures, nothing short
+of 20/20 clears 98 %.
 
 Twenty-one mechanisms were built against that, each by one agent and graded by a
 separate critic with fresh context, on data the builder could not see. One
