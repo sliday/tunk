@@ -268,6 +268,22 @@ make-or-break metric has nothing behind it. The gap is real, and it is reported
 rather than hidden — which is the difference between an unmeasured metric and a
 false green.
 
+## Which tap goes missing
+
+Twelve mechanisms targeted the second tap. The split had never been measured.
+Replaying every training tap deck and asking, for each missed gesture, which
+onset the detector never declared:
+
+| surface | detected | missed | first tap unseen | second unseen |
+|---|---|---|---|---|
+| desk | 22 | 0 | 0 | 0 |
+| soft | 20 | 0 | 0 | 0 |
+| lap | 61 | 17 | **3** | **14** |
+
+So the focus was right: lap misses are overwhelmingly the second tap, and no
+gesture fails with both onsets seen but ungrouped. `MissedTapSideTests` holds
+these as upper bounds.
+
 ## Correction: the ranking yardstick below was wrong
 
 The section that follows estimated that a pick-the-largest ranker could reach
@@ -409,6 +425,29 @@ Every consequence already measured follows from this one fact:
 - **Ring lobes sit at crest factor 1.41** — exactly the sinusoid value — while
   strikes reach 1.78. The ring hypothesis is right; there is simply not enough
   bandwidth left to act on it reliably.
+
+### Is the ceiling tied to the report rate?
+
+On most MEMS parts the anti-alias filter follows the output data rate, so a
+faster `ReportInterval` might move it. Measured, six idle recordings:
+
+```
+requested    delivered
+ 5000 us  ->  199.0 Hz
+ 2500 us  ->  398.1 Hz
+ 1250 us  ->  796.3 Hz   <- shipped
+  625 us  ->  796.3 Hz
+  400 us  ->  796.3 Hz
+  250 us  ->  796.3 Hz
+```
+
+**796 Hz is a hard cap.** Asking for more returns the same rate, and asking for
+less simply downsamples. Power above 100 Hz stays at 6.5e-11 relative across
+every setting. The rate is a dial; the bandwidth is not attached to it.
+
+(These are idle recordings with no broadband excitation, so they establish the
+rate cap. The bandwidth limit itself is measured on tap decks above, which do
+have excitation.)
 
 ### Can the filter be moved?
 

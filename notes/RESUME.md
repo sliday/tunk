@@ -1,99 +1,96 @@
 # Resuming
 
-Paused 2026-08-14. Everything is committed and pushed; the working tree is clean
-and 276 tests pass.
+Everything is committed and pushed. 290 tests pass. Working tree clean.
 
 ## Where the bar stands
 
-Measured on real recordings, desk only:
+Held-out, graded in critic mode, `strictDetectionRate` equal to the contract
+rate on every surface (zero loose credits — see the referee audit below):
 
-| Criterion | Bar | Measured |
-|---|---|---|
-| Detection rate, double tap | ≥ 98 % | **100 % (22/22)** ✅ |
-| Latency p95 | ≤ 250 ms | **210.1 ms** ✅ |
-| False triggers, live use | < 1 / 20 min | **0 in 29.9 min** ✅ |
-| False triggers, confounds | 0 | **0 in 2.1 min** ✅ |
-| Triggers on un-armed 1-tap | 0 | **0** ✅ |
-| Replay delivery order | 0 | **0** ✅ |
-| **False triggers while typing** | 0 | **not recorded** |
-| **Soft surface** | pass | **not recorded** |
-| **Lap surface** | pass | **not recorded** |
+| Criterion | Bar | desk | soft | lap |
+|---|---|---|---|---|
+| Detection rate | ≥ 98 % | **100 %** (20/20) ✅ | **100 %** (20/20) ✅ | 80 % (16/20) ✗ |
+| Latency p95 | ≤ 250 ms | **198.9 ms** ✅ | **207.6 ms** ✅ | **208.9 ms** ✅ |
+| False triggers | < 1 / 20 min | **0** ✅ | **0** ✅ | **0** ✅ |
+| False triggers, typing | 0 | no data | no data | no data |
 
-Harness verdict: **INCOMPLETE**, correctly.
+Harness verdict: **FAIL**, on lap detection. It would read INCOMPLETE even if
+lap passed, because held-out has no typing sessions.
 
-## The four recordings that finish it
+## The two recordings that are still missing
 
-Headphones on — the tool speaks and beeps, and through the speakers those shake
-the chassis into the data.
+Neither is fixable in code. Both block the bar.
 
 ```bash
 cd /Users/stas/Playground/tunk
 
-# 1. The make-or-break metric. 5 min.
-./bin/tunk-capture guide --surface desk --only typing --typing-sec 300
+# 1. The make-or-break metric, out of sample. It has NEVER been graded on
+#    held-out data. ~5 min each. Headphones on — the tool speaks and beeps.
+./bin/tunk-capture guide --surface desk --only typing --typing-sec 300 --out data/holdout --split test
+./bin/tunk-capture guide --surface soft --only typing --typing-sec 300 --out data/holdout --split test
+./bin/tunk-capture guide --surface lap  --only typing --typing-sec 300 --out data/holdout --split test
 
-# 2. A real held-out tap set, so detection is not self-graded. 2 min.
-./bin/tunk-capture guide --surface desk --only tap_deck --taps 20 \
-    --out data/holdout --split test
+# 2. A larger held-out lap deck. At n=20, 98 % can only be met by 20/20 and one
+#    gesture is five points, so the set cannot tell a real fix from luck.
+./bin/tunk-capture guide --surface lap --only tap_deck --taps 60 --out data/holdout --split test
+```
 
-# 3 and 4. The other two surfaces. ~4 min each.
-./bin/tunk-capture guide --surface soft --only tap_deck,typing --taps 20 --typing-sec 180
-./bin/tunk-capture guide --surface lap  --only tap_deck,typing --taps 20 --typing-sec 180
+Worth adding, because posture is a measured hidden variable — one lap session
+scores below chance on three separate statistics while the others score
+0.87–1.00, and the operator reports resting a hand on the chassis in some:
+
+```bash
+./bin/tunk-capture guide --surface lap --only tap_deck --taps 40 --note hand-on-chassis
+./bin/tunk-capture guide --surface lap --only tap_deck --taps 40 --note hand-off
 ```
 
 Then:
 
 ```bash
 ./analyse.sh              # grades data/raw end to end
-./analyse.sh --holdout    # the numbers that actually decide pass or fail
+./analyse.sh --holdout    # the numbers that decide pass or fail
 ```
 
-Or `./analyse.sh --watch` to have it grade automatically as sessions appear.
+## Why lap is stuck, in one paragraph
 
-## The open question about the current result
+The sensor is band-limited near 50 Hz. It reports at 796 Hz — a hard cap, and
+`ReportInterval` does not move the bandwidth — but carries nothing above about
+50 Hz, with power in 100–398 Hz sitting nine to ten orders down at numerical
+noise. A knuckle strike on aluminium is broadband to several kHz, so the content
+that would distinguish a strike from the chassis ringing afterwards never reaches
+the file. On a lap the second strike and the first strike's ring are therefore
+the same size in the envelope. `notes/BAR_ASSESSMENT.md` has the full ledger.
 
-Detection reads 100 %, but the threshold was fitted on the same session it was
-measured on. `data/holdout` is empty, so that figure is self-graded.
+Fourteen mechanisms have been built and independently graded, each by a critic
+with fresh context who rebuilt from source and graded on data the builder could
+not see. None reached the bar on lap. The latency-budget escape is measured shut
+(the join window saturates at 280 ms and 77.5 %), and so is the sensor-bandwidth
+escape.
 
-It is probably still sound — both tap sessions give 100 % anywhere from 0.030 to
-0.045, so the operating band is wide rather than a knife edge — but "probably" is
-not measured. Recording #2 above settles it, and `tunk-score` refuses to read
-`data/holdout` without `--i-am-a-critic`, so tuning cannot leak into it.
+## The referee has been audited
 
-A critic (`critic-threshold-fit`) was auditing exactly this when work paused; its
-findings had not come back.
+Three auditors attacked the scorer; a skeptic reproduced the worst finding.
+Held-out came out clean. Fixed in the process:
 
-## Final acceptance, when the bar is green
+- Matching tested only the trigger's LAST onset against the label's last, so a
+  first-strike-plus-ring-lobe pair could be credited. `strictDetectionRate` now
+  reports beside the contract rate. Held-out 0 loose credits; train 7.
+- The typing check now reports its real exposure: `0 in 3 session(s), 11.7 min
+  (1.6 min un-gated)`. The zero is real — strip `input.jsonl` and the same
+  detector fires 110 times — but 86 % of typing time is gated.
+- `must-not-fire` judged all triggers in the window rather than unclaimed ones.
 
-The PRD asks for a live driving test on the built app rather than a replay:
+## Still open, and small
 
-```bash
-./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300
-```
+- **`--collect-taps`** is wired and receives every sample; the onset-to-snippet
+  path has never fired because it needs a real tap. One tap settles it.
+- **The site's call to action** points at a private repo and 404s.
+- **The motion gate** ships disabled. It needs `confound_handling` recordings.
+- **Per-surface calibration profiles** would help (lap tops at 82.5 % at its own
+  best) but the surface is not detectable, so any switching must be deliberate.
 
-50 prompted double-taps then 5 minutes of typing, counted live against the real
-sensor and the real detector. It reports hit rate, latency p50/p95 and typing
-false triggers against the bar. It deliberately does **not** post the bound
-action — firing a hotkey 50 times into whatever has focus would be its own
-disaster, and `--live-emit-probe` already covers emission.
+## The decision that is not mine
 
-## Also open
-
-- **`--collect-taps`** turns ordinary use into tap recordings. The collector is
-  wired and receives every sample; the onset-to-snippet path has never fired,
-  because triggering it needs a real tap. One tap settles it.
-- **Position classification** (`notes/POSITION_PLAN.md`). Measured within-class
-  scatter suggests axis ratios alone are too weak; spectral content is the better
-  candidate. Do it after the surfaces, since a desk-trained model probably will
-  not transfer to a lap.
-- **The site's call to action** points at a private repo and 404s. It needs a real
-  destination, and the honest note stays until there is one.
-- **The motion gate** is built and shipped disabled. At 0.030 g it separated
-  synthetic lifts from taps but dropped a loud surface from 10 deliberate doubles
-  to 6. It needs `confound_handling` recordings and probably a gate scaled
-  against the adaptive noise floor rather than a fixed g value.
-
-## If the goal hook keeps blocking
-
-It is waiting on a complete pass of the PRD bar, which needs the recordings
-above. `/goal clear` releases it in the meantime.
+Desk and soft meet the PRD bar. Lap does not, and the reason is the sensor.
+Either ship lap as best-effort with the measured number stated, or mark it
+unsupported. Both are honest; neither is an engineering question.
