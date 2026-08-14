@@ -213,7 +213,13 @@ public final class TapDetector: TapDetecting {
         var onsetTrigger: Trigger?
 
         if armed {
-            if sampleIndex > tuning.warmupSamples && envelope >= threshold {
+            // The bar to cross is not always the bar to fall back under: with
+            // `secondTapBarFraction` on, only the crossing scales with the first
+            // strike, while the re-arm hysteresis stays where it was. Raising
+            // the release level along with the bar would re-arm the detector
+            // part-way down a ring, which is the failure mode this mechanism
+            // exists to avoid.
+            if sampleIndex > tuning.warmupSamples && envelope >= onsetBar(base: threshold) {
                 armed = false
                 lastOnsetNs = sample.tNs
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
@@ -309,7 +315,7 @@ public final class TapDetector: TapDetecting {
     /// Current adaptive noise floor, in g.
     public var noiseFloor: Double { chain.noiseFloor }
     /// The threshold an onset would have to beat right now, in g.
-    public var activeThreshold: Double { currentThreshold() }
+    public var activeThreshold: Double { onsetBar(base: currentThreshold()) }
     /// The counts that can actually fire, after unsupported ones are dropped.
     public var effectiveArmedTapCounts: Set<Int> { firingCounts }
 
@@ -353,6 +359,37 @@ public final class TapDetector: TapDetecting {
         let openUntil = last + effectiveConfig.maxInterTapNs
         guard let now = lastSampleNs, now <= openUntil else { return base }
         return base * tuning.inGestureThresholdFraction
+    }
+
+    /// The bar a NEW onset has to cross right now, in g.
+    ///
+    /// Equal to `base` unless `secondTapBarFraction` is on and a gesture is in
+    /// flight, in which case the bar becomes
+    ///
+    ///     max(adaptive floor, min(base, fraction * first onset's peak))
+    ///
+    /// Scaling with the first tap is what a fixed reduction could not do. A
+    /// fixed reduction is one number for every surface, so it has to stay small
+    /// enough not to admit ring-down on a damped chassis, and ring-down there
+    /// reaches 80 % of the peak. Measured against the first strike instead, the
+    /// same fraction lands at a median 0.046 g on a desk and 0.027 g on a lap,
+    /// so the bar only actually falls where the gesture itself is faint.
+    ///
+    /// Two clamps, both measured on `data/raw` at fraction 0.65:
+    ///
+    /// - `min(base, ...)`, so the bar is never stricter than the shipped one.
+    ///   Without it a loud first tap raises the bar against its own second tap:
+    ///   lap 82.50 % drops to 78.75 %, one lap session losing three gestures,
+    ///   and not one false trigger bought back. The rise side is worthless here.
+    /// - `max(adaptive, ...)`, so it never goes under the noise-derived terms. A
+    ///   surface loud enough to lift them sprays onsets at any lower bar,
+    ///   gesture in flight or not.
+    private func onsetBar(base: Double) -> Double {
+        let fraction = effectiveConfig.secondTapBarFraction
+        guard fraction > 0, let first = group.first, let last = groupLastOnsetNs else { return base }
+        guard let now = lastSampleNs, now <= last + effectiveConfig.maxInterTapNs else { return base }
+        let adaptive = max(tuning.noiseSnrMultiple * chain.noiseFloor, tuning.minThresholdG)
+        return max(adaptive, min(base, fraction * first.strength))
     }
 
     /// Drop everything derived from the sample stream, keeping gate and

@@ -65,6 +65,7 @@ during typing, which stayed at zero.
 | Wider join window | lap 65 → 70 %, **latency p95 209 → 389 ms** |
 | Per-surface calibration | desk 95.65 %, soft 100 %, **lap 82.5 % at its own best** |
 | Learned join window (235 ms) | held-out lap **80 % → 80 %**, latency 208.9 → 223.9 ms |
+| 2nd-tap bar scaled to the 1st tap (k = 0.65) | lap 73.75 → 82.5 %, desk and soft unmoved, typing FT still 0, but **lap false triggers 3 → 4** and one lap session regresses. Train only; ships off. See `PROPORTIONAL_BAR.md` |
 
 ### What the learned window does and does not fix
 

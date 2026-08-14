@@ -91,6 +91,7 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "secondTapBarFraction": return "Second-tap bar"
         default:                    return field
         }
     }
@@ -192,6 +193,16 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // A negative or non-finite fraction would make the in-gesture bar
+        // meaningless rather than merely wrong, so it falls back to "off"
+        // instead of to some other live value.
+        if !(out.secondTapBarFraction.isFinite && out.secondTapBarFraction >= 0) {
+            issues.append(CoherenceIssue(field: "secondTapBarFraction",
+                                         reason: "not a fraction of the first tap's strength",
+                                         applied: "0 (disabled)"))
+            out.secondTapBarFraction = 0
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

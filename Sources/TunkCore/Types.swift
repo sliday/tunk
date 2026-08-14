@@ -219,6 +219,42 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Bar for a later onset in a live gesture, as a fraction of the FIRST
+    /// onset's measured peak. **0, disabled.**
+    ///
+    /// While a gesture is in flight — within `maxInterTapNs` of an onset that
+    /// already cleared the full bar — a later onset faces
+    /// `secondTapBarFraction * (first onset's peak, in g)` instead of the
+    /// absolute threshold, never above the threshold it replaces and never
+    /// below the adaptive terms. Zero keeps the absolute term, which is the
+    /// shipped behaviour.
+    ///
+    /// A user's second tap runs a stable fraction of their first (median 0.85
+    /// desk, 0.86 soft, 0.95 lap) while the absolute amplitude does not travel
+    /// at all: lap first taps are a fraction of desk first taps. So the same
+    /// fraction of the first strike is a different number on every surface,
+    /// which is what `DSPTuning.inGestureThresholdFraction` could not be. That
+    /// one dropped the bar by a fixed factor everywhere and took soft detection
+    /// from 100 % to 55 %.
+    ///
+    /// Swept on `data/raw`, per surface, detection rate and false triggers:
+    ///
+    ///     fraction  desk      soft      lap       lap FP  latency p95
+    ///     0 (off)   95.65 %   100.00 %  73.75 %   3       225.2 ms
+    ///     0.50      95.65 %   95.00 %   77.50 %   3       223.9 ms
+    ///     0.55      95.65 %  100.00 %   76.25 %   4       223.9 ms
+    ///     0.60      95.65 %  100.00 %   80.00 %   5       225.2 ms
+    ///     0.65      95.65 %  100.00 %   82.50 %   4       225.2 ms
+    ///     0.70      95.65 %  100.00 %   80.00 %   4       225.2 ms
+    ///     0.80      95.65 %  100.00 %   77.50 %   4       225.2 ms
+    ///
+    /// Lap gains up to 8.75 points with desk, soft, latency and typing false
+    /// triggers all unmoved, and it costs one extra lap false trigger — a
+    /// surface already failing that bar at 3. It ships off because the gain is
+    /// measured on one operator's four lap sessions and is not uniform across
+    /// them; see `notes/PROPORTIONAL_BAR.md` for the per-session split.
+    public var secondTapBarFraction: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -260,7 +296,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
         onsetCeilingG: 2.5,
-        motionGateG: 0
+        motionGateG: 0,
+        secondTapBarFraction: 0
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
@@ -269,6 +306,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                secondTapBarFraction: Double = 0,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +319,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.secondTapBarFraction = secondTapBarFraction
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +342,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case secondTapBarFraction
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +360,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        secondTapBarFraction = try c.decodeIfPresent(Double.self, forKey: .secondTapBarFraction)
+            ?? d.secondTapBarFraction
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +385,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(secondTapBarFraction, forKey: .secondTapBarFraction)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
