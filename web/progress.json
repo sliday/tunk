@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "title": "Tunk — gauntlet loop",
-  "generated_at": "2026-08-14T11:31:33Z",
+  "generated_at": "2026-08-14T12:50:47Z",
   "stale_after_s": 900,
   "cold_after_s": 7200,
   "primary_tap_count": "2",
@@ -3559,6 +3559,173 @@
       "status": "scored",
       "headline": "796 Hz of samples carrying 50 Hz of content — the strike-vs-ring difference is filtered out before it reaches us",
       "biggest_gap": "Power above 100 Hz is 9-10 orders down, at numerical noise. A knuckle strike is broadband to several kHz; none of it arrives. This explains all eleven failed mechanisms, and why rise time measured 13.8 vs 12.6 ms (that was the filter, not the taps). The service exposes ReportInterval and BatchInterval only - 27 of 29 candidate bandwidth/filter/ODR keys return nothing, so the ceiling is not ours to move.",
+      "source": {
+        "tool": "tunk-score 0.1.0",
+        "detector": "TunkCore.TapDetector",
+        "split": "test",
+        "data_root": "/Users/stas/Playground/tunk/data/holdout",
+        "is_stub": false,
+        "warnings": [
+          "\n┌──────────────────────────────────────────────────────────────────────┐\n│  HOLDOUT RUN — CRITIC MODE                                           │\n│  Grading against held-out test data. These numbers are the verdict.  │\n│  Do not feed them back into tuning.                                  │\n└──────────────────────────────────────────────────────────────────────┘\nReason: the path /Users/stas/Playground/tunk/data/holdout is held-out test data."
+        ]
+      },
+      "surfaces": {
+        "desk": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 187.6,
+                  "n": 20
+                },
+                "latency_p95_ms": {
+                  "value": 198.9,
+                  "n": 20
+                },
+                "latency_max_ms": {
+                  "value": 210.1,
+                  "n": 20
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "soft": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 100,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 197.6,
+                  "n": 20
+                },
+                "latency_p95_ms": {
+                  "value": 207.6,
+                  "n": 20
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 20
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        },
+        "lap": {
+          "coverage": {
+            "sessions": 1,
+            "tap_groups": {
+              "2": 20
+            }
+          },
+          "taps": {
+            "2": {
+              "metrics": {
+                "detection_rate": {
+                  "value": 80.0,
+                  "n": 20
+                },
+                "false_triggers_typing": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no typing sessions in this scope"
+                },
+                "false_triggers_confound": {
+                  "value": null,
+                  "n": 0,
+                  "note": "no confound sessions in this scope"
+                },
+                "false_triggers_per_20min": {
+                  "value": 0,
+                  "n": 1
+                },
+                "latency_p50_ms": {
+                  "value": 183.9,
+                  "n": 16
+                },
+                "latency_p95_ms": {
+                  "value": 208.9,
+                  "n": 16
+                },
+                "latency_max_ms": {
+                  "value": 208.9,
+                  "n": 16
+                },
+                "stuck_modifiers": {
+                  "value": null,
+                  "n": 0,
+                  "note": "replay does not emit keys; graded by the emission tests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "round": 28,
+      "label": "audited the referee",
+      "timestamp": "2026-08-14T12:50:47Z",
+      "status": "scored",
+      "headline": "Held-out survives the audit: 0 loose credits. Train soft's 100% does not.",
+      "biggest_gap": "The scorer tested one number - trigger's LAST onset vs the label's last - and ignored the rest, so a first-strike-plus-ring-lobe pair could be credited. Now reports strictDetectionRate beside the contract rate: held-out 0 loose credits (desk/soft/lap unchanged), train 7 (soft 1, lap 6). The typing zero is real - stripping input.jsonl makes the same detector fire 110 times - but 86% of typing time is gated, so the honest exposure is 1.6 min not 11.7, and the report now says so.",
       "source": {
         "tool": "tunk-score 0.1.0",
         "detector": "TunkCore.TapDetector",

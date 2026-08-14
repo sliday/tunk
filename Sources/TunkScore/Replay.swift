@@ -28,6 +28,16 @@ struct ReplayResult {
     var largestGapNs: Int64 = 0
     var firstNs: Int64 = 0
     var lastNs: Int64 = 0
+    /// Seconds of the session during which the input gate had the detector
+    /// switched off, and the seconds during which it could actually fire.
+    ///
+    /// "Zero false triggers in 11.7 minutes of typing" is the project's
+    /// make-or-break claim, and it was measured: strip input.jsonl and the same
+    /// detector fires 110 times on the same recording. But 86 % of that time the
+    /// gate had it muted, so the honest exposure is about 1.6 minutes. The zero
+    /// is real; the denominator was not being reported.
+    var gatedSeconds = 0.0
+    var ungatedSeconds = 0.0
     /// Records the harness had to reorder because the file was not ascending.
     var unsortedSamples = 0
     var unsortedInputs = 0
@@ -74,6 +84,38 @@ enum Replay {
         result.sampleCount = samples.count
         result.inputCount = inputs.count
         result.gatingInputCount = inputs.filter { $0.kind.gatesDetection }.count
+        // Union of the gate's shadow over every gating input, clipped to the
+        // recorded span. Merged rather than summed: keystrokes overlap heavily
+        // during real typing, and summing would double-count them into a
+        // coverage above 100 %.
+        do {
+            let spanLo = samples.first?.tNs ?? 0
+            let spanHi = samples.last?.tNs ?? 0
+            let tuning = DSPTuning.default
+            // Falls back to the shipped default for the stub detector, which
+            // has no config; only the real detector's gate matters here.
+            let gateWindowNs = (detector as? TapDetector)?.effectiveConfig.gateWindowNs
+                ?? DetectorConfig.default.gateWindowNs
+            var shadows: [(Int64, Int64)] = inputs.filter { $0.kind.gatesDetection }.map {
+                (max(spanLo, $0.tNs - tuning.preGateNs),
+                 min(spanHi, $0.tNs + gateWindowNs))
+            }.filter { $0.0 < $0.1 }
+            shadows.sort { $0.0 < $1.0 }
+            var merged = 0.0
+            var i = 0
+            while i < shadows.count {
+                var (lo, hi) = shadows[i]
+                var j = i + 1
+                while j < shadows.count, shadows[j].0 <= hi {
+                    hi = max(hi, shadows[j].1); j += 1
+                }
+                merged += Double(hi - lo) / 1e9
+                i = j
+            }
+            let span = Double(spanHi - spanLo) / 1e9
+            result.gatedSeconds = merged
+            result.ungatedSeconds = max(0, span - merged)
+        }
         result.firstNs = samples.first?.tNs ?? inputs.first?.tNs ?? 0
         result.lastNs = samples.last?.tNs ?? inputs.last?.tNs ?? 0
 

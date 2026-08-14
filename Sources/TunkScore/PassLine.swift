@@ -56,9 +56,9 @@ enum PassLine {
                 : agg.typingSeconds < minimumMeaningfulSeconds
                     ? String(format: "%d typing session(s) holding only %.1f s of data",
                              agg.typingSessions, agg.typingSeconds)
-                    : String(format: "%d in %d session(s), %.1f min",
+                    : String(format: "%d in %d session(s), %.1f min (%.1f min un-gated)",
                              agg.typingFalsePositives, agg.typingSessions,
-                             agg.typingSeconds / 60),
+                             agg.typingSeconds / 60, agg.typingUngatedSeconds / 60),
             status: agg.typingSessions == 0 || agg.typingSeconds < minimumMeaningfulSeconds
                 ? .noData : (agg.typingFalsePositives == 0 ? .pass : .fail)
         ))

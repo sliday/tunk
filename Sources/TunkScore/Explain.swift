@@ -190,6 +190,13 @@ enum Explainer {
                 + "trigger(s) landed inside the match window. Every one of them is a false trigger."
         case .detected:
             return "one trigger landed inside the match window; counted as detected."
+        case .detectedLooseOnsets:
+            let ms = Double(g.onsetSpreadNs ?? 0) / 1e6
+            return String(format: "one trigger landed inside the match window and is counted as "
+                + "detected, BUT its onsets disagree with the labelled ones by %.0f ms. Matching "
+                + "only ever tests the last onset, so this credit may be firing on a different "
+                + "physical event than the label names — most often the first strike plus a ring "
+                + "lobe, with the real second strike arriving afterwards.", ms)
         case .ambiguous:
             return "\(g.candidateTriggers) triggers of the right tap count landed inside the match window. FORMAT.md requires "
                 + "exactly one, so this group is not detected and the surplus triggers count as false positives."

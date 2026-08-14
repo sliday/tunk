@@ -9,6 +9,15 @@ enum Scoring {
     /// FORMAT.md: a labelled group counts as detected when exactly one trigger has
     /// its last tap onset within +/-150 ms of the labelled last onset.
     static let matchWindowNs: Int64 = 150_000_000
+
+    /// How far the trigger's onset vector may drift from the labelled one
+    /// before the credit is flagged as landing on different physical events.
+    ///
+    /// This is `TunkLabel.minGapNs`: the smallest spacing at which the labeller
+    /// itself will call two peaks two separate taps. Any disagreement smaller
+    /// than that is the same strike attributed to a different crest, which is
+    /// jitter, not a mis-credit.
+    static let onsetAgreementNs: Int64 = 80_000_000
 }
 
 /// Which tap counts the detector is allowed to fire on this run.
@@ -57,6 +66,19 @@ struct ScoringPolicy: Codable, Equatable {
 /// Why a labelled group was or was not detected. `explain` prints this verbatim.
 enum GroupVerdict: String, Codable {
     case detected
+    /// Credited, but the trigger's onsets do not line up with the labelled ones.
+    ///
+    /// Matching tests one number: the trigger's LAST onset against the label's
+    /// last onset. It never looks at the others. So a trigger built from the
+    /// first strike plus a ring lobe can be credited with detecting a gesture
+    /// whose real second strike arrived later — the right verdict on the wrong
+    /// physical event. Measured on training data: 2 of 20 soft credits.
+    ///
+    /// These still count as detections, because the detector did fire once
+    /// inside a gesture the operator actually made, and FORMAT.md's contract
+    /// says so. They are counted separately as well, so a reader can see how
+    /// much of a detection rate rests on them.
+    case detectedLooseOnsets
     /// The group is armed, and nothing fired on it.
     case missed
     /// More than one trigger landed in the window: not "exactly one", so the group
@@ -96,6 +118,11 @@ struct GroupOutcome: Codable {
     var latencyNs: Int64?
     /// `detector last onset - labelled last onset`, for onset-accuracy debugging.
     var onsetErrorNs: Int64?
+    /// Spread of (trigger onset i - labelled onset i) across the whole vector.
+    /// Zero-ish means the trigger fired on the same physical strikes the label
+    /// names; large means it fired on different ones and was credited anyway,
+    /// because matching only ever tested the last onset.
+    var onsetSpreadNs: Int64?
 }
 
 struct TriggerOutcome: Codable {
@@ -121,6 +148,10 @@ struct CountStats: Codable {
     /// Labelled gesture groups with this many onsets (`intent != none`).
     var labelledGroups = 0
     var detectedGroups = 0
+    /// Of `detectedGroups`, those credited on an onset vector that disagrees
+    /// with the labelled one by more than `Scoring.onsetAgreementNs`. Counted so
+    /// a detection rate can be read strictly as well as by the contract.
+    var looseOnsetCredits = 0
     var ambiguousGroups = 0
     var missedGroups = 0
     /// Labelled groups of this count that the detector is not armed for.
@@ -144,6 +175,14 @@ struct CountStats: Codable {
         guard armed, labelledGroups > 0 else { return nil }
         return Double(detectedGroups) / Double(labelledGroups)
     }
+    /// Detection rate counting only credits whose onsets line up with the label.
+    /// Reported beside `detectionRate`, never instead of it: the contract in
+    /// FORMAT.md defines the headline, and replacing it silently would be the
+    /// same sin the harness exists to prevent.
+    var strictDetectionRate: Double? {
+        guard armed, labelledGroups > 0 else { return nil }
+        return Double(detectedGroups - looseOnsetCredits) / Double(labelledGroups)
+    }
     var latencyP50Ns: Int64? { Percentile.of(latenciesNs, 0.50) }
     var latencyP95Ns: Int64? { Percentile.of(latenciesNs, 0.95) }
     var latencyMaxNs: Int64? { latenciesNs.max() }
@@ -152,6 +191,7 @@ struct CountStats: Codable {
         armed = armed || o.armed
         labelledGroups += o.labelledGroups
         detectedGroups += o.detectedGroups
+        looseOnsetCredits += o.looseOnsetCredits
         ambiguousGroups += o.ambiguousGroups
         missedGroups += o.missedGroups
         mustNotFireGroups += o.mustNotFireGroups
@@ -163,10 +203,11 @@ struct CountStats: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case count, armed, labelledGroups, detectedGroups, ambiguousGroups, missedGroups
+        case count, armed, labelledGroups, detectedGroups, looseOnsetCredits
+        case ambiguousGroups, missedGroups
         case mustNotFireGroups, mustNotFireViolations, triggers, falseTriggers
         case latencyExcluded, latenciesNs
-        case detectionRate, latencyP50Ns, latencyP95Ns, latencyMaxNs
+        case detectionRate, strictDetectionRate, latencyP50Ns, latencyP95Ns, latencyMaxNs
     }
 
     func encode(to encoder: Encoder) throws {
@@ -175,6 +216,7 @@ struct CountStats: Codable {
         try c.encode(armed, forKey: .armed)
         try c.encode(labelledGroups, forKey: .labelledGroups)
         try c.encode(detectedGroups, forKey: .detectedGroups)
+        try c.encode(looseOnsetCredits, forKey: .looseOnsetCredits)
         try c.encode(ambiguousGroups, forKey: .ambiguousGroups)
         try c.encode(missedGroups, forKey: .missedGroups)
         try c.encode(mustNotFireGroups, forKey: .mustNotFireGroups)
@@ -184,6 +226,7 @@ struct CountStats: Codable {
         try c.encode(latencyExcluded, forKey: .latencyExcluded)
         try c.encode(latenciesNs, forKey: .latenciesNs)
         try c.encodeIfPresent(detectionRate, forKey: .detectionRate)
+        try c.encodeIfPresent(strictDetectionRate, forKey: .strictDetectionRate)
         try c.encodeIfPresent(latencyP50Ns, forKey: .latencyP50Ns)
         try c.encodeIfPresent(latencyP95Ns, forKey: .latencyP95Ns)
         try c.encodeIfPresent(latencyMaxNs, forKey: .latencyMaxNs)
@@ -195,6 +238,7 @@ struct CountStats: Codable {
         armed = try c.decode(Bool.self, forKey: .armed)
         labelledGroups = try c.decode(Int.self, forKey: .labelledGroups)
         detectedGroups = try c.decode(Int.self, forKey: .detectedGroups)
+        looseOnsetCredits = try c.decodeIfPresent(Int.self, forKey: .looseOnsetCredits) ?? 0
         ambiguousGroups = try c.decode(Int.self, forKey: .ambiguousGroups)
         missedGroups = try c.decode(Int.self, forKey: .missedGroups)
         mustNotFireGroups = try c.decode(Int.self, forKey: .mustNotFireGroups)
@@ -217,6 +261,9 @@ struct SessionScore: Codable {
     var sampleCount: Int
     var inputCount: Int
     var gatingInputCount: Int
+    /// Seconds of this session where the input gate was NOT muting the detector.
+    /// The honest denominator for any false-trigger claim about typing.
+    var ungatedSeconds: Double = 0
     var gapCount: Int
     var largestGapNs: Int64
     var unsortedSamples: Int
@@ -287,6 +334,7 @@ enum SessionScorer {
         }.sorted { $0.lastNs < $1.lastNs }
 
         var detected = 0, ambiguous = 0, armedGroups = 0
+        var looseOnsetCredits = 0
         var mustNotFire = 0, mustNotFireViolations = 0, latencyExcluded = 0
 
         for g in keyed {
@@ -330,7 +378,11 @@ enum SessionScorer {
                 // the window stays in the false-positive column.
                 mustNotFire += 1
                 if isGesture { s.mustNotFireGroups += 1 }
-                if window.isEmpty {
+                // `unclaimed`, not `window`: a trigger already credited to an
+                // armed group must not also be booked as a violation here. No
+                // real recording has an unarmed label close enough for this to
+                // bite, but the asymmetry was reachable with a planted label.
+                if unclaimed.isEmpty {
                     outcome.verdict = .mustNotFire
                 } else {
                     outcome.verdict = .firedWhenItMustNot
@@ -351,9 +403,26 @@ enum SessionScorer {
                 outcome.latencyNs = triggers[best].tNs - g.lastNs
                 outcome.onsetErrorNs = triggerOnsetNs(triggers[best]) - g.lastNs
                 if sameCount.count == 1 {
-                    outcome.verdict = .detected
+                    // Compare the WHOLE onset vector, not just the last one.
+                    // The per-session lead (the detector crosses threshold
+                    // before the labeller's peak, by 8-34 ms depending on the
+                    // session) is common to every onset, so it cancels in the
+                    // spread and only real disagreement survives.
+                    let onsets = triggers[best].tapOnsets
+                    if onsets.count == g.rows.count, onsets.count > 1 {
+                        let residuals = zip(onsets, g.rows).map { $0 - $1.tNs }
+                        let spread = (residuals.max() ?? 0) - (residuals.min() ?? 0)
+                        outcome.onsetSpreadNs = spread
+                    }
+                    // 80 ms is TunkLabel's own `minGapNs`: the smallest spacing
+                    // at which the labeller will call two peaks two taps. Below
+                    // it, a disagreement is provably the same physical strike
+                    // attributed to a different crest, not a different event.
+                    let loose = (outcome.onsetSpreadNs ?? 0) > Scoring.onsetAgreementNs
+                    outcome.verdict = loose ? .detectedLooseOnsets : .detected
                     detected += 1
                     s.detectedGroups += 1
+                    if loose { looseOnsetCredits += 1; s.looseOnsetCredits += 1 }
                     if confidence == .promptWindow {
                         latencyExcluded += 1
                         s.latencyExcluded += 1
@@ -457,6 +526,7 @@ enum SessionScorer {
             sampleCount: replay.sampleCount,
             inputCount: replay.inputCount,
             gatingInputCount: replay.gatingInputCount,
+            ungatedSeconds: replay.ungatedSeconds,
             gapCount: replay.gapCount,
             largestGapNs: replay.largestGapNs,
             unsortedSamples: replay.unsortedSamples,
@@ -497,6 +567,13 @@ struct Aggregate: Codable {
     var confoundSessions: Int = 0
     var durationSeconds: Double = 0
     var typingSeconds: Double = 0
+    /// Of `typingSeconds`, the part where the input gate was NOT muting the
+    /// detector. This is the real exposure behind "zero false triggers while
+    /// typing": measured on the training set, 86 % of typing time is gated, so
+    /// 11.7 minutes of typing is about 1.6 minutes of opportunity to misfire.
+    /// The zero is real — stripping input.jsonl makes the same detector fire
+    /// 110 times on the same recording — but a reader is owed the denominator.
+    var typingUngatedSeconds: Double = 0
     var confoundSeconds: Double = 0
     var armedGroups: Int = 0
     var detectedGroups: Int = 0
@@ -563,6 +640,7 @@ struct Aggregate: Codable {
         if s.category == Category.typing.rawValue {
             typingSessions += 1
             typingSeconds += s.durationSeconds
+            typingUngatedSeconds += s.ungatedSeconds
             typingFalsePositives += c.falseTriggers
         }
         if s.category.hasPrefix("confound_") {
@@ -595,6 +673,7 @@ struct Aggregate: Codable {
         if s.category == Category.typing.rawValue {
             typingSessions += 1
             typingSeconds += s.durationSeconds
+            typingUngatedSeconds += s.ungatedSeconds
             typingFalsePositives += s.falsePositives
         }
         if s.category.hasPrefix("confound_") {
@@ -620,7 +699,7 @@ struct Aggregate: Codable {
     enum CodingKeys: String, CodingKey {
         case label, tapCount, armed, labelledGroups
         case sessions, tapSessions, typingSessions, confoundSessions
-        case durationSeconds, typingSeconds, confoundSeconds
+        case durationSeconds, typingSeconds, typingUngatedSeconds, confoundSeconds
         case armedGroups, detectedGroups, ambiguousGroups
         case mustNotFireGroups, mustNotFireViolations
         case triggerCount, falsePositives, typingFalsePositives, confoundFalsePositives
@@ -644,6 +723,7 @@ struct Aggregate: Codable {
         try c.encode(confoundSessions, forKey: .confoundSessions)
         try c.encode(durationSeconds, forKey: .durationSeconds)
         try c.encode(typingSeconds, forKey: .typingSeconds)
+        try c.encode(typingUngatedSeconds, forKey: .typingUngatedSeconds)
         try c.encode(confoundSeconds, forKey: .confoundSeconds)
         try c.encode(armedGroups, forKey: .armedGroups)
         try c.encode(detectedGroups, forKey: .detectedGroups)
@@ -681,6 +761,7 @@ struct Aggregate: Codable {
         confoundSessions = try c.decode(Int.self, forKey: .confoundSessions)
         durationSeconds = try c.decode(Double.self, forKey: .durationSeconds)
         typingSeconds = try c.decodeIfPresent(Double.self, forKey: .typingSeconds) ?? 0
+        typingUngatedSeconds = try c.decodeIfPresent(Double.self, forKey: .typingUngatedSeconds) ?? 0
         confoundSeconds = try c.decodeIfPresent(Double.self, forKey: .confoundSeconds) ?? 0
         armedGroups = try c.decode(Int.self, forKey: .armedGroups)
         detectedGroups = try c.decode(Int.self, forKey: .detectedGroups)
