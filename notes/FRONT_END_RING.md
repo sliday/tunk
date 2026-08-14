@@ -211,3 +211,38 @@ the same measure, so the resonator buys about 23 %. That is the whole of the
 front-end gain, and the two-resonator variant is recorded here so nobody spends
 a round rediscovering that subtracting the ring's band subtracts the strike with
 it.
+
+
+## Decay normalisation, measured shut, and why it cannot work
+
+If subtracting the ring removes the strike with it, the scale-free version is to
+DIVIDE: track the decaying peak-hold after a strike and normalise the envelope by
+it, so a fresh strike gives a large ratio and the ring itself gives about one.
+
+```
+resonator envelope (baseline)    strike 0.1424   ring 0.0545   ratio 2.61
+normalised by decay tau  40 ms   strike 0.9736   ring 0.9263   ratio 1.05
+normalised by decay tau  80 ms   strike 0.9736   ring 0.7140   ratio 1.36
+normalised by decay tau 150 ms   strike 0.9736   ring 0.4395   ratio 2.22
+```
+
+It cannot beat the baseline, and the reason is structural rather than empirical.
+The strike sets the peak-hold, so the strike's own normalised value is pinned at
+about 1.0 whatever tau is — note it never moves off 0.9736. Only the ring's value
+varies, falling as tau lengthens, and as tau grows the hold stops decaying at all,
+the denominator becomes a constant, and the whole transform converges on the
+unnormalised envelope. So normalisation approaches the baseline from below and
+can never exceed it.
+
+### The front-end space, as explored
+
+| front end | strike/ring on lap |
+|---|---|
+| plain 20 Hz high pass (was shipped) | 2.13 |
+| **resonator 40 Hz, Q 2** | **2.61** |
+| resonator minus a 26 Hz resonator | 1.06 |
+| resonator normalised by its own decay | 2.22 |
+
+Centre and Q were swept 10-60 Hz and 1.0-4.0 by the builder that found the
+resonator. 2.61 is the best available, it is a 23 % improvement on what it
+replaced, and it converts to one clean held-out lap gesture.
