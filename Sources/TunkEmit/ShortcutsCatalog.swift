@@ -44,12 +44,22 @@ public struct ShortcutsListing: Sendable, Equatable {
 /// without a Shortcuts library.
 public protocol ShortcutNameResolving: AnyObject, Sendable {
     func listing() -> ShortcutsListing
+    /// The cached listing, or nil. Must never block or spawn — see
+    /// `ShortcutsCatalog.cachedListing`.
+    func cachedListing() -> ShortcutsListing?
+}
+
+public extension ShortcutNameResolving {
+    /// Conformers that predate the hot-path split fall back to the blocking
+    /// call, which is correct for tests and for the panel.
+    func cachedListing() -> ShortcutsListing? { listing() }
 }
 
 /// The real resolver: whatever `ShortcutsCatalog` last listed.
 public final class CatalogNameResolver: ShortcutNameResolving, @unchecked Sendable {
     public init() {}
     public func listing() -> ShortcutsListing { ShortcutsCatalog.listing() }
+    public func cachedListing() -> ShortcutsListing? { ShortcutsCatalog.cachedListing() }
 }
 
 public enum ShortcutsCatalog {
@@ -67,6 +77,20 @@ public enum ShortcutsCatalog {
     public static func available() -> [String] { listing().names }
 
     /// The cached listing, including whether it worked. Lists on first call.
+    /// The cache, or nil if it has never been filled. Never spawns.
+    ///
+    /// `listing()` falls through to `refreshListing()` on a cold cache, which
+    /// spawns `shortcuts list` and waits up to 3 s. On the action path the
+    /// caller is the sensor callback, so a cold cache put a subprocess on the
+    /// 796 Hz thread: measured, the shortcut path costs 14.3 ms cold against
+    /// 7 microseconds warm. Engine warms it asynchronously at launch, so this is
+    /// a startup race rather than a standing bug — but "the warm-up usually
+    /// wins" is not a guarantee, and the hot path should not be able to spawn.
+    public static func cachedListing() -> ShortcutsListing? {
+        lock.lock(); defer { lock.unlock() }
+        return cache
+    }
+
     public static func listing() -> ShortcutsListing {
         lock.lock()
         if let cache {

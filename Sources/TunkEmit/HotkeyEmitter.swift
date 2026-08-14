@@ -350,9 +350,18 @@ public final class HotkeyEmitter: @unchecked Sendable {
         if opts.requireAccessibility && !permission.isTrusted {
             throw EmitError.accessibilityNotTrusted
         }
+        // Both halves validated AS THEY WILL BE POSTED. The up used to be
+        // validated with the DOWN's flags, so `RShift` validated
+        // ["down:0x20004", "up:0x20004"] and posted ["down:0x20004", "up:0x0"].
+        // Harmless today, because CGEvent creation ignores flags — but the class
+        // docstring rests on "both halves are built and validated before either
+        // is posted", which is the load-bearing claim for "nothing can fail
+        // between the down and the up". A guarantee that validates a different
+        // event than it posts is not that guarantee.
         let flags = spec.eventFlags(includeDeviceSide: opts.includeDeviceSideFlags).rawValue
+        let upFlags = spec.releaseFlags(includeDeviceSide: opts.includeDeviceSideFlags).rawValue
         try poster.validate(EmittedKeyEvent(phase: .down, keyCode: spec.keyCode, flagsRaw: flags))
-        try poster.validate(EmittedKeyEvent(phase: .up, keyCode: spec.keyCode, flagsRaw: flags))
+        try poster.validate(EmittedKeyEvent(phase: .up, keyCode: spec.keyCode, flagsRaw: upFlags))
     }
 
     private func currentConfig() -> (HotkeySpec, Options) {

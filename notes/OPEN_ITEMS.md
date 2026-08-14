@@ -168,6 +168,20 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkEmit
 
+- **`shortcutsUnreadable` refuses to run a Shortcut on a justification that does
+  not hold.** The stated reason was that handing an unknown name to Shortcuts
+  puts a modal dialog on screen. Measured: `/usr/bin/shortcuts run
+  "zzz-does-not-exist"` prints `Error: ... Couldn't find shortcut` to stderr,
+  exits 1 in 0.196 s, and shows nothing. The dialog is real for the
+  `shortcuts://` URL scheme, which this code deliberately avoids.
+
+  So guessing wrong costs a stderr line, while refusing costs a working Shortcut
+  not running because an unrelated `shortcuts list` failed. On those numbers the
+  refusal is the more expensive choice. Left alone deliberately: changing when a
+  user's bound action fires is a product decision, not a correction. The comments
+  now state what was measured rather than the dialog.
+
+
 All three of these were fixed and the list was never updated. Checked against
 the source and the tests on 2026-08-14:
 

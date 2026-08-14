@@ -28,15 +28,28 @@ public enum EmitError: Error, Equatable, CustomStringConvertible, LocalizedError
     case shortcutTimedOut(name: String, seconds: TimeInterval)
     /// The bound name is not in the current listing, so it was not run.
     ///
-    /// This is checked *before* dispatch on purpose. Handing an unknown name to
-    /// the Shortcuts machinery puts a modal dialog on screen, and a tap gesture
-    /// is easy to trigger by accident — so a stale binding would throw a dialog
-    /// in the user's face repeatedly, for months, until they worked out why.
-    /// `wasListedWhenBound` decides the wording: renamed, or never there.
+    /// Checked *before* dispatch, but not for the reason this comment used to
+    /// give. It claimed an unknown name puts a modal dialog on screen. Measured:
+    /// `/usr/bin/shortcuts run "zzz-does-not-exist"` prints
+    /// "Error: ... Couldn't find shortcut" to stderr, exits 1 in 0.196 s, and
+    /// shows nothing. The dialog is real for the `shortcuts://` URL scheme,
+    /// which this code deliberately does not use.
+    ///
+    /// The check still earns its place: it turns a silent 200 ms no-op into a
+    /// named reason the panel can show, and `wasListedWhenBound` distinguishes
+    /// renamed from never-there. But it is a diagnosis feature, not a defence
+    /// against a dialog, and the difference matters for the case below.
     case shortcutMissing(name: String, wasListedWhenBound: Bool)
     /// `shortcuts list` has never come back cleanly, so Tunk cannot tell whether
-    /// the bound name is still good. It refuses to guess, because guessing wrong
-    /// is the modal dialog above.
+    /// the bound name is still good, and it refuses to run it.
+    ///
+    /// That refusal was justified by the dialog above, which does not happen. So
+    /// the cost of guessing wrong is now known to be small — a stderr line and
+    /// an exit code — while the cost of refusing is that a working Shortcut does
+    /// not run because an unrelated `shortcuts list` failed. On the measured
+    /// numbers the refusal is the more expensive choice, and this is left as it
+    /// is only because changing when a user's action fires is a product
+    /// decision rather than a correction. Flagged in notes/OPEN_ITEMS.
     case shortcutsUnreadable(name: String)
 
     public var description: String {
