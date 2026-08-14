@@ -429,6 +429,53 @@ caution applies as to every other training number in this file: the four-round
 pattern has been that train gains of six to eight gestures deliver one on
 held-out.
 
+## One lap session carries most of the remaining lap deficit
+
+Per session at the resonator operating point, training data:
+
+| session | detection | strict | false triggers |
+|---|---|---|---|
+| lap a4a257 | **100.0 %** | **100.0 %** | 0 |
+| lap ad3fd3 | 95.0 % | 95.0 % | 1 |
+| lap 3fee5b | 90.0 % | 85.0 % | 1 |
+| lap **13e15a** | 80.0 % | **50.0 %** | **4** |
+| soft fe9b8c | 100.0 % | 100.0 % | 0 |
+| desk 5f07e8 | 100.0 % | 100.0 % | 0 |
+| desk 8f0079 | 66.7 % | 66.7 % | 0 |
+
+A lap session now reads 100 %, which has not happened before. On the three
+sessions other than 13e15a, lap is 57/60 = **95.0 %**.
+
+13e15a is an outlier on every axis at once, and the evidence that its ground
+truth is wrong rather than merely difficult is now substantial:
+
+1. A **proven pairing defect** in its group 1, verified at source level by an
+   independent critic: a 597 ms pair chosen over a legal 265 ms one.
+2. **Strict rate 50 %** against 85-100 % elsewhere. Half its credits land on a
+   different physical event than the label names.
+3. Labelled intervals p50 258 ms against 181-187 ms in every other lap session.
+4. It holds **4 of the 6** lap false triggers, and at shipped defaults it held
+   all 3.
+5. Two independent statistics (`cos_first_xy`, crest factor) score BELOW CHANCE
+   on it while scoring 0.87-1.00 on the other three.
+6. The operator reports resting a hand on the chassis during some lap sessions,
+   which changes the coupling.
+
+Points 1 and 2 say the labels are wrong. Points 3 to 6 say the operator may
+genuinely have tapped differently. **Both can be true**, and the corpus cannot
+separate them: nothing recorded says which gesture the operator believed they
+made. That is what a confirmed re-recording would settle.
+
+This is stated as context for reading the lap number, not as grounds for
+dropping the session. Excluding a session because it is inconvenient is how a
+project talks itself into a passing grade, and the headline lap figures
+everywhere in this file include 13e15a.
+
+The odd seventh miss at the resonator point — "the transient was above threshold
+but rejected by the detector's own logic", 0.0534 g against a 0.0110 g bar,
+4.85x — is 13e15a group 1 itself, the group with the proven defect. Labelled
+16.128 -> 16.725 s, a 597 ms span. Not a detector failure.
+
 ## A labelling bug that is real, and a fix that was worse
 
 An audit found a source-level defect in the labeller. `Sources/TunkLabel/main.swift`
