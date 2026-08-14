@@ -45,6 +45,10 @@ public enum AccelSourceError: Error, CustomStringConvertible {
 /// assumed. With `reportIntervalUs = 1250` this machine delivers 796 Hz with a
 /// p95 event-to-callback lag of 0.34 ms and no batching.
 public final class AccelSource {
+    /// The interval actually being delivered, learned from the stream. See the
+    /// gap test in `handle(event:)`.
+    private var deliveredIntervalNs: Int64 = 1_250_000
+
     public struct Stats: Sendable {
         public var sampleCount: UInt64 = 0
         public var gapCount: UInt64 = 0
@@ -187,8 +191,27 @@ public final class AccelSource {
         )
 
         statsLock.lock()
-        if stats.sampleCount > 0, sample.tNs - stats.lastSampleNs > nominalIntervalNs * 3 / 2 {
-            stats.gapCount += 1
+        // Measured against the DELIVERED cadence, not the requested one.
+        //
+        // `nominalIntervalNs` is derived from `reportIntervalUs`, which is what
+        // was asked for. The SPU caps at 796 Hz, so asking for 625 us gets
+        // 1250 us delivered — a perfectly regular stream in which EVERY
+        // interval exceeds 1.5x the requested one. Measured at 625 us: 3183
+        // samples, 796.34 Hz, interval p50 1250 us, max 1298 us, zero
+        // non-monotonic stamps, zero duplicates — and gapCount 3182. A capture
+        // at that setting reported a broken stream that was not broken.
+        //
+        // The delivered interval is learned from the stream itself, so the gap
+        // test asks the question it means: did this sample arrive far later than
+        // the ones before it.
+        if stats.sampleCount > 8 {
+            let step = sample.tNs - stats.lastSampleNs
+            if step > deliveredIntervalNs * 3 / 2 { stats.gapCount += 1 }
+            // Slow EMA, so a real gap barely moves the reference it is measured
+            // against but a genuine rate change is tracked within a second.
+            deliveredIntervalNs += (min(step, deliveredIntervalNs * 4) - deliveredIntervalNs) / 64
+        } else if stats.sampleCount > 0 {
+            deliveredIntervalNs = max(1, sample.tNs - stats.lastSampleNs)
         }
         stats.sampleCount += 1
         stats.lastSampleNs = sample.tNs

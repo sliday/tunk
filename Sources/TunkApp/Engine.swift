@@ -257,8 +257,22 @@ final class Engine: ObservableObject {
         }
 
         detectorLock.lock()
-        detector.config = settings.config
-        arm(for: settings.config)
+        // Do not overwrite the calibration probe. `apply(config:)` already
+        // refuses this while a calibration is live; `start()` did not, and
+        // start() is reachable mid-calibration from the watchdog's sensorLost
+        // backoff, from didWake, and from the `.needsPermission -> ready`
+        // branch — which is the FIRST-RUN path, where the user opens
+        // "Calibrate…" and grants permission with the sheet already up.
+        //
+        // Measured over ten identical synthetic double-taps: the probe config
+        // (0.020 g) fills 10 of 10 dots and learns a 207 ms window; the shipped
+        // default (0.032 g) fills 6 and learns none; a prior desk calibration
+        // (0.06 g) fills zero. The panel's only guard is "the sensor is not
+        // running", and after start() it is running — so the dots simply stop
+        // filling while the user keeps tapping.
+        let live = configBeforeCalibration == nil ? settings.config : detector.config
+        detector.config = live
+        arm(for: live)
         detector.reset()
         detectorLock.unlock()
 

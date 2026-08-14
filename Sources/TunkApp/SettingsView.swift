@@ -35,7 +35,15 @@ struct SettingsView: View {
     /// between keystrokes, so a gate much under this leaves gaps typing can
     /// fire through. The harness sets `DetectorConfig` directly and is not
     /// bound by this; the panel is where a user could do it by accident.
-    static let gateFloorMs: Double = 60
+    /// The slider must not offer a value the next launch will revert.
+    ///
+    /// It floored at 60 ms while `SettingsMigration.minimumSafeGateNs` is
+    /// 150 ms, so 60, 100 and 140 all ran at 180 ms after a relaunch — and the
+    /// card that appeared said "These were saved by an earlier version of Tunk
+    /// and no longer work the way they did", about a value this build's own
+    /// slider had set minutes earlier. Offering a setting and then quietly
+    /// undoing it is worse than not offering it.
+    static let gateFloorMs = Double(SettingsMigration.minimumSafeGateNs) / 1_000_000
     /// Below this the panel explains the cost. The PRD's own starting range is
     /// 150–200 ms. Read from the migration's floor rather than restated, so the
     /// value the panel warns about and the value an upgrade silently raises
