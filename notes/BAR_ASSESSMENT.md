@@ -252,6 +252,22 @@ Named independently by all four critics, and neither is fixable by code:
 Both need recordings, not engineering: held-out typing and confound sessions on
 all three surfaces, and a larger held-out lap tap deck.
 
+**The harness cannot paper over gap 1.** Checked directly, on the two held-out
+sessions where every detection check reads 100 %:
+
+```
+[  ok  ] pooled  detection rate, all armed gestures  >= 98 %  ->  100.00 % (40/40)
+[ ---- ] pooled  false triggers, typing sessions     = 0      ->  no typing sessions
+[ ---- ] lap     surface coverage                    >=1 session -> none recorded
+VERDICT: INCOMPLETE            exit code 3
+```
+
+A missing typing session is `.noData`, and `.noData` maps to `.incomplete`, not
+to `.pass`. So a perfect detection score cannot buy a green verdict while the
+make-or-break metric has nothing behind it. The gap is real, and it is reported
+rather than hidden — which is the difference between an unmeasured metric and a
+false green.
+
 ## The physical reason
 
 One tap is not one lobe. The raw magnitude around a single real soft-surface tap:
