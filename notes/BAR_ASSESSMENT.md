@@ -804,6 +804,50 @@ do not survive held-out, is not a result. Reverted rather than graded, because
 grading it would spend the held-out set on something already known to be inside
 its own noise.
 
+### Releasing on a short mean
+
+The third repair the diagnosis suggests, and the one the adjudicating critic's
+own instrument implies: their onset finder used a 5 ms MEAN, and a mean averages
+chatter down while an impulse still lifts it. The shipped chain uses a sliding
+MAXIMUM, which holds chatter up. So: detect on the max, release on a mean.
+
+```
+                    desk           soft            lap
+sliding max        95.7 %        100.0 %      73.8 %  (59/80)
+short mean         95.7 %        100.0 %      72.5 %  (58/80)
+```
+
+Slightly worse, typing zero either way.
+
+### Three repairs, one mechanism
+
+All three fail the same way, and together they explain the constraint better than
+any of them individually:
+
+| repair | lap | soft |
+|---|---|---|
+| latch the release | unchanged | **20/20 -> 15/20** |
+| release on the undilated pair | 59 -> 61 | **20/20 -> 17/20** |
+| release on a short mean | 59 -> 58 | unchanged |
+
+Every one of them re-arms **sooner**. Sooner means hearing the half-peak energy
+between the contacts, that energy becomes onsets, and a group with three or more
+onsets fires nothing. The detection lost to over-long groups exceeds the
+detection gained by hearing the real second contact.
+
+And the escape from that — prune the surplus onsets and fire on the survivors —
+is closed by arithmetic already measured. `onsetDebounceNs` keeps declared onsets
+100 ms apart, and the join window is [100, 220] ms from the first onset, so two
+candidates can both be legal only inside a 20 ms corner of a 120 ms band. Round
+four measured it directly: nine selection attempts, every one holding exactly one
+eligible candidate; one prunable group in 49 minutes of training data; none at
+all on held-out. A looser re-arm does not change that, because the debounce that
+sets the spacing is upstream of it.
+
+So the constraint is not the re-arm rule, and not the grouper, but the pair: the
+detector cannot hear the second contact without also hearing the chatter, and
+cannot keep the chatter without losing the gesture.
+
 *Process note, recorded because it matters:* I ran this on held-out first, since
 that is where the critic's evidence sat, and only then on train. That is the
 discipline this project enforces everywhere else, broken by me. It changed
