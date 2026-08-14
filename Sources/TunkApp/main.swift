@@ -14,6 +14,10 @@ if let index = arguments.firstIndex(of: "--dump-glyphs") {
     GlyphDump.run(into: directory)
     exit(0)
 }
+if arguments.contains("--sensor-props") {
+    app.setActivationPolicy(.accessory)
+    Diagnostics.sensorProperties()
+}
 if let index = arguments.firstIndex(of: "--cpu-probe") {
     let seconds = index + 1 < arguments.count ? Double(arguments[index + 1]) ?? 10 : 10
     app.setActivationPolicy(.accessory)

@@ -268,6 +268,75 @@ make-or-break metric has nothing behind it. The gap is real, and it is reported
 rather than hidden — which is the difference between an unmeasured metric and a
 false green.
 
+## Root cause: the sensor is band-limited near 50 Hz
+
+This is the finding that explains all eleven failed mechanisms, and it was found
+by accident while measuring whether spectral content could separate a strike
+from a ring.
+
+Power spectral density of the raw z axis, no filtering applied, six windows of
+512 samples from a desk tap deck:
+
+```
+sample rate 799.6 Hz, Nyquist 399.8 Hz
+
+    0- 25 Hz : 99.9841 %
+   25- 50 Hz :  0.0127 %
+   50-100 Hz :  0.0032 %
+  100-150 Hz :  0.0000 %   (6.4e-10)
+  150-200 Hz :  0.0000 %   (1.1e-11)
+  200-398 Hz :  0.0000 %   (1.4e-11)
+```
+
+The stream reports at 796 Hz and carries nothing above about 50 Hz. Content
+above 100 Hz sits nine to ten orders of magnitude down, at numerical noise.
+
+It is not naive upsampling: consecutive samples are identical 0.0 % of the time
+(7 of 69,567), so the ADC really is producing distinct values at 796 Hz. The
+part has an internal filter, which is the normal configuration for a MEMS
+accelerometer intended for orientation and motion rather than vibration.
+
+### Why this explains everything
+
+A knuckle striking aluminium is broadband to several kHz. The energy that makes
+an impulse *look* like an impulse — and therefore distinguishable from the
+chassis resonance that follows it — is removed before the data reaches us. What
+arrives is the low-frequency rigid-body response, and a strike and its own ring
+produce the same shape there.
+
+Every consequence already measured follows from this one fact:
+
+- **Rise time could not separate them** (13.8 ms vs 12.6 ms). A 50 Hz-limited
+  signal cannot rise faster than about 10 ms. That measurement was of the
+  filter, not of the taps.
+- **Spectral flatness ran backwards** on lap (AUC 0.173, strikes more *tonal*)
+  and the band ratio above 200 Hz had an empty numerator. There is no broadband
+  part left to find.
+- **The best spectral statistic was a 25 Hz versus 50 Hz bin ratio in a
+  two-live-bin spectrum**, which is why it inverted between surfaces.
+- **Ring lobes sit at crest factor 1.41** — exactly the sinusoid value — while
+  strikes reach 1.78. The ring hypothesis is right; there is simply not enough
+  bandwidth left to act on it reliably.
+
+### Can the filter be moved?
+
+No, not through the interface available. `--sensor-props` asks the service for
+29 candidate property names — every plausible spelling of bandwidth, cutoff,
+output data rate, range, and performance mode. Two return a value:
+
+```
+  ReportInterval = 1250
+  BatchInterval  = 0
+```
+
+Report rate and batching are exposed. Bandwidth is not. There is no enumeration
+API, so absence is not proof of unsupported — but combined with the measured
+spectrum, the working conclusion is that the ceiling is fixed.
+
+**Tunk is asked to tell a strike from a ring using a sensor that filters out the
+difference.** That is the honest statement of the limit, and it is a property of
+the hardware and its driver, not of the detector.
+
 ## The physical reason
 
 One tap is not one lobe. The raw magnitude around a single real soft-surface tap:

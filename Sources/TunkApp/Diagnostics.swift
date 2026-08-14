@@ -781,3 +781,43 @@ extension Diagnostics {
         exit(pass ? 0 : 1)
     }
 }
+
+extension Diagnostics {
+    /// `tunk --sensor-props`
+    ///
+    /// The recorded stream carries no measurable power above ~100 Hz (9 orders
+    /// down at 100-398 Hz) while reporting at 796 Hz. A knuckle strike on
+    /// aluminium is broadband to several kHz, so the content that would tell a
+    /// strike apart from the chassis ringing afterwards is removed before it
+    /// reaches us. This asks the service whether that ceiling is ours to move.
+    static func sensorProperties() {
+        let source = AccelSource()
+        do { try source.start(onSample: { _ in }) }
+        catch { print("could not start sensor: \(error)"); exit(1) }
+        defer { source.stop() }
+
+        // No enumeration API exists for these, so this is a candidate list:
+        // the two keys already known to work, plus every plausible spelling of
+        // a bandwidth, rate or filter control.
+        let keys = [
+            "ReportInterval", "BatchInterval", "SampleRate", "SamplingRate",
+            "ReportRate", "MaxReportRate", "MinReportInterval", "AccelerometerRate",
+            "Bandwidth", "BandwidthHz", "LowPassCutoff", "CutoffFrequency",
+            "FilterBandwidth", "FilterMode", "AntiAliasFilter", "OutputDataRate",
+            "ODR", "FullScaleRange", "Range", "Sensitivity", "Resolution",
+            "AccelerometerMode", "OperatingMode", "PowerMode", "PerformanceMode",
+            "HighPerformanceMode", "LowNoiseMode", "SensorProperties", "Product",
+        ]
+        var found = 0
+        for key in keys {
+            if let value = source.property(key) {
+                print(String(format: "  %-22@ = %@", key as NSString, value as NSString))
+                found += 1
+            }
+        }
+        print("\n  \(found) of \(keys.count) candidate keys returned a value.")
+        print("  Keys absent here are not necessarily unsupported — there is no")
+        print("  enumeration API, so this can only report what it thought to ask.")
+        exit(0)
+    }
+}

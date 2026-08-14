@@ -59,6 +59,18 @@ public final class AccelSource {
 
     private var client: TunkHIDEventSystemClientRef?
     private var service: TunkHIDServiceClientRef?
+
+    /// Ask the service for one property by name. Read-only.
+    ///
+    /// Exists because the recorded stream is band-limited near 50 Hz while
+    /// reporting at 796 Hz — measured, see notes/BAR_ASSESSMENT.md — and whether
+    /// that ceiling is a configurable filter or a fixed property of the part
+    /// decides whether tap-versus-ring discrimination is reachable at all.
+    public func property(_ key: String) -> String? {
+        guard let svc = service,
+              let v = IOHIDServiceClientCopyProperty(svc, key as CFString) else { return nil }
+        return CFCopyDescription(v) as String
+    }
     private let queue = DispatchQueue(label: "dev.tunk.accel", qos: .userInteractive)
     private var onSample: ((AccelSample) -> Void)?
     private var stats = Stats()
