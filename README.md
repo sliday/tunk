@@ -115,21 +115,44 @@ The bar is `tunk-prd.md`. Numbers come from `tunk-score` run over recorded
 sessions; the harness reports **INCOMPLETE** rather than inventing a value for
 anything unmeasured.
 
+**Held out** — 20 prompted double-taps per surface, replayed through the detector,
+which the tuning never saw:
+
 | Criterion | Bar | desk | soft | lap |
 |---|---|---|---|---|
-| False triggers while typing | 0 | **0** ✅ | **0** ✅ | **0** ✅ |
-| False triggers, live use | < 1/20 min | **0.00** ✅ | **0.00** ✅ | 4.36 ✗ |
-| Latency p95 | ≤ 250 ms | **200 ms** ✅ | **209 ms** ✅ | **225 ms** ✅ |
-| Detection rate | ≥ 98 % | 95.65 % ✗ | **100 %** ✅ | 73.75 % ✗ |
+| Detection rate | ≥ 98 % | **100 %** ✅ | **100 %** ✅ | 80 % ✗ |
+| Latency p95 | ≤ 250 ms | **199 ms** ✅ | **208 ms** ✅ | **209 ms** ✅ |
+| False triggers | < 1/20 min | **0** ✅ | **0** ✅ | **0** ✅ |
+| False triggers while typing | 0 | not recorded | not recorded | not recorded |
 
-A held-out desk set of 20 double-taps, which the threshold was never fitted to,
-scores **100 % detection at 189 ms p95**.
+The harness returns **FAIL** on lap detection, and would return **INCOMPLETE**
+even if lap passed, because the held-out set contains no typing or confound
+sessions. The make-or-break metric has never been graded out of sample. On
+training data it reads zero across 11.7 minutes of typing — but the input gate
+mutes the detector for 86 % of that, so the honest exposure is 1.6 minutes.
+`./bin/record-for-the-bar.sh` records what is missing, in about 28 minutes.
 
 **Tunk meets the bar on a hard desk and on a soft surface, and does not on a lap.**
-Desk misses by exactly one gesture: a real double-tap with 426 ms between the
-strikes, which cannot be grouped without spending more latency than the 250 ms
-budget allows. Lap fails for physical reasons — coupling halves the tap while lap
-ambient noise reaches tap amplitude — and every lever was tried and measured.
+
+Lap fails for a reason that is not tuning. The sensor reports 796 times a second
+but carries nothing above about 50 Hz — power in the 100–398 Hz band sits nine to
+ten orders down, at numerical noise — and the report rate is a hard cap that does
+not move the bandwidth. A knuckle strike on aluminium is broadband to several
+kHz, so the content that would tell a strike apart from the chassis ringing
+afterwards never reaches the file. On a lap the second tap of a gesture lands on
+the first one's echo, and the two are the same size in the envelope.
+
+Twenty-one mechanisms were built against that, each by one agent and graded by a
+separate critic with fresh context, on data the builder could not see. One
+helped: a resonator front end, which lifts held-out lap to 95 % by the scoring
+contract, though only one of its three recovered gestures survives a stricter
+reading. It ships behind a switch that is off by default. The rest are preserved
+with their verdicts:
+
+```bash
+git tag -l 'rejected/*' 'shipped/*'
+git show rejected/ring-subtraction     # subtracting the ring makes it 1.20x louder
+```
 
 Full working, including what was tried and why each failed, is in
 `notes/BAR_ASSESSMENT.md`.
