@@ -10,6 +10,7 @@ rate on every surface (zero loose credits — see the referee audit below):
 | Criterion | Bar | desk | soft | lap |
 |---|---|---|---|---|
 | Detection rate | ≥ 98 % | **100 %** (20/20) ✅ | **100 %** (20/20) ✅ | 80 % (16/20) ✗ |
+| ...of which credits landing on a different transient | — | 0 | 0 | **2 of 16** |
 | Latency p95 | ≤ 250 ms | **198.9 ms** ✅ | **207.6 ms** ✅ | **208.9 ms** ✅ |
 | False triggers | < 1 / 20 min | **0** ✅ | **0** ✅ | **0** ✅ |
 | False triggers, typing | 0 | no data | no data | no data |
@@ -75,7 +76,7 @@ that would distinguish a strike from the chassis ringing afterwards never reache
 the file. On a lap the second strike and the first strike's ring are therefore
 the same size in the envelope. `notes/BAR_ASSESSMENT.md` has the full ledger.
 
-Twenty mechanisms have been built and independently graded, each by a critic
+Twenty-one mechanisms have been built and independently graded, each by a critic
 with fresh context who rebuilt from source and graded on data the builder could
 not see. None reached the bar on lap. The latency-budget escape is measured shut
 (the join window saturates at 280 ms and 77.5 %), and so is the sensor-bandwidth
@@ -127,7 +128,15 @@ rehearsal announced "Type normally for 0 minutes", and the countdown printed
   tap is whether ordinary use produces onsets worth collecting, which is a claim
   about the world rather than about the code.
 - **The site's call to action** points at a private repo and 404s.
-- **The motion gate** ships disabled. It needs `confound_handling` recordings.
+- **The motion gate** ships disabled. Re-measured at the resonator operating
+  point it removes one lap false trigger of six at no detection cost, across a
+  wide plateau — but that is one event, in the one lap session whose ground truth
+  is known to be defective. It needs the `confound_handling` recordings that
+  `record-for-the-bar.sh` now captures.
+- **Every mechanism ever built is a tag.** `git tag -l 'rejected/*' 'shipped/*'`
+  lists them with their verdicts in the tag messages; `git show` any of them for
+  the measured outcome, `git diff main...<tag>` for the code. The worktrees they
+  were built in are gone; the commits are not.
 - **Per-surface calibration profiles** would help (lap tops at 82.5 % at its own
   best) but the surface is not detectable, so any switching must be deliberate.
 
