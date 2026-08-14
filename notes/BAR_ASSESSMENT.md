@@ -8,6 +8,64 @@ recordings; nothing is synthetic.
 The PRD asks that a target proved physically unreachable be reported **with the
 data, not quietly relaxed**. This is that report.
 
+## The largest open question: the lap labels may be wrong
+
+A critic commissioned to refute the unreachability claim came back with
+something else — that lap ground truth is systematically misplaced, and that
+correcting it removes most of the lap deficit. This is the biggest unresolved
+item in the project and it is recorded here rather than acted on.
+
+**Their evidence.** An instrument independent of the detector: zero-phase (so
+non-causal, offline only) 60 Hz high pass, 3-axis magnitude, 5 ms mean, local
+maxima at 8x the session median. Controls that matter:
+
+- It reproduces all 183 shipped labels byte-exact when configured as the
+  labeller, so the port is validated before it is trusted.
+- On **desk**, where each gesture yields exactly two unambiguous peaks, 40
+  gestures move by a median of **0.0 ms** and none by more than 40 ms.
+- Held-out **desk 0 of 20 move, soft 0 of 20 move, lap 19 of 20 move.**
+- Corner-stable at 50, 60 and 80 Hz; it breaks down only at 25-30 Hz, which is
+  the ring band. 60 Hz sits 20 Hz from the resonator, so it cannot be circular
+  with the mechanism it happens to vindicate.
+- Several corrections make intervals **wider** (13e15a g4 91 -> 205 ms), so the
+  rule is not systematically detector-flattering.
+
+**Independently reproduced here.** Implementing the same instrument from scratch,
+on the five held-out lap groups whose labels move most:
+
+```
+group   energy at label   energy at instrument peak   ratio   timing
+g0         0.003910              0.005353            1.37    150 ms vs labelled 236
+g1         0.002017              0.003774            1.87    159 ms vs labelled 249
+g2         0.002490              0.003361            1.35    134 ms vs labelled 233
+g3         0.003447              0.004394            1.27    124 ms vs labelled 223
+g6         0.002143              0.002607            1.22    128 ms vs labelled 224
+```
+
+In every one there is a stronger high-frequency peak *earlier* than the labelled
+second onset. Above the ring band the contact impulses dominate; at the
+labeller's own corner the ring does. The labeller appears to be placing lap
+second onsets on ring lobes, 60-100 ms late.
+
+**Why lap and not desk.** Ring-to-strike is 0.20-0.29 on desk and 0.30-0.61 on
+lap. An amplitude-greedy peak picker only confuses a lobe for a strike when the
+lobe is comparable to the strike, which is a lap-specific condition and exactly
+what the surface measurement predicts.
+
+**What it would change.** Re-grading the same detector, trigger counts identical,
+only ground truth moved: train lap 73.75 % -> 77.50 %, lap false triggers
+**3 -> 0** (all three sat in the session with the proven defect), and with the
+resonator lap 91.25 % -> 96.25 %.
+
+**Why it has not been acted on.** Rewriting ground truth is the most
+self-serving action available here, my own previous attempt at it moved 32 of 183
+groups and collapsed intervals onto the 80 ms floor, and I would be the
+beneficiary of the correction. Two independent implementations agreeing on
+direction is strong, and it is not the same as an audited re-label with the desk
+and soft controls re-run and the diffs reviewed by someone who did not build the
+detector. That is the next piece of work, and it needs a decision rather than
+another round from me.
+
 ## Finding the rejected mechanisms
 
 Every mechanism built for this project is preserved as an annotated tag, with
