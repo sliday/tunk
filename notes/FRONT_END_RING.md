@@ -182,3 +182,32 @@ The harness can now reach the front end at all, which it could not before —
 - **Desk is unchanged at 95.65 %**, still the single 426 ms gesture the join
   window cannot admit.
 - **n = 20 per surface on soft and desk.** One gesture is five points.
+
+
+## A two-resonator discriminant, measured shut
+
+The resonator works by exploiting one measured gap: lap strikes have spectral
+centroid p50 31.4 Hz against 26.1 Hz for ring lobes. The obvious next step is a
+discriminant matched to both ends of that gap rather than a single band —
+`max(0, |R40| - k|R26|)`, which should suppress anything sitting at the ring's
+centre while passing the strike.
+
+It does the opposite. Strike-to-ring on lap training data:
+
+```
+single resonator 40 Hz            strike 0.14237   ring 0.05450   ratio 2.61
+difference 40 Hz - 1.0 x 26 Hz    strike 0.00779   ring 0.00736   ratio 1.06
+difference 40 Hz - 1.4 x 26 Hz    strike 0.00576   ring 0.00456   ratio 1.26
+```
+
+The subtraction removes almost as much strike as ring, because a strike centred
+at 31 Hz still carries substantial energy at 26 Hz — the centroids differ by
+5 Hz, not the bands. What the resonator actually exploits is its GAIN SHAPE,
+attenuating 26 Hz more than 40 Hz while keeping both, and an explicit difference
+throws away the part of the strike that overlaps the ring.
+
+For reference, the plain 20 Hz high pass the resonator replaced scores 2.13 on
+the same measure, so the resonator buys about 23 %. That is the whole of the
+front-end gain, and the two-resonator variant is recorded here so nobody spends
+a round rediscovering that subtracting the ring's band subtracts the strike with
+it.
