@@ -201,6 +201,31 @@ final class CaptureCLITests: XCTestCase {
 
     // MARK: - The recording plan itself
 
+    /// Every tunk-capture command in the docs an operator actually follows.
+    ///
+    /// Was two files; is now every file that carries commands, because the one
+    /// left uncovered immediately grew a `--note hand-on-chassis` that the CLI
+    /// rejects — the flag is `--notes`. A guard that covers most of the places
+    /// a mistake can live is a guard that tells you where the mistake will be.
+    func testEveryCommandInEveryOperatorDocRuns() throws {
+        for relative in ["notes/RESUME.md", "notes/BAR_ASSESSMENT.md"] {
+            let url = CaptureCLITests.repoRoot.appendingPathComponent(relative)
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            for argv in CaptureCLITests.captureCommands(inShell: text) {
+                guard let sub = argv.first else { continue }
+                guard sub == "guide" || sub == "record" else {
+                    let r = try capture(argv + ["--help"])
+                    XCTAssertEqual(r.status, 0, "\(relative): unknown subcommand in `"
+                                   + argv.joined(separator: " ") + "`\n" + r.all)
+                    continue
+                }
+                let r = try capture(argv + ["--dry-run"])
+                XCTAssertEqual(r.status, 0, "\(relative) command failed:\n  tunk-capture "
+                               + argv.joined(separator: " ") + "\n" + r.all)
+            }
+        }
+    }
+
     /// Every tunk-capture command in bin/record-for-the-bar.sh, run as written.
     ///
     /// That script is the one the operator will actually run to close the eight

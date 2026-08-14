@@ -1,6 +1,6 @@
 # Resuming
 
-Everything is committed and pushed. 290 tests pass. Working tree clean.
+Everything is committed and pushed. 306 tests pass. Working tree clean.
 
 ## Where the bar stands
 
@@ -54,8 +54,8 @@ scores below chance on three separate statistics while the others score
 0.87–1.00, and the operator reports resting a hand on the chassis in some:
 
 ```bash
-./bin/tunk-capture guide --surface lap --only tap_deck --taps 40 --note hand-on-chassis
-./bin/tunk-capture guide --surface lap --only tap_deck --taps 40 --note hand-off
+./bin/tunk-capture guide --surface lap --only tap_deck --taps 40 --notes hand-on-chassis
+./bin/tunk-capture guide --surface lap --only tap_deck --taps 40 --notes hand-off
 ```
 
 Then:
@@ -75,7 +75,7 @@ that would distinguish a strike from the chassis ringing afterwards never reache
 the file. On a lap the second strike and the first strike's ring are therefore
 the same size in the envelope. `notes/BAR_ASSESSMENT.md` has the full ledger.
 
-Fourteen mechanisms have been built and independently graded, each by a critic
+Twenty mechanisms have been built and independently graded, each by a critic
 with fresh context who rebuilt from source and graded on data the builder could
 not see. None reached the bar on lap. The latency-budget escape is measured shut
 (the join window saturates at 280 ms and 77.5 %), and so is the sensor-bandwidth
