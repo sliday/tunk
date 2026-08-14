@@ -714,6 +714,39 @@ release  debounce   lap             soft
 lever either — but it is now gradeable, which it was not when this document
 claimed to know why lap failed.
 
+### Reconciling the two accounts — both were overstated
+
+The adjudicating critic wrote that "the ring is gone in under ten milliseconds,
+and 150 to 200 ms of quiet separates the two strikes". This document had claimed
+the opposite: that the second tap lands on the ring. Measured on the raw signal
+around held-out lap g1, gravity removed by a long mean, no filter:
+
+```
+  16.740  0.06969        16.833  0.07077
+  16.800  0.06916        16.950  0.08651
+```
+
+Sustained excursions of 0.035 to 0.087 g across the whole window. The critic's
+own "the envelope drops to 7-55 % of the first peak" is right and is not quiet:
+40-50 % of peak sits between the contacts for most of the interval.
+
+So neither account was accurate. The second contact is real, comparable in size
+to the first, and separated by a region carrying **roughly half the peak energy**
+— not a decayed ring, and not silence.
+
+That reconciles the mechanism. The release line is `releaseFraction` (0.4) times
+the threshold, and the inter-contact energy on a lap sits right on top of it.
+Re-arming is therefore marginal and decided by where individual samples fall,
+which is exactly what the trace below shows: one dip to 0.01279 against a line at
+0.01280. Not a filter with too much memory, and not a chassis that rings for
+300 ms. Two comparable numbers.
+
+It also explains why both repairs fail in opposite directions. Latching the
+release, or releasing on the undilated signal, re-arms during that half-energy
+region and the chatter there becomes onsets. Requiring a deeper release never
+re-arms at all. No single threshold separates a lap's inter-contact energy from
+its contacts, because on this evidence they are the same size.
+
 ### Why the detector reports one onset where two contacts exist
 
 Traced through the shipped chain on held-out lap g1, the gesture whose two
