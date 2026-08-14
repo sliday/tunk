@@ -164,6 +164,9 @@ final class Engine: ObservableObject {
     /// Consecutive healthy watchdog ticks. Gates the backoff reset; see the
     /// watchdog switch.
     private var healthyTicks = 0
+    /// A reacquire is in flight on a background queue. Guards against stacking
+    /// them up if one blocks — see the watchdog.
+    private var reacquiring = false
     private var reacquireBackoff = 1
     private var wantsRunning = false
     private var catalogTicks = 0
@@ -756,6 +759,8 @@ final class Engine: ObservableObject {
             // for a while, not merely because we reached .running.
             healthyTicks += 1
             if healthyTicks >= 5 { reacquireBackoff = 1 }
+        case .sensorLost where reacquiring:
+            break        // one is already running, and it may never return
         case .sensorLost:
             // Bounded backoff: 1, 2, 4 … 32 s. Never a spin.
             healthyTicks = 0
@@ -763,8 +768,26 @@ final class Engine: ObservableObject {
             if starvedTicks >= reacquireBackoff {
                 starvedTicks = 0
                 reacquireBackoff = min(reacquireBackoff * 2, 32)
-                stopSensors()
-                start()          // re-opens on the same epoch; sets the next status
+                // Off the main thread, because reacquiring can block forever.
+                //
+                // `IOHIDEventSystemClientScheduleWithDispatchQueue` was measured
+                // hanging indefinitely on repeated stop/start — intermittently,
+                // at cycle 8 or 10 of a tight loop, with every earlier cycle
+                // taking 0.00 s. It reproduces with and without the client
+                // release, so it is not that. See notes/OPEN_ITEMS.
+                //
+                // The watchdog is a main-thread Timer and this is exactly the
+                // stop-then-start it hangs on, so a wedged sensor could freeze
+                // the menubar and the settings panel rather than merely failing
+                // to recover. It still may not recover; it will no longer take
+                // the UI with it.
+                reacquiring = true
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    guard let self else { return }
+                    self.stopSensors()
+                    self.start()
+                    DispatchQueue.main.async { self.reacquiring = false }
+                }
             }
         case .needsPermission:
             if PermissionState.current().ready { start() }

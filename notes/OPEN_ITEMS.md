@@ -139,17 +139,32 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkIMU
 
-- **`--sensor-cycles` hangs above roughly ten cycles.** Added while fixing the
-  client leak. At n = 10 it reports and exits; at n = 12 and above it produces
-  no output and does not return. The sensor is NOT wedged by it: immediately
-  afterwards `--sensor-props` answers normally and `tunk-capture record` gets
-  3188 samples at 794.8 Hz with zero gaps. So it is the probe, and the cause is
-  unknown — most likely something in repeated `stop()`/`start()` around the
-  `queue.sync {}` teardown, which would matter beyond the probe because the
-  watchdog reacquires that way.
-  
-  Recorded rather than quietly capped, because a diagnostic that hangs is worth
-  less than no diagnostic and this one may be pointing at something real.
+- **`IOHIDEventSystemClientScheduleWithDispatchQueue` blocks forever on repeated
+  stop/start.** Traced, not guessed. Every call in `start()` is marked; the last
+  thing printed is `[schedule]`, and nothing follows:
+
+  ```
+  cycle 9: start 0.00 s, stop 0.00 s
+      [create] [setMatching] [copyServices] [setReportInterval] [schedule]   <- stops here
+  ```
+
+  Intermittent: it lands at cycle 8 or cycle 10 of a tight loop, and every
+  earlier cycle takes **0.00 s**, so it is not slowness. **It reproduces with
+  and without the client release added at the same time**, bisected explicitly,
+  so that is not the cause. The sensor is not wedged afterwards —
+  `--sensor-props` answers and `tunk-capture record` gets 3188 samples at
+  794.8 Hz with zero gaps immediately after.
+
+  This is a shipped-code hazard, not just a probe limit: the watchdog reacquires
+  with exactly this stop-then-start, on a **main-thread Timer**. A wedged sensor
+  could therefore freeze the menubar and the settings panel rather than merely
+  failing to recover.
+
+  **Mitigated, not fixed.** The reacquire now runs on a background queue with a
+  guard against stacking, so a block costs the recovery rather than the UI. The
+  underlying reason the private API blocks is unknown, and `--sensor-cycles`
+  still hangs above roughly ten cycles because it calls the same thing in a
+  tight loop.
 
 ## Owned by TunkEmit
 
