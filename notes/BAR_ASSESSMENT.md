@@ -8,6 +8,50 @@ recordings; nothing is synthetic.
 The PRD asks that a target proved physically unreachable be reported **with the
 data, not quietly relaxed**. This is that report.
 
+## The 60 Hz point: held-out 60/60, and why that is not the bar met
+
+A critic auditing the re-label found, as a side finding, that a plain 60 Hz high
+pass at threshold 0.012 g with the threshold floor released scores **held-out
+60/60** — desk 20/20, soft 20/20, lap 20/20, p95 201.4 ms, zero false triggers.
+Verified here, reproducing exactly.
+
+That is every held-out detection check passing on all three surfaces, and it is
+**not** the bar met. Three reasons, in order of weight.
+
+**1. Half the lap gain is credits landing on a different transient.** The harness
+reports 6 of 20 held-out lap credits disagreeing with the label by more than
+40 ms. The clean count is 14/20 = **70 %**, against 16/20 = 80 % for the shipped
+detector, which carries 2. By the contract this config detects everything; by the
+measure built to catch exactly this, it is worse than what ships.
+
+**2. It fails on the larger sample.** Training data holds 80 lap gestures, 20
+soft and 23 desk against held-out's 20 each:
+
+```
+              desk        soft         lap        lap FP/20min
+shipped     95.65 %    100.00 %     73.75 %          6.54
+60 Hz       95.65 %     85.00 %     87.50 %          8.72
+```
+
+Soft loses three gestures and the lap false-trigger rate gets worse against a
+bar of 1. A configuration that reads 100 % on twenty held-out soft gestures and
+85 % on twenty training ones is not a configuration that has solved soft.
+
+**3. It was selected against held-out.** The critic searched configurations and
+reported the held-out score. That is the one thing the held-out set cannot
+survive being used for. Its value comes from being untouched, and a number
+chosen because it looked good on it is not evidence about anything.
+
+So the honest reading is that a 60 Hz front end trades soft for lap, gets a
+favourable roll on twenty held-out lap gestures, and buys much of that with
+credits on the wrong transient. It is recorded because it is real and because
+somebody will find it again; it is not proposed, and the shipped default does not
+move.
+
+What it does establish, and this matters: **the four held-out lap misses are
+recoverable by changing the detector, without touching a single label.** They are
+not a labelling artifact and not a hardware limit.
+
 ## The largest open question: the lap labels may be wrong
 
 A critic commissioned to refute the unreachability claim came back with
