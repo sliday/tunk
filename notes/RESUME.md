@@ -1,6 +1,6 @@
 # Resuming
 
-Everything is committed and pushed. 308 tests pass. Working tree clean.
+Everything is committed and pushed. 311 tests pass. Working tree clean.
 
 ## Where the bar stands
 
@@ -93,6 +93,17 @@ Held-out came out clean. Fixed in the process:
   (1.6 min un-gated)`. The zero is real — strip `input.jsonl` and the same
   detector fires 110 times — but 86 % of typing time is gated.
 - `must-not-fire` judged all triggers in the window rather than unclaimed ones.
+
+## The live acceptance test works
+
+`./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300` is the PRD's live
+driving test and had never been executed. Running it with a tiny count settles
+that it works end to end — it prompts, counts, grades against the bar, exits
+non-zero on failure, and deliberately does not post the bound action.
+
+Running it also found two defects that only appear when you run it: a short
+rehearsal announced "Type normally for 0 minutes", and the countdown printed
+"-7 s left". Both fixed. Worth knowing before spending fifty taps on it.
 
 ## Still open, and small
 

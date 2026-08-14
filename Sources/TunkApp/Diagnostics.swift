@@ -688,6 +688,13 @@ extension Diagnostics {
     /// Shortcut fifty times into whatever has focus would be its own disaster,
     /// and the acceptance question is whether the gesture is recognised, not
     /// whether CGEventPost works — `--live-emit-probe` already covers that.
+    /// "5 minutes", "90 seconds", "1 minute". Spoken, so it has to read aloud.
+    static func spokenDuration(_ seconds: Double) -> String {
+        if seconds < 90 { return "\(Int(seconds.rounded())) seconds" }
+        let minutes = Int((seconds / 60).rounded())
+        return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+    }
+
     static func acceptance(taps: Int, typingSeconds: Double) {
         let engine = Engine(settings: AppSettings())
         var fired: [(atNs: Int64, lastOnsetNs: Int64)] = []
@@ -736,12 +743,17 @@ extension Diagnostics {
         line("")
         line("LIVE ACCEPTANCE — phase 2 of 2: type for \(Int(typingSeconds)) s")
         line("  Real prose, normal speed and force. No deliberate taps.")
-        speak("Phase two. Type normally for \(Int(typingSeconds / 60)) minutes.")
+        // Sub-minute durations rendered as "0 minutes", which is what a short
+        // rehearsal run of this test says out loud before asking you to type.
+        speak("Phase two. Type normally for \(Self.spokenDuration(typingSeconds)).")
         let start = Date()
         while Date().timeIntervalSince(start) < typingSeconds {
-            Thread.sleep(forTimeInterval: 10)
+            // Sleep only as long as remains, or a short run counts down past
+            // zero and prints "-7 s left".
+            let remaining = typingSeconds - Date().timeIntervalSince(start)
+            Thread.sleep(forTimeInterval: min(10, max(0.1, remaining)))
             lock.lock(); let n = fired.count; lock.unlock()
-            let left = Int(typingSeconds - Date().timeIntervalSince(start))
+            let left = max(0, Int(typingSeconds - Date().timeIntervalSince(start)))
             line("  \(left) s left, false triggers so far: \(n)")
         }
         speak("Done.")
