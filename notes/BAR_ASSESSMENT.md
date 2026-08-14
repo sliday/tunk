@@ -819,6 +819,48 @@ short mean         95.7 %        100.0 %      72.5 %  (58/80)
 
 Slightly worse, typing zero either way.
 
+### The combination that looked like the first real win
+
+Three repairs failing the same way suggested the pair rather than either half:
+re-arm loosely enough to hear the second contact, then prune the chatter it lets
+in. Round four's pruning never engaged because the shipped re-arm rarely hears
+three things; with a loose re-arm it would.
+
+First attempt kept the outer pair, and never fired: measured, all six over-long
+groups span further than the join window allows, so first-and-last is never
+legal. Keeping the first onset and its **latest legal partner** instead — the
+real second contact is the last thing inside the window, the chatter sits before
+it — pruned all six. On training data:
+
+```
+              desk        soft            lap          lapFP  typingFP
+shipped      95.7 %     100.0 %      73.8 % (59/80)      3       0
+combination  95.7 %     100.0 %      77.5 % (62/80)      4       0
+```
+
+Soft preserved, desk untouched, **+3 lap**, typing still zero. The first
+mechanism measured in this project to gain lap without costing soft.
+
+**And it is a regression.** Run through the harness rather than a hand-rolled
+script, the loose-credit counts appear:
+
+| | contract | credits disagreeing > 40 ms | clean |
+|---|---|---|---|
+| shipped, soft | 20/20 | 0 | **20** |
+| shipped, lap | 59/80 | 6 | **53** |
+| combination, soft | 20/20 | 5 | **15** |
+| combination, lap | 62/80 | 12 | **50** |
+
+Soft's preserved 100 % is 15 clean credits and 5 landing on a different
+transient, against 20 clean before. Lap's three extra gestures come with six
+extra loose credits. On the clean measure both surfaces go **backwards**.
+
+Reverted. Recorded at length because of what caught it: `strictDetectionRate` and
+the `> 40 ms` count exist because a critic showed my strict measure could not see
+a one-onset shift, and I sharpened it rather than defending it. Two rounds later
+it stopped me shipping a regression I had already called "the first real win" —
+against a contract rate that said, unambiguously, that nothing had been lost.
+
 ### Three repairs, one mechanism
 
 All three fail the same way, and together they explain the constraint better than
