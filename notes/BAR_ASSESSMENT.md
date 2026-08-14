@@ -268,6 +268,56 @@ make-or-break metric has nothing behind it. The gap is real, and it is reported
 rather than hidden — which is the difference between an unmeasured metric and a
 false green.
 
+## Ranking, not admission — and the yardstick it must beat
+
+Every one of the eleven mechanisms used a statistic to ADMIT an onset: "is this
+a real tap?" That is detection, and it is why the best statistic found died —
+at a threshold admitting 1 % of ring lobes it kept only 10 % of real strikes.
+
+But the detector already waits a full confirm window before firing, holding
+several candidate onsets and choosing none. The useful question is therefore
+"WHICH candidate is the real second tap?", which is ranking, and ranking inside
+a window that has already elapsed costs no latency at all.
+
+Feasibility, measured on lap training data by reconstructing the detector's
+envelope and looking for candidate local maxima in the join window. (The
+reconstruction reads about 0.70x the detector's published strength, so these are
+estimates, not harness numbers.)
+
+| bar | real 2nd tap is among the candidates | candidates per gesture |
+|---|---|---|
+| x1.0 (shipped) | 65/80 (81.2 %) | median 1 |
+| **x0.8** | **76/80 (95.0 %)** | median 2 |
+| x0.6 | 77/80 (96.2 %) | median 2 |
+| x0.4 | 77/80 (96.2 %) | median 4 |
+
+So the information is present: at a bar 20 % lower, the real second tap is a
+candidate in 95 % of lap gestures. Three gestures out of eighty have no second
+transient at any bar, and those are the true floor.
+
+**But most of the work is not ranking.** At x0.8:
+
+```
+exactly 1 candidate, no choice needed  : 33  (43 %)
+2+ candidates, a ranker must choose    : 43  (57 %)
+  of those, picking the LARGEST is right: 39/43  (91 %)
+```
+
+A trivial pick-the-largest rule therefore reaches roughly 33 + 39 = 72 of 80,
+about **90 % on lap**, against 73.75 % today. That is the yardstick: any
+statistic clever enough to justify its complexity has to beat 91 % selection
+accuracy, and `cos_first_xy` at AUC 0.79 probably cannot.
+
+Note what this does and does not say. Amplitude failed four times as an
+ADMISSION rule and works here as a RANKING rule, because ranking compares
+candidates from the same gesture on the same surface, where the absolute scale
+that defeated it cancels out. The estimate also ignores false triggers bought by
+the lower bar outside gestures, which is what killed the earlier attempts, and
+it assumes the first tap was detected. The harness decides; this only says the
+direction is not hopeless.
+
+Even at 90 %, lap does not reach 98 %.
+
 ## Root cause: the sensor is band-limited near 50 Hz
 
 This is the finding that explains all eleven failed mechanisms, and it was found
