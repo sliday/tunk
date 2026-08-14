@@ -84,6 +84,18 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   first — see the detector agent's report for what a shape test would key on and
   why tuning one against synthetic taps would only fit it to our imagination.
 
+  **The resonator does not close it.** Measured with each front end's knock
+  amplitude scaled to its own chain gain, and with a control requiring each to
+  detect a real double-tap at that amplitude: shipped 28.8 per 60 s, resonator
+  28.6. Identical. `ResonatorConfoundTests` pins both the result and the control.
+
+  The first attempt at this measurement said the resonator fired **zero** times.
+  It used the shared amplitude helper, which divides by the default chain's gain
+  of 0.68; the resonator's is 0.0789, so every synthetic knock was a ninth of the
+  intended size and sat under the bar. The control — does this front end still
+  detect a real double-tap at the amplitude under test — turns that from a
+  breakthrough into an artifact in one line, and is why it is in the test.
+
 ### Resolved by the detector agent
 
 - ~~The adaptive noise floor freezes while the detector is disarmed.~~ Fixed.

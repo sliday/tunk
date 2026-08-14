@@ -99,6 +99,34 @@ extension SyntheticStream {
         DetectorConfig.default.defaultThreshold * multiple / 0.68
     }
 
+    /// Gain of an ARBITRARY front end, measured rather than written down.
+    ///
+    /// The 0.68 above is the default chain's. The resonator's is 0.0789 — nine
+    /// times smaller, because a narrow band passes a slice of a broadband
+    /// impulse. A test that swaps the front end and keeps the constant asks for
+    /// taps a ninth of the size it means and gets a beautiful, meaningless
+    /// result: measuring the resonator against aperiodic knock trains that way
+    /// produced 0 firings against the shipped chain's 28.8, which looked like a
+    /// breakthrough and was an artifact of every knock being sub-threshold.
+    static func chainGain(tuning: DSPTuning) -> Double {
+        var stream = SyntheticStream(durationNs: SyntheticStream.leadInNs + 1_000_000_000)
+        stream.taps.append(.init(tNs: SyntheticStream.leadInNs, amplitude: 1.0))
+        var chain = SignalChain(tuning: tuning)
+        var peak = 0.0
+        for s in stream.samples() {
+            peak = max(peak, chain.process(x: Double(s.x), y: Double(s.y), z: Double(s.z),
+                                           holdNoiseFloor: false))
+        }
+        return peak
+    }
+
+    /// A tap amplitude worth `multiple` of `threshold` through `tuning`.
+    static func amplitude(timesThreshold multiple: Double,
+                          tuning: DSPTuning,
+                          threshold: Double) -> Double {
+        threshold * multiple / chainGain(tuning: tuning)
+    }
+
     /// Quiet lead-in so the high pass settles and the noise floor converges
     /// before the first tap. 1.5 s at 796 Hz is ~1200 samples.
     static let leadInNs: Int64 = 1_500_000_000
