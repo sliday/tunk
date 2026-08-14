@@ -1,4 +1,5 @@
-{"confidence":"prompt_window","group":0,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":11946565500}
+{"confidence":"auto_refined","group":0,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":13029990792}
+{"confidence":"auto_refined","group":0,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":13456444917}
 {"confidence":"auto_refined","group":1,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":17383342292}
 {"confidence":"auto_refined","group":1,"index_in_group":1,"intent":"double","kind":"tap_onset","t_ns":17568432292}
 {"confidence":"auto_refined","group":2,"index_in_group":0,"intent":"double","kind":"tap_onset","t_ns":20918815417}

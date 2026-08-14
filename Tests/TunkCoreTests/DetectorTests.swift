@@ -234,9 +234,11 @@ final class DetectorTests: XCTestCase {
         // This helper reports triggers and onsets, not groups, and a trigger is
         // what a group becoming a gesture produces — so the assertion above
         // already covers it.
-        XCTAssertLessThan(result.onsets.filter { !$0.suppressedByGate }.count, 4,
-                          "a sway may leak the odd onset past a 0.045 g bar, but "
-                          + "not a stream of them")
+        // Measured: exactly 1 onset at 0.3, 0.5, 0.8 and 1.0 g of sway, still 1
+        // over 60 s, 0 triggers throughout. `< 4` was four times looser than the
+        // evidence and would not have caught a 3x regression.
+        XCTAssertLessThanOrEqual(result.onsets.filter { !$0.suppressedByGate }.count, 1,
+                                 "a sway leaks at most one onset past the bar")
     }
 
     func testQuietStreamProducesNothing() {

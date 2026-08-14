@@ -39,7 +39,9 @@ func usage() {
                          (covers ~1 s of human reaction time plus the tap pair)
       --snr 6            peak must clear this multiple of the noise floor
       --min-gap-ms 80    minimum spacing between the taps of one gesture
-      --max-gap-ms 400   maximum spacing between the taps of one gesture
+      --max-gap-ms 600   maximum spacing between the taps of one gesture.
+                         Deliberately wider than the detector's join window:
+                         a gesture it cannot group is a MISS, not a non-event.
       --write            for `run` on a root: actually write, not a dry run
       --quiet            summary lines only
 
@@ -133,7 +135,15 @@ func sessions(at path: String) throws -> [Session] {
 // window has to cover reaction time plus the gesture, not just the gesture.
 let windowNs = Int64((Double(flag("window-ms") ?? "2600") ?? 2600) * 1e6)
 let minGapNs = Int64((Double(flag("min-gap-ms") ?? "80") ?? 80) * 1e6)
-let maxGapNs = Int64((Double(flag("max-gap-ms") ?? "400") ?? 400) * 1e6)
+// 600 ms, wider than the detector's 220 ms join window ON PURPOSE.
+//
+// Ground truth records what the OPERATOR did, not what the detector can
+// handle. At 400 ms a prompted double-tap of two clean 0.1025 g strikes
+// 426 ms apart was labelled as a single onset, scored as a 1-tap gesture,
+// and left the detection denominator entirely — turning 22/23 into 22/22
+// and a 95.65 % detection rate into 100 %. The gesture happened; the
+// detector cannot group it; both of those facts belong in the report.
+let maxGapNs = Int64((Double(flag("max-gap-ms") ?? "600") ?? 600) * 1e6)
 let snr = Double(flag("snr") ?? "6") ?? 6
 let quiet = has("quiet")
 

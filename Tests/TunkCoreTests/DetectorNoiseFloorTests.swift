@@ -135,9 +135,14 @@ final class DetectorNoiseFloorTests: XCTestCase {
         // take over as the governing bar. What must remain true is the ordering
         // — on a quiet desk the calibrated absolute threshold governs, so
         // calibration means something.
+        // Measured at 34% of the absolute threshold (0.01015 against 0.030). Asserting only "< 1.0x"
+        // stated the ordering but permitted a 4x drift before failing, and the
+        // ordering is not the property most at risk — on the recorded music
+        // session 4 x noiseFloor already peaks at 84% of the shipped threshold,
+        // so the adaptive term taking over is live rather than hypothetical.
         XCTAssertLessThan(DSPTuning.default.noiseSnrMultiple * after,
-                          DetectorConfig.default.defaultThreshold,
-                          "on a quiet desk the absolute threshold must still govern")
+                          DetectorConfig.default.defaultThreshold * 0.45,
+                          "on a quiet desk the adaptive term stays well under the absolute one")
     }
 
     func testAQuietSurfaceCostsNothing() {
