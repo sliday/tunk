@@ -237,6 +237,58 @@ not reach the bar. That option is now closed, not deferred.
 At the saturating window, 17 of the 18 remaining lap misses are still
 "only 1 ungated onset near this label".
 
+## Correction: the lap false-trigger rate has no live-use denominator
+
+Round 26 audited the six lap false triggers the resonator front end produces
+(`notes/LAP_FALSE_TRIGGERS.md`) and, in the course of it, found that the
+denominator this table's "false triggers, live use" row is divided by does not
+contain any lap live use.
+
+What the corpus actually holds, per surface:
+
+| surface | tap deck | typing | idle | confound |
+|---|---|---|---|---|
+| desk | 1.88 min | 5.22 min | **26.00 min** | **2.05 min** |
+| soft | 1.53 min | 3.22 min | — | — |
+| lap | 5.95 min | 3.23 min | **none** | **none** |
+
+Lap's 13.08 per 20 min is 6 false triggers over 9.2 minutes, and those 9.2
+minutes are 5.95 minutes of the operator deliberately tapping and repositioning
+the machine plus 3.23 minutes of typing, of which only 0.23 minutes is un-gated.
+There are **zero seconds of lap recording in which the operator is neither
+tapping nor typing**. Desk's 0.00 per 20 min is dominated by 26 minutes of idle.
+
+The two rates are not comparable measurements. Desk passes on a denominator made
+of live use; lap fails on a denominator made of prompted gestures.
+
+Broken out, at the resonator operating point:
+
+| lap denominator | minutes | false triggers | per 20 min |
+|---|---|---|---|
+| inside a 2.6 s prompt window | 3.47 | 4 | 23.1 |
+| tap deck, outside every prompt window | 2.48 | 2 | 16.1 |
+| typing, un-gated | 0.23 | 0 | 0.0 |
+| typing, gated | 3.00 | 0 | 0.0 |
+| idle | **0.00** | — | **undefined** |
+| confound | **0.00** | — | **undefined** |
+
+The honest denominator for "live use" is the last two rows, and they are empty.
+Of the two false triggers outside a prompt window, one is a real unlabelled
+double tap the operator made before the first beep and the other is the operator
+moving the machine as the script ended.
+
+**This does not turn the lap failure into a pass.** It says the number in the
+scoreboard is not measuring what its name claims, in either direction, and that
+the fix is a recording rather than a mechanism: 20 minutes of a lap idle session.
+Until that exists, "lap live false triggers 13.08 / 20 min" should be read as
+"6 false triggers in 9.2 minutes of prompted tapping", which is what it is.
+
+A related coverage limit, same source: ground truth exists only inside the
+labeller's `[beep, beep + 2600 ms]` windows, which cover 58.3 % of the lap tap
+decks. The detector is graded on 100 % of the recording against labels that
+cover 58 % of it, so anything the operator does in the other 41.7 % is a false
+trigger with no route to credit.
+
 ## Two gaps in the measurement itself
 
 Named independently by all four critics, and neither is fixable by code:

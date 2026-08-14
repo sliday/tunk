@@ -144,6 +144,11 @@ mechanisms is a property of the front end, not of the threshold.
   20 min. Lap live false triggers already failed the bar; they now fail it
   harder. Desk, soft, both confound sessions, 25 minutes of idle and all
   11.7 minutes of typing stay at **zero**.
+  **Audited one at a time in round 26** (`notes/LAP_FALSE_TRIGGERS.md`): four of
+  the six are ground-truth defects, one is the operator moving the machine and
+  one is a genuine ring lobe — the only one the resonator introduced. The three
+  at the shipped operating point are all ground-truth defects too, so "already
+  failed the bar" does not survive the audit either.
 - **Typing false triggers across the whole threshold sweep** at this front end:
   0 at every value from 0.005 to 0.022, and **1 at 0.004**. The headroom is
   finite and the operating point sits well inside it, but it is not unlimited.

@@ -109,6 +109,33 @@ says who owns it now. Delete an entry when it is done, not when it is started.
   before this pass. The slider floors at 60 ms and the panel prints what it
   costs below 150 ms; `--dump-panel` renders that state as `panel-gatefloor-*`.
 
+## Owned by whoever next records data
+
+Raised by the round-26 audit of the lap false triggers
+(`notes/LAP_FALSE_TRIGGERS.md`). None of these is a code change, and all three
+block conclusions the project is currently drawing without them.
+
+- **A lap idle session, 20 minutes.** The corpus has 26 minutes of desk idle and
+  **zero seconds of lap idle**. "Lap false triggers per 20 min of live use" is
+  currently computed over 5.95 minutes of prompted tapping plus 3.23 minutes of
+  typing. There is no lap live-use recording to divide by. A lap confound session
+  would help too; there is none of that either.
+- **A lap tap deck with hands off the chassis between prompts.** Four of the six
+  false triggers are the operator producing three to six transients where the
+  protocol asked for two, and the corpus cannot separate "the detector picked the
+  wrong pair" from "the operator made an ambiguous gesture".
+- **Hand-checked labels for `tap_deck__lap__20260814-104745__13e15a`**, or its
+  removal from training with the removal stated. It holds 14 of the 18
+  out-of-window lap labels, four of the six false triggers and four of the seven
+  misses, on a quarter of the lap gestures.
+
+Cheapest structural fix, if the labeller is ever revisited: `TunkLabel.analyse`
+walks peaks in descending amplitude and commits the first pair inside
+[80, 600] ms. It has no preference for the operator's own rhythm and no way to
+say "this window holds four strong peaks, a human should look". Left alone here
+on purpose — ground truth should not be edited by the agent whose score depends
+on it.
+
 ## Pass line
 
 Single, double and triple are graded against the **same** bar. Relaxing it for
