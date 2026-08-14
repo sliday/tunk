@@ -65,6 +65,7 @@ during typing, which stayed at zero.
 | Wider join window | lap 65 → 70 %, **latency p95 209 → 389 ms** |
 | Per-surface calibration | desk 95.65 %, soft 100 %, **lap 82.5 % at its own best** |
 | Learned join window (235 ms) | held-out lap **80 % → 80 %**, latency 208.9 → 223.9 ms |
+| Re-arm against a decay model of the last strike | deaf lap 12 → 2 and soft 3 → 0, but 14 doubles become unbound triples: lap 73.75 → 61.25 %, **soft 100 → 40 %**. Ships off; see notes/TAIL_MODEL.md |
 
 ### What the learned window does and does not fix
 

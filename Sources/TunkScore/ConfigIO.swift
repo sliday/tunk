@@ -71,6 +71,9 @@ enum ConfigParam: String, CaseIterable {
     case tapCountToFire
     case onsetCeilingG
     case motionGateG
+    case tailRearmFraction
+    case tailOnsetFraction
+    case tailDecayTauNs
 
     /// Accepts the canonical name or its `...Ms` alias for the ns fields.
     init?(name: String) {
@@ -113,6 +116,9 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .tailRearmFraction: c.tailRearmFraction = v
+        case .tailOnsetFraction: c.tailOnsetFraction = v
+        case .tailDecayTauNs: c.tailDecayTauNs = Int64(v.rounded())
         }
     }
 
@@ -129,6 +135,9 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .tailRearmFraction: return c.tailRearmFraction
+        case .tailOnsetFraction: return c.tailOnsetFraction
+        case .tailDecayTauNs: return Double(c.tailDecayTauNs)
         }
     }
 

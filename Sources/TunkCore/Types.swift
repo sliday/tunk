@@ -219,6 +219,49 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Re-arm allowance against the last strike's own tail, as a fraction of
+    /// that strike's peak. **0, which disables the whole tail model.**
+    ///
+    /// The shipped re-arm rule is absolute: the envelope has to fall back under
+    /// `releaseFraction * threshold` before the detector listens again. On a
+    /// damped surface it does not. Tallied over every training tap deck, the
+    /// second tap of 12 lap gestures and all 3 soft misses landed while the
+    /// detector was still disarmed, at 1.2x to 2.0x the threshold — strong
+    /// strikes into a deaf detector.
+    ///
+    /// With this above zero the detector also re-arms once the envelope drops
+    /// under `tailRearmFraction * D(t)`, where `D(t)` is the decay model of the
+    /// last strike (see `tailDecayTauNs`). Self-scaling: a loud strike grants a
+    /// proportionally larger tail allowance, so nothing has to be tuned per
+    /// surface.
+    ///
+    /// `onsetDebounceNs` still gates re-arming, so the second lobe of a single
+    /// strike (+26 ms, 80 % of the peak) is swallowed exactly as before.
+    public var tailRearmFraction: Double
+
+    /// Onset guard against the last strike's tail, as a fraction of that
+    /// strike's peak. **0, inert.**
+    ///
+    /// The other half of the tail model, and the reason re-arming early is not
+    /// simply an invitation to count the ring twice. While the model is above
+    /// the fixed bar, an onset must clear `tailOnsetFraction * D(t)` as well —
+    /// it must be louder than anything the previous strike's tail could still be
+    /// producing. It only bites when the previous strike was far louder than the
+    /// threshold, which is where a ring can cross the bar on its own.
+    public var tailOnsetFraction: Double
+
+    /// Time constant of the tail model, `D(t) = peak * exp(-(t - onset) / tau)`.
+    /// Zero or negative means no decay at all: the allowance stays at the
+    /// strike's peak.
+    ///
+    /// Measured on all 123 training gestures, an exponential is a poor
+    /// description of what the envelope actually does after a strike (median R2
+    /// of a per-gesture fit past +40 ms: desk 0.01, lap 0.14, soft 0.14; 11 of
+    /// 23 desk, 22 of 77 lap and 13 of 20 soft tails do not decay at all over
+    /// that span). Read this as a tunable allowance curve, not as fitted
+    /// physics. See notes/TAIL_MODEL.md.
+    public var tailDecayTauNs: Int64
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -269,6 +312,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                tailRearmFraction: Double = 0,
+                tailOnsetFraction: Double = 0,
+                tailDecayTauNs: Int64 = 150_000_000,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +327,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.tailRearmFraction = tailRearmFraction
+        self.tailOnsetFraction = tailOnsetFraction
+        self.tailDecayTauNs = tailDecayTauNs
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +352,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case tailRearmFraction, tailOnsetFraction, tailDecayTauNs
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +370,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        tailRearmFraction = try c.decodeIfPresent(Double.self, forKey: .tailRearmFraction) ?? d.tailRearmFraction
+        tailOnsetFraction = try c.decodeIfPresent(Double.self, forKey: .tailOnsetFraction) ?? d.tailOnsetFraction
+        tailDecayTauNs = try c.decodeIfPresent(Int64.self, forKey: .tailDecayTauNs) ?? d.tailDecayTauNs
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,10 +396,17 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(tailRearmFraction, forKey: .tailRearmFraction)
+        try c.encode(tailOnsetFraction, forKey: .tailOnsetFraction)
+        try c.encode(tailDecayTauNs, forKey: .tailDecayTauNs)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
     }
+
+    /// Whether the tail model is doing anything at all. Off, every code path
+    /// that consults it is skipped and the detector is the shipped one.
+    public var tailModelEnabled: Bool { tailRearmFraction > 0 }
 
     /// The threshold actually applied, after calibration and the sensitivity slider.
     public var effectiveThreshold: Double {

@@ -30,6 +30,13 @@ import Foundation
 /// `releaseFraction * T` **and** `onsetDebounceNs` has passed, so one strike is
 /// one onset.
 ///
+/// That release line is absolute, and on a damped surface the case rings above
+/// it for the whole gesture, which is what makes the detector deaf to a second
+/// strike landing on the tail. `DetectorConfig.tailRearmFraction` replaces the
+/// line with a decay model of the last strike; it ships at zero and off, because
+/// every setting swept costs more gestures than it recovers. Measured in
+/// notes/TAIL_MODEL.md.
+///
 /// The floor keeps tracking the whole time, apart from a bounded
 /// `tuning.noiseFloorHoldNs` after each crossing. It has to: it describes the
 /// surface, not whether the detector currently feels like firing, and the one
@@ -157,6 +164,9 @@ public final class TapDetector: TapDetecting {
     private var lastSampleNs: Int64?
     private var armed: Bool = true
     private var lastOnsetNs: Int64?
+    /// Peak envelope of the strike that disarmed the detector, in g. Zero until
+    /// there has been one. Scale of the tail model; see `tailModel(now:)`.
+    private var lastOnsetPeak: Double = 0
     private var pending: PendingOnset?
 
     /// Members of the live group, kept only while the group could still fire.
@@ -213,10 +223,18 @@ public final class TapDetector: TapDetecting {
         envelopeForTesting = envelope
         var onsetTrigger: Trigger?
 
+        // Peak of the strike that disarmed us, tracked over the same span the
+        // published onset strength is. It is the scale of the tail model, so it
+        // must be the strike's own height and nothing later.
+        if let onset = lastOnsetNs, sample.tNs - onset <= tuning.peakHoldNs {
+            lastOnsetPeak = max(lastOnsetPeak, envelope)
+        }
+
         if armed {
-            if sampleIndex > tuning.warmupSamples && envelope >= threshold {
+            if sampleIndex > tuning.warmupSamples && envelope >= onsetBar(threshold, now: sample.tNs) {
                 armed = false
                 lastOnsetNs = sample.tNs
+                lastOnsetPeak = envelope
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
 
                 // The chassis is in motion, not merely ringing. Lifting the
@@ -234,7 +252,7 @@ public final class TapDetector: TapDetecting {
                     onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
                 }
             }
-        } else if envelope <= threshold * tuning.releaseFraction,
+        } else if envelope <= releaseLevel(threshold, now: sample.tNs),
                   let onset = lastOnsetNs,
                   sample.tNs - onset >= tuning.onsetDebounceNs {
             armed = true
@@ -293,6 +311,7 @@ public final class TapDetector: TapDetecting {
         lastSampleNs = nil
         armed = true
         lastOnsetNs = nil
+        lastOnsetPeak = 0
         pending = nil
         clearGroup()
         lastGroupingOnsetNs = nil
@@ -362,6 +381,44 @@ public final class TapDetector: TapDetecting {
         return base * tuning.inGestureThresholdFraction
     }
 
+    /// The last strike's modelled tail at `now`, in g, or nil when the tail
+    /// model is off or there is no strike to model.
+    ///
+    /// `D(t) = peak * exp(-(t - onset) / tau)`. The exponential is a modelling
+    /// choice, not a fitted law — see `DetectorConfig.tailDecayTauNs`. With
+    /// `tau` at zero it degenerates to a flat allowance at the strike's peak,
+    /// which is closer to what a lap actually does.
+    private func tailModel(now tNs: Int64) -> Double? {
+        guard effectiveConfig.tailModelEnabled,
+              let onset = lastOnsetNs, lastOnsetPeak > 0 else { return nil }
+        let tau = effectiveConfig.tailDecayTauNs
+        guard tau > 0 else { return lastOnsetPeak }
+        let elapsed = Double(tNs - onset) / Double(tau)
+        return lastOnsetPeak * exp(-elapsed)
+    }
+
+    /// What the envelope must fall under before the detector listens again.
+    ///
+    /// Shipped rule: `releaseFraction * threshold`, an absolute line the
+    /// envelope on a damped surface can sit above for hundreds of ms. The tail
+    /// model raises that line to whatever the previous strike's own tail could
+    /// still be producing, which is the whole point — a decaying ring is not
+    /// evidence that the detector should stay deaf.
+    private func releaseLevel(_ threshold: Double, now tNs: Int64) -> Double {
+        let absolute = threshold * tuning.releaseFraction
+        guard let tail = tailModel(now: tNs) else { return absolute }
+        return max(absolute, tail * effectiveConfig.tailRearmFraction)
+    }
+
+    /// What an onset must clear right now. The fixed bar, plus — while the
+    /// previous strike's tail is modelled as louder than that bar — enough
+    /// headroom over the tail that the ring cannot declare itself.
+    private func onsetBar(_ threshold: Double, now tNs: Int64) -> Double {
+        guard effectiveConfig.tailOnsetFraction > 0,
+              let tail = tailModel(now: tNs) else { return threshold }
+        return max(threshold, tail * effectiveConfig.tailOnsetFraction)
+    }
+
     /// Drop everything derived from the sample stream, keeping gate and
     /// refractory (they are driven by wall-order events, not by the filters).
     private func dropSignalState() {
@@ -369,6 +426,7 @@ public final class TapDetector: TapDetecting {
         sampleIndex = 0
         armed = true
         lastOnsetNs = nil
+        lastOnsetPeak = 0
         lastGroupingOnsetNs = nil
         noiseFloorHoldUntilNs = Int64.min
         publishPending()

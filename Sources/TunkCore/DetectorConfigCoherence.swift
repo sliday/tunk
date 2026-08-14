@@ -194,6 +194,23 @@ extension DetectorConfig {
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
         }
 
+        // The tail model is off at zero, so a negative or NaN fraction has to
+        // land on zero rather than on a default: an unreadable number must
+        // disable a mechanism, never silently switch one on.
+        if !(out.tailRearmFraction.isFinite && out.tailRearmFraction >= 0) {
+            issues.append(CoherenceIssue(field: "tailRearmFraction",
+                                         reason: "not a fraction of a strike's peak",
+                                         applied: "0 (tail model off)"))
+            out.tailRearmFraction = 0
+        }
+        if !(out.tailOnsetFraction.isFinite && out.tailOnsetFraction >= 0) {
+            issues.append(CoherenceIssue(field: "tailOnsetFraction",
+                                         reason: "not a fraction of a strike's peak",
+                                         applied: "0 (no tail onset guard)"))
+            out.tailOnsetFraction = 0
+        }
+        out.tailDecayTauNs = min(max(out.tailDecayTauNs, 0), maxWindowNs)
+
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {
             issues.append(CoherenceIssue(field: "calibratedThreshold",
                                          reason: "not a positive threshold in g",
