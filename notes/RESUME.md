@@ -94,6 +94,19 @@ Held-out came out clean. Fixed in the process:
   detector fires 110 times — but 86 % of typing time is gated.
 - `must-not-fire` judged all triggers in the window rather than unclaimed ones.
 
+## Rebuild the app bundle before trusting anything it measures
+
+```bash
+./dist/build-app.sh     # now refuses to finish if the bundle ends up stale
+```
+
+`dist/Tunk.app` was found four hours behind its sources — missing the
+ring-to-strike calibration measure and both fixes to the acceptance test. Running
+fifty prompted taps against that bundle would have measured yesterday's detector
+while looking exactly like a fresh result. The build script now makes the same
+assertion `bin/refresh.sh` makes about the CLI binaries, and fails loudly rather
+than printing "built:" over a binary that did not change.
+
 ## The live acceptance test works
 
 `./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300` is the PRD's live
