@@ -138,6 +138,13 @@ final class Engine: ObservableObject {
     /// gesture *rhythm* and not just how hard they hit. Same order as
     /// `calibrationStrengths`.
     private var calibrationOnsetTimes: [Int64] = []
+    /// Ring-to-strike ratio per calibration onset: the loudest envelope 60-100 ms
+    /// after the strike, over the strike's own peak. Measured because it is what
+    /// actually predicts whether a surface will work — see
+    /// `CalibrationResult.ringToStrike`.
+    private var calibrationRingRatios: [Double] = []
+    /// The onset still inside its 60-100 ms measuring window, if any.
+    private var ringPending: (tNs: Int64, peak: Double, ring: Double)?
     private var calibrationSuppressed = 0
     private var configBeforeCalibration: DetectorConfig?
     /// Floor used while learning a tap, so weak taps still produce an onset to
@@ -293,7 +300,12 @@ final class Engine: ObservableObject {
         // a second filter of our own keeps the trace, the onset spikes and the
         // threshold line in one coordinate system.
         recordEnvelope(tNs: sample.tNs, value: Float(readout?.envelope ?? 0))
+        // Onsets first: a new onset closes the previous ring measurement, and
+        // this sample then belongs to the new one.
         for onset in onsets { record(onset: onset) }
+        if configBeforeCalibration != nil {
+            accumulateRing(nowNs: sample.tNs, envelope: readout?.envelope ?? 0)
+        }
         // Passive capture, off unless deliberately switched on. Fed the same
         // onsets the monitor draws, so it keeps the seconds around anything
         // tap-shaped without a second detector or a second filter.
@@ -387,7 +399,31 @@ final class Engine: ObservableObject {
         } else {
             calibrationStrengths.append(onset.strength)
             calibrationOnsetTimes.append(onset.tNs)
+            // Close out any previous measurement before starting this one, so a
+            // fast second tap cannot silently overwrite the first's window.
+            flushRingMeasurement()
+            ringPending = (tNs: onset.tNs, peak: onset.strength, ring: 0)
         }
+    }
+
+    /// Accumulates the ring measurement for the onset currently being watched.
+    /// Called per sample while calibrating; costs one comparison otherwise.
+    private func accumulateRing(nowNs: Int64, envelope: Double) {
+        guard var p = ringPending else { return }
+        let age = nowNs - p.tNs
+        if age >= 60_000_000 && age <= 100_000_000 {
+            p.ring = max(p.ring, envelope)
+            ringPending = p
+        } else if age > 100_000_000 {
+            flushRingMeasurement()
+        }
+    }
+
+    private func flushRingMeasurement() {
+        if let p = ringPending, p.peak > 0, p.ring > 0 {
+            calibrationRingRatios.append(p.ring / p.peak)
+        }
+        ringPending = nil
     }
 
     private func record(trigger: Trigger) {
@@ -491,6 +527,8 @@ final class Engine: ObservableObject {
         detector.reset()
         calibrationStrengths.removeAll(keepingCapacity: true)
         calibrationOnsetTimes.removeAll(keepingCapacity: true)
+        calibrationRingRatios.removeAll(keepingCapacity: true)
+        ringPending = nil
         calibrationSuppressed = 0
         detectorLock.unlock()
         isCalibrating = true
@@ -501,10 +539,11 @@ final class Engine: ObservableObject {
     /// plus the noise floor the calibration has to clear, plus the time each
     /// onset landed so the gesture's rhythm can be fitted as well as its force.
     func calibrationProgress() -> (strengths: [Double], onsetTimesNs: [Int64],
-                                   suppressed: Int, noiseFloor: Double) {
+                                   suppressed: Int, noiseFloor: Double,
+                                   ringRatios: [Double]) {
         detectorLock.lock(); defer { detectorLock.unlock() }
         return (calibrationStrengths, calibrationOnsetTimes,
-                calibrationSuppressed, readout?.noiseFloor ?? 0)
+                calibrationSuppressed, readout?.noiseFloor ?? 0, calibrationRingRatios)
     }
 
     /// The sensitivity slider's value, which is held out of the way while taps

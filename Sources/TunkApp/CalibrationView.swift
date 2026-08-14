@@ -144,6 +144,16 @@ struct CalibrationView: View {
                 .opacity(revealed ? 1 : 0)
                 .tunkAnimation(.tunkSnappy.delay(Metrics.stagger * 2), value: revealed,
                                reduceMotion: reduceMotion)
+            if let ring = ringNote {
+                Text(ring)
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(ringIsLoud ? Color.orange : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(revealed ? 1 : 0)
+                    .tunkAnimation(.tunkSnappy.delay(Metrics.stagger * 3), value: revealed,
+                                   reduceMotion: reduceMotion)
+            }
             if let timing = timingNote {
                 Text(timing)
                     .font(.system(size: 11))
@@ -156,6 +166,33 @@ struct CalibrationView: View {
                                    reduceMotion: reduceMotion)
             }
         }
+    }
+
+    private var ringIsLoud: Bool {
+        (result?.ringToStrike ?? 0) > TapCalibration.noisyRingRatio
+    }
+
+    /// How loudly this surface rings, and what to do about it.
+    ///
+    /// Worth saying out loud because it is the property that actually predicts
+    /// whether a surface works, and it is not the one a user would guess. Across
+    /// four lap recordings the tap amplitude, the noise floor and the decay time
+    /// were all but identical, and signal-to-noise ran backwards — the session
+    /// that detected every gesture had the WORST SNR. What tracked detection was
+    /// how much of the first strike was still ringing when the second arrived.
+    private var ringNote: String? {
+        guard let ratio = result?.ringToStrike else { return nil }
+        if ratio > TapCalibration.noisyRingRatio {
+            return String(format: "This surface rings loudly: %.0f %% of each tap is still "
+                          + "sounding when the second one lands, against %.0f %% on a surface "
+                          + "that works well. Your second tap has to be heard over the first "
+                          + "one's echo, so expect some misses. Resting an arm on the case "
+                          + "while you tap is a common cause — try lifting it.",
+                          ratio * 100, 40.0)
+        }
+        return String(format: "This surface settles quickly: %.0f %% of each tap is still "
+                      + "sounding when the second lands. That is the range where Tunk is "
+                      + "most reliable.", ratio * 100)
     }
 
     /// What the learned rhythm means, in the two cases that differ for the user.
@@ -333,7 +370,8 @@ struct CalibrationView: View {
         poll?.invalidate()
         poll = nil
         result = TapCalibration.calibrate(gestures: gestures,
-                                          noiseFloor: progress.noiseFloor)
+                                          noiseFloor: progress.noiseFloor,
+                                          ringRatios: progress.ringRatios)
         phase = result == nil ? .failed : .review
         // One genuine one-shot sequence: numbers, then bars, then the note.
         DispatchQueue.main.async { revealed = true }

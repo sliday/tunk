@@ -35,6 +35,26 @@ public struct CalibrationResult: Sendable, Equatable {
     /// The observed spread, so the panel can show why it chose what it chose.
     public var interTapP10Ns: Int64?
     public var interTapP90Ns: Int64?
+    /// How loudly the chassis rings after a strike, as a fraction of that
+    /// strike: the envelope 60-100 ms later divided by the strike's own peak.
+    /// Nil when calibration could not measure it.
+    ///
+    /// This is the property that separates a lap that works from one that does
+    /// not, and it is not the one you would guess. Measured across four lap
+    /// sessions on one machine, tap amplitude (0.032-0.036 g), noise floor and
+    /// decay time were effectively identical, and signal-to-noise ran BACKWARDS
+    /// — the session that detected 100 % had the LOWEST SNR. What tracked
+    /// detection was the ring:
+    ///
+    ///     ring/strike 0.30 -> 95 %      0.38 -> 90 %
+    ///     ring/strike 0.42 -> 100 %     0.61 -> 80 %
+    ///
+    /// A second tap has to be heard over the first one's tail, so a chassis that
+    /// returns 61 % of the strike is a chassis where half the gesture is
+    /// competing with itself. Resting a forearm on the case while tapping is one
+    /// way to produce it.
+    public var ringToStrike: Double?
+
     /// True when the fitted window had to be cut to stay inside the latency
     /// budget. The user is then choosing between reliability and responsiveness
     /// and deserves to be told, rather than having it decided for them.
@@ -44,7 +64,8 @@ public struct CalibrationResult: Sendable, Equatable {
                 medianStrength: Double, noiseFloor: Double, margin: Double,
                 noiseLimited: Bool, sampleCount: Int,
                 interTapNs: Int64? = nil, interTapP10Ns: Int64? = nil,
-                interTapP90Ns: Int64? = nil, interTapClamped: Bool = false) {
+                interTapP90Ns: Int64? = nil, interTapClamped: Bool = false,
+                ringToStrike: Double? = nil) {
         self.threshold = threshold
         self.lowPercentileStrength = lowPercentileStrength
         self.weakestStrength = weakestStrength
@@ -57,6 +78,7 @@ public struct CalibrationResult: Sendable, Equatable {
         self.interTapP10Ns = interTapP10Ns
         self.interTapP90Ns = interTapP90Ns
         self.interTapClamped = interTapClamped
+        self.ringToStrike = ringToStrike
     }
 }
 
@@ -109,6 +131,11 @@ public enum TapCalibration {
     public static let distributionFloor: Double = 0.35
     /// Below this the weakest recorded tap is too close to the bar to trust.
     public static let comfortableMargin: Double = 1.30
+
+    /// Ring-to-strike ratio above which detection has been measured to fall.
+    /// The four lap sessions split 0.30/0.38/0.42 at 90-100 % against 0.61 at
+    /// 80 %, so the line is drawn between them rather than fitted to them.
+    public static let noisyRingRatio: Double = 0.50
 
     /// - Parameters:
     ///   - tapStrengths: `OnsetEvent.strength` for each recorded calibration
@@ -254,6 +281,7 @@ public enum TapCalibration {
     public static func calibrate(gestures: [(strengths: [Double], intervalNs: Int64)],
                                  noiseFloor: Double = 0,
                                  allowExceedingLatencyBudget: Bool = false,
+                                 ringRatios: [Double] = [],
                                  tuning: DSPTuning = .default) -> CalibrationResult? {
         guard var result = calibrate(tapStrengths: gestures.flatMap(\.strengths),
                                      noiseFloor: noiseFloor, tuning: tuning) else { return nil }
@@ -264,6 +292,8 @@ public enum TapCalibration {
             result.interTapP90Ns = fit.p90
             result.interTapClamped = fit.clamped
         }
+        let usable = ringRatios.filter { $0.isFinite && $0 > 0 }.sorted()
+        if !usable.isEmpty { result.ringToStrike = percentile(usable, 0.5) }
         return result
     }
 
