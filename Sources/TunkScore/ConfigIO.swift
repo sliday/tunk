@@ -90,6 +90,8 @@ enum ConfigParam: String, CaseIterable {
     case tapCountToFire
     case onsetCeilingG
     case motionGateG
+    case pairStrengthMinRatio
+    case pairDirectionMinCosine
     // Front-end filter design. These live in `DSPTuning`, not `DetectorConfig`,
     // so they write `DetectorFactory.tuning` rather than the config struct —
     // see `isFrontEnd`. They ship at their default values, and a run that does
@@ -152,6 +154,9 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .pairStrengthMinRatio: c.pairStrengthMinRatio = v
+        // A cosine of -1 admits every pair, so a sweep can start at "off".
+        case .pairDirectionMinCosine: c.pairDirectionMinCosine = v > -1 ? v : nil
         case .highPassHz: DetectorFactory.tuning.highPassHz = v
         // Zero means the stage is absent, so a sweep can start at "shipped".
         case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
@@ -173,6 +178,8 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .pairStrengthMinRatio: return c.pairStrengthMinRatio
+        case .pairDirectionMinCosine: return c.pairDirectionMinCosine ?? -1
         case .highPassHz: return DetectorFactory.tuning.highPassHz
         case .resonatorHz: return DetectorFactory.tuning.resonatorHz
         case .resonatorQ: return DetectorFactory.tuning.resonatorQ

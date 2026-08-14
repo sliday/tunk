@@ -194,6 +194,39 @@ extension DetectorConfig {
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
         }
 
+        // A ratio over 1 asks for two strikes stronger than each other, and a
+        // cosine over 1 asks for directions closer than identical. Both are
+        // silent kill switches — every gesture would fail them — so they are
+        // clamped to the value that means "as strict as the test can be".
+        if !out.pairStrengthMinRatio.isFinite || out.pairStrengthMinRatio < 0 {
+            issues.append(CoherenceIssue(field: "pairStrengthMinRatio",
+                                         reason: "not a ratio in 0...1",
+                                         applied: "0 (off)"))
+            out.pairStrengthMinRatio = 0
+        } else if out.pairStrengthMinRatio > 1 {
+            issues.append(CoherenceIssue(field: "pairStrengthMinRatio",
+                                         reason: "no two onsets can match better than exactly",
+                                         applied: "1.0"))
+            out.pairStrengthMinRatio = 1
+        }
+
+        if let cosine = out.pairDirectionMinCosine {
+            if !cosine.isFinite {
+                issues.append(CoherenceIssue(field: "pairDirectionMinCosine",
+                                             reason: "not a cosine in -1...1",
+                                             applied: "off"))
+                out.pairDirectionMinCosine = nil
+            } else if cosine > 1 {
+                issues.append(CoherenceIssue(field: "pairDirectionMinCosine",
+                                             reason: "no two directions agree better than exactly",
+                                             applied: "1.0"))
+                out.pairDirectionMinCosine = 1
+            } else if cosine < -1 {
+                // -1 admits everything, so this is "off" spelled a longer way.
+                out.pairDirectionMinCosine = nil
+            }
+        }
+
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {
             issues.append(CoherenceIssue(field: "calibratedThreshold",
                                          reason: "not a positive threshold in g",

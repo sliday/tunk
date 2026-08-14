@@ -140,6 +140,10 @@ public final class TapDetector: TapDetecting {
     private struct GroupOnset {
         var tNs: Int64
         var strength: Double
+        /// Lateral direction of this strike, sampled where its envelope peaked.
+        /// Only read by the pair tests, which ship off.
+        var dirX: Double = 0
+        var dirY: Double = 0
     }
 
     /// An onset whose peak is still being tracked. Its crossing time is already
@@ -147,6 +151,8 @@ public final class TapDetector: TapDetecting {
     private struct PendingOnset {
         var tNs: Int64
         var peak: Double
+        var dirX: Double
+        var dirY: Double
         var suppressedByGate: Bool
         var joinedGroup: Bool
     }
@@ -205,7 +211,13 @@ public final class TapDetector: TapDetecting {
                                      holdNoiseFloor: sample.tNs < noiseFloorHoldUntilNs)
 
         if pending != nil {
-            pending!.peak = max(pending!.peak, envelope)
+            // The direction travels with the peak: the sample where the strike
+            // is loudest is the one that says which way it pushed.
+            if envelope > pending!.peak {
+                pending!.peak = envelope
+                pending!.dirX = chain.lateralX
+                pending!.dirY = chain.lateralY
+            }
             if sample.tNs - pending!.tNs >= tuning.peakHoldNs { publishPending() }
         }
 
@@ -391,6 +403,8 @@ public final class TapDetector: TapDetecting {
             clearGroup()
         } else if p.joinedGroup, let i = group.indices.last, group[i].tNs == p.tNs {
             group[i].strength = p.peak
+            group[i].dirX = p.dirX
+            group[i].dirY = p.dirY
         }
         pending = nil
     }
@@ -441,6 +455,7 @@ public final class TapDetector: TapDetecting {
         }
 
         pending = PendingOnset(tNs: tNs, peak: strength,
+                               dirX: chain.lateralX, dirY: chain.lateralY,
                                suppressedByGate: suppressed, joinedGroup: joined)
         return trigger
     }
@@ -502,6 +517,41 @@ public final class TapDetector: TapDetecting {
         groupDeadlineNs = nil
     }
 
+    /// Do the onsets of this gesture look like one hand doing one thing twice?
+    ///
+    /// **Both tests ship off and the measurement says leave them off.** They are
+    /// here so the negative can be reproduced end to end rather than from a
+    /// scratch script: on `data/raw` lap at the resonator operating point, the
+    /// six false triggers are as strength-matched and as direction-matched as
+    /// the 73 real detections, and every threshold that removes four of six
+    /// costs 12 to 28 detections. `notes/PAIR_COHERENCE.md` has the tables.
+    ///
+    /// Consecutive members are compared, so a triple has to cohere twice. An
+    /// onset with no lateral energy at all cannot answer the direction question
+    /// and is not made to: silence there means "no evidence", not "reject".
+    private func membersCohere(_ members: [GroupOnset]) -> Bool {
+        let minRatio = effectiveConfig.pairStrengthMinRatio
+        let minCosine = effectiveConfig.pairDirectionMinCosine
+        guard minRatio > 0 || minCosine != nil, members.count >= 2 else { return true }
+        for i in 1..<members.count {
+            let a = members[i - 1], b = members[i]
+            if minRatio > 0 {
+                let hi = max(a.strength, b.strength)
+                let lo = min(a.strength, b.strength)
+                guard hi > 0, lo / hi >= minRatio else { return false }
+            }
+            if let minCosine {
+                let na = (a.dirX * a.dirX + a.dirY * a.dirY).squareRoot()
+                let nb = (b.dirX * b.dirX + b.dirY * b.dirY).squareRoot()
+                if na > 0, nb > 0 {
+                    let cosine = (a.dirX * b.dirX + a.dirY * b.dirY) / (na * nb)
+                    guard cosine >= minCosine else { return false }
+                }
+            }
+        }
+        return true
+    }
+
     private func checkGroupDeadline(now tNs: Int64) -> Trigger? {
         guard let deadline = groupDeadlineNs, tNs >= deadline else { return nil }
         return closeGroup(now: tNs)
@@ -528,6 +578,7 @@ public final class TapDetector: TapDetecting {
         // have done.
         let score = members.map(\.strength).min() ?? 0
         let fires = firingCounts.contains(count) && members.count == count
+            && membersCohere(members)
         append(TapGroupEvent(tNs: tNs, tapOnsets: members.map(\.tNs),
                              tapCount: count, score: score, fired: fires))
 

@@ -445,6 +445,19 @@ public struct SignalChain: Sendable, Equatable {
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
 
+    /// Signed lateral (x, y) high-passed acceleration at the current sample,
+    /// taken **before** the optional narrow band.
+    ///
+    /// Everything downstream of the high pass throws the direction away on
+    /// purpose — the magnitude is what makes the envelope independent of which
+    /// face was struck. `DetectorConfig.pairDirectionMinCosine` is the one
+    /// consumer that needs it back, to ask whether the two strikes of a gesture
+    /// pushed the chassis the same way. Published from the high pass rather than
+    /// from the resonator because the resonator's output is `|s|`, which has no
+    /// sign at all.
+    public private(set) var lateralX: Double = 0
+    public private(set) var lateralY: Double = 0
+
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
     ///
     /// The high-passed envelope above answers "did something ring". This answers
@@ -501,6 +514,8 @@ public struct SignalChain: Sendable, Equatable {
         fastMagnitude.reset()
         magnitude = 0
         envelope = 0
+        lateralX = 0
+        lateralY = 0
     }
 
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
@@ -517,6 +532,8 @@ public struct SignalChain: Sendable, Equatable {
         var ax = hpX.process(x)
         var ay = hpY.process(y)
         var az = hpZ.process(z)
+        lateralX = ax
+        lateralY = ay
         // Optional narrow band. Off by default, and the three optionals are nil
         // together, so the shipped path costs one branch and no arithmetic.
         if resX != nil {

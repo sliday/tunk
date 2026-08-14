@@ -219,6 +219,46 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Smallest `weakest / strongest` strength ratio a gesture's onsets may
+    /// have and still fire. **0, disabled**, and the measurement below says it
+    /// should stay that way.
+    ///
+    /// The idea: one motor action repeated twice should produce two strikes of
+    /// similar force, while two unrelated bumps have no reason to match. It
+    /// needs no absolute threshold, so surface and posture cancel — which is
+    /// what made it worth measuring after every absolute statistic had failed.
+    ///
+    /// Measured on `data/raw` lap at the resonator operating point (73 real
+    /// detections against the 6 false triggers), the two distributions sit on
+    /// top of each other, and the false triggers are if anything the BETTER
+    /// matched pair:
+    ///
+    ///     ratio     min    p05    p25    p50    p75
+    ///     detected  0.554  0.656  0.770  0.849  0.919
+    ///     false                   0.579  0.677  0.841  0.916  0.978  0.982
+    ///
+    /// Three of the six false triggers are matched to better than 0.91, above
+    /// the detections' own p75. See `notes/PAIR_COHERENCE.md`.
+    public var pairStrengthMinRatio: Double
+
+    /// Smallest cosine between the lateral (x, y) directions of a gesture's
+    /// onsets that still fires. **Nil, disabled.**
+    ///
+    /// Same idea as `pairStrengthMinRatio` on a different axis: a second strike
+    /// from the same finger should push the chassis the way the first one did.
+    /// Direction comes from `SignalChain.lateralX/lateralY` at each onset's peak
+    /// sample, so it is one dot product per gesture and costs nothing.
+    ///
+    /// Also measured, same corpus, same operating point:
+    ///
+    ///     cosine    min     p05     p25    p50    p75
+    ///     detected  -0.999  -0.651  0.951  0.981  0.998
+    ///     false                     -0.616  0.870  0.952  0.958  0.990  0.997
+    ///
+    /// Five of the six false triggers are more direction-coherent than the
+    /// detections' p25. Removing four of them costs 28 of the 73.
+    public var pairDirectionMinCosine: Double?
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -260,7 +300,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
         onsetCeilingG: 2.5,
-        motionGateG: 0
+        motionGateG: 0,
+        pairStrengthMinRatio: 0,
+        pairDirectionMinCosine: nil
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
@@ -269,6 +311,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                pairStrengthMinRatio: Double = 0,
+                pairDirectionMinCosine: Double? = nil,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +325,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.pairStrengthMinRatio = pairStrengthMinRatio
+        self.pairDirectionMinCosine = pairDirectionMinCosine
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +349,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case pairStrengthMinRatio, pairDirectionMinCosine
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +367,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        pairStrengthMinRatio = try c.decodeIfPresent(Double.self, forKey: .pairStrengthMinRatio)
+            ?? d.pairStrengthMinRatio
+        pairDirectionMinCosine = try c.decodeIfPresent(Double.self, forKey: .pairDirectionMinCosine)
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +393,12 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        // Both pair tests are written only when they are switched on, so a
+        // report or a settings file produced by this build with them off is
+        // byte-identical to one produced before they existed. They round-trip
+        // exactly either way: an absent key decodes to "off".
+        if pairStrengthMinRatio != 0 { try c.encode(pairStrengthMinRatio, forKey: .pairStrengthMinRatio) }
+        try c.encodeIfPresent(pairDirectionMinCosine, forKey: .pairDirectionMinCosine)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
