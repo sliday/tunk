@@ -43,12 +43,12 @@ public protocol KeyEventPosting: AnyObject {
     /// `EmittedKeyEvent`: it carries no key, and counting it as one would make
     /// every balance assertion in the suite read three events where two were
     /// posted. Default is a no-op, so a recording double sees exactly the pair.
-    func releaseModifiers() throws
+    func releaseModifiers(asserted: CGEventFlags) throws
 }
 
 public extension KeyEventPosting {
     func validate(_ event: EmittedKeyEvent) throws {}
-    func releaseModifiers() throws {}
+    func releaseModifiers(asserted: CGEventFlags) throws {}
 }
 
 /// Posts to the HID event tap location, the same place hardware key events
@@ -99,11 +99,29 @@ public final class CGEventPoster: KeyEventPosting {
     /// The key-up carries the flags on purpose (a listener reading them off the
     /// release must see the combination), so the release has to be a separate,
     /// keyless event rather than a change to the pair.
-    public func releaseModifiers() throws {
+    ///
+    /// It posts the session's CURRENT modifiers minus the ones this emission
+    /// asserted, not an empty set. Posting `[]` released modifiers Tunk never
+    /// touched: measured, with hardware Caps Lock on, one emission took
+    /// `NSEvent.modifierFlags` from capsLock to 0 and left it there at t+1 s,
+    /// +3 s and +5 s, while `IOHIDGetModifierLockState` still reported the
+    /// hardware bit set. A Control held from a real key event went 0x40000 to 0
+    /// the same way, and every listener saw `flagsChanged flags=0x0` — "the user
+    /// let go of everything". Anything tracking modifiers (Option-drag to copy
+    /// in Finder, shift-to-constrain, the caps-lock warning in a password field,
+    /// key remappers) then believed exactly that, until the user's next
+    /// hardware modifier event.
+    ///
+    /// That is this module's own invariant pointed the wrong way. It was built
+    /// so Tunk never leaves a modifier asserted; it must equally never clear one
+    /// it did not assert.
+    public func releaseModifiers(asserted: CGEventFlags = []) throws {
         guard let cg = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
         else { throw EmitError.eventCreationFailed(keyCode: 0) }
         cg.type = .flagsChanged
-        cg.flags = []
+        // Read what the session holds right now and subtract only our own bits.
+        let live = CGEventSource.flagsState(.combinedSessionState)
+        cg.flags = live.subtracting(asserted)
         cg.setIntegerValueField(.eventSourceUserData, value: Self.userDataTag)
         cg.post(tap: tapLocation)
     }
@@ -154,7 +172,7 @@ public final class RecordingPoster: KeyEventPosting, @unchecked Sendable {
         return _modifierReleases
     }
 
-    public func releaseModifiers() throws {
+    public func releaseModifiers(asserted: CGEventFlags = []) throws {
         lock.lock(); _modifierReleases += 1; lock.unlock()
     }
 

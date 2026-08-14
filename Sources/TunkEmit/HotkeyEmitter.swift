@@ -298,7 +298,8 @@ public final class HotkeyEmitter: @unchecked Sendable {
                 // modifier is most likely to be left asserted, so this must not
                 // be skipped because the up threw.
                 if up.flagsRaw != 0 {
-                    do { try poster.releaseModifiers() } catch { failures.append(error) }
+                    do { try poster.releaseModifiers(asserted: CGEventFlags(rawValue: up.flagsRaw)) }
+                    catch { failures.append(error) }
                 }
             }
 
