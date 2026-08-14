@@ -92,6 +92,33 @@ naturally slower tapper from being failed by a number chosen for someone else,
 and the clamp is now reported to the user instead of applied silently — but it is
 not the lap fix, and nothing here should be read as one.
 
+### Why calibration cannot pick the surface for you
+
+Per-surface calibration helps (the table above), so the obvious next step is to
+detect the surface and switch profiles automatically. The adaptive noise floor is
+the only signal available for that, and it does not carry the information:
+
+```
+median high-passed magnitude, tap sessions
+  desk  0.00011
+  soft  0.00014
+  lap   0.00012
+```
+
+Three surfaces inside a 30 % spread, with typing sessions (0.0005–0.0007)
+an order of magnitude above all of them. What the floor measures is whether the
+user is touching the machine, not what the machine is resting on. Any profile
+switching has to be something the user does deliberately.
+
+### The threshold ceiling, measured on held-out data
+
+Sweeping the threshold from 0.020 to 0.040 g against the held-out sets tops out
+at 95 % pooled (57/60) and never reaches the 98 % bar. Three of the four lap
+misses are a second tap that no threshold in the usable band recovers without
+spending the false-trigger budget. Reported here rather than acted on: these are
+held-out numbers and tuning against them would destroy the only unbiased estimate
+the project has.
+
 **Soft and lap pull in opposite directions.** Every step that helps one costs the
 other about twice as much. Even with perfect per-surface calibration — the PRD's
 own remedy for coupling that varies by surface — lap tops out at 82.5 %.
