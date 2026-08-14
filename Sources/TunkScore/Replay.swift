@@ -184,22 +184,11 @@ enum Replay {
         return result
     }
 
-    /// 99.9th percentile of the sample-to-sample acceleration step.
-    ///
-    /// Needs a few hundred samples before a p99.9 means anything; below that it
-    /// reports 0, which reads as "no evidence" rather than "quiet".
+    /// 99.9th percentile of the sample-to-sample acceleration step. The
+    /// implementation lives in TunkFormat, because the capture tool needs the
+    /// same number to warn an operator before they walk away from a dead phase.
     static func disturbanceP999(of samples: [AccelSample]) -> Double {
-        guard samples.count >= 400 else { return 0 }
-        var steps = [Double]()
-        steps.reserveCapacity(samples.count - 1)
-        for i in 1..<samples.count {
-            let dx = Double(samples[i].x - samples[i - 1].x)
-            let dy = Double(samples[i].y - samples[i - 1].y)
-            let dz = Double(samples[i].z - samples[i - 1].z)
-            steps.append((dx * dx + dy * dy + dz * dz).squareRoot())
-        }
-        steps.sort()
-        return steps[min(steps.count - 1, Int(0.999 * Double(steps.count)))]
+        Disturbance.p999(of: samples)
     }
 
     /// Convenience: load a session off disk and replay it with a fresh detector.

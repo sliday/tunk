@@ -605,11 +605,10 @@ struct Aggregate: Codable {
     /// Confound sessions excluded from the count above because nothing happened
     /// in them. Reported, never credited.
     var inertConfoundSessions: Int = 0
-    /// Floor a confound recording has to clear to count as evidence, in g of
-    /// sample-to-sample step at p99.9. The loudest idle session in `data/raw`
-    /// reads 0.0026 and the one real music session reads 0.0076, so this sits
-    /// between them with margin on both sides.
-    static let minimumConfoundDisturbance = 0.004
+    /// Floor a confound recording has to clear to count as evidence. Shared
+    /// with the capture tool, which applies it live so a dead phase can be
+    /// re-recorded on the spot.
+    static let minimumConfoundDisturbance = Disturbance.confoundFloor
     var durationSeconds: Double = 0
     /// Samples behind `durationSeconds`, so the pass line can derive the actual
     /// rate and compare it against the one the filters were designed for.

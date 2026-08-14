@@ -251,14 +251,20 @@ func guidePhases(taps: Int, typingSec: Double, trackpadSec: Double, confoundSec:
               setup: "Confound: a phone buzzing on the same desk.",
               during: "Let the phone vibrate on the desk beside the machine."),
         Phase(category: .confoundMusic, seconds: confoundSec,
-              setup: "Confound: bass heavy music through the desk.",
-              during: "Play bass heavy music loud enough to feel through the desk."),
+              // The one phase where the headphones rule is wrong, and it has to
+              // say so: everywhere else speakers are contamination, here they
+              // are the whole point.
+              setup: "Confound: bass heavy music through the desk. TAKE THE HEADPHONES OFF for this one.",
+              during: "Headphones off. Play bass heavy music on speakers, loud enough that you can feel the desk. Turn it up until you feel it, not just hear it."),
         Phase(category: .confoundFootfall, seconds: confoundSec,
               setup: "Confound: footfall on a timber floor.",
               during: "Walk past the desk, and let someone else walk past too."),
         Phase(category: .confoundHandling, seconds: confoundSec,
-              setup: "Confound: repositioning, lifting, and cables.",
-              during: "Lift the machine, put it down, slide it about, and plug and unplug a cable."),
+              setup: "Confound: repositioning, lifting, and cables. Keep moving the whole time.",
+              // A count and a cadence, because "lift the machine" over 60 s left
+              // the operator guessing and this is the phase that prices the lap
+              // false-trigger question. One move every five seconds, no gaps.
+              during: "Move the machine about once every five seconds, without stopping. Lift it and put it down, slide it left and right, tilt it, and plug and unplug a cable. Roughly twelve moves before I say stop."),
         Phase(category: .idle, seconds: confoundSec,
               setup: "Idle. Hands off completely.",
               during: "Do not touch the machine or the desk until I say stop."),
@@ -373,6 +379,16 @@ func runGuide(_ args: Args) throws -> Never {
             Runtime.exitNow(2)
         }
 
+        // Typing a note during a phase marks the stream. The one thing an
+        // operator could not do was flag their own mistake: a fumbled gesture
+        // stayed indistinguishable from a clean one until grading, and the
+        // labeller had no reason to drop it. Manual `record` has had this all
+        // along; guided mode, where every long session is actually recorded,
+        // did not.
+        Console.line("  Fumbled one? Type a note and press return — it lands in the stream.")
+        Console.line("")
+        startStdinMarkReader()
+
         var written = [SessionRecorder.Summary]()
         for (i, phase) in phases.enumerated() {
             let header = "PHASE \(i + 1)/\(phases.count)  \(phase.category.rawValue)"
@@ -415,6 +431,7 @@ func runGuide(_ args: Args) throws -> Never {
             Runtime.adopt(nil)
             written.append(s)
             Runtime.printSummary(s)
+            warnIfInert(summary: s, phase: phase, surface: surface, cue: cue)
             if !finishedCleanly { break }
         }
 
@@ -428,6 +445,27 @@ func runGuide(_ args: Args) throws -> Never {
         Console.line("  Verify each one:  tunk-capture verify <dir>")
         cue.say("Capture complete.")
     }
+}
+
+/// Tells the operator, while they are still sitting there, that the confound
+/// phase they just recorded contains nothing.
+///
+/// `data/raw` holds a `confound_music` session quieter than an empty room. It
+/// was graded as evidence for months. The harness now refuses to credit one,
+/// but refusing at grading time costs a whole recording session; refusing here
+/// costs a minute.
+func warnIfInert(summary: SessionRecorder.Summary, phase: Phase, surface: Surface, cue: Cue) {
+    guard phase.category.isConfound, summary.sampleCount >= 400 else { return }
+    guard let samples = try? Session(directory: summary.dir).samples() else { return }
+    let level = Disturbance.p999(of: samples)
+    guard level < Disturbance.confoundFloor else { return }
+    Console.line("")
+    Console.line(String(format: "  THIS PHASE IS EMPTY. Peak chassis movement %.4f g, below the %.4f g",
+                        level, Disturbance.confoundFloor))
+    Console.line("  floor — quieter than an idle room. The scorer will not count it.")
+    Console.line("  Re-record it:  tunk-capture guide --surface \(surface.rawValue) --only \(phase.category.rawValue)")
+    Console.line("")
+    cue.say("That phase recorded nothing. It needs doing again, harder.")
 }
 
 /// What this run will record, printed before anything opens the sensor. The

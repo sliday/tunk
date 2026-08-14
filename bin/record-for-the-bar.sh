@@ -26,6 +26,17 @@ SPLIT=test
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
+# Waits for the operator rather than trusting a 12-second countdown to cover
+# "go and sit down with the laptop on your lap". Skipped when stdin is not a
+# terminal, so the guard test can still scrape this file.
+pause() {
+    say "$*"
+    if [ -t 0 ]; then
+        printf '  Press return when you are settled and ready. '
+        read -r _ || true
+    fi
+}
+
 if [ "${1:-}" = "--dry-run" ]; then
     say "Plan (nothing will be recorded)"
     for s in desk soft lap; do
@@ -40,7 +51,7 @@ fi
 $CAPTURE doctor --seconds 3
 
 for surface in desk soft lap; do
-    say "=== $surface : put the machine on the $surface, then follow the prompts ==="
+    pause "=== $surface : put the machine on the $surface ==="
 
     # The make-or-break metric, out of sample. Five minutes each, because the
     # input gate mutes the detector for about 86 % of typing time and the
@@ -57,7 +68,10 @@ for surface in desk soft lap; do
              --notes "held-out confounds; handling prices the lap false triggers"
 done
 
-say "=== lap, larger tap deck : sixty gestures ==="
+# The phase before this one had the operator lifting the machine, sliding it
+# about, and unplugging cables. Where it ended up is anyone's guess, and this
+# deck is the recording that decides whether lap can express 98 % at all.
+pause "=== lap, larger tap deck : sixty gestures — put the machine back on your lap, settled ==="
 $CAPTURE guide --surface lap --only tap_deck --taps 60 \
          --out "$OUT" --split "$SPLIT" \
          --notes "larger held-out lap deck so 98 % is expressible"
