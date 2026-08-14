@@ -429,6 +429,55 @@ caution applies as to every other training number in this file: the four-round
 pattern has been that train gains of six to eight gestures deliver one on
 held-out.
 
+## A labelling bug that is real, and a fix that was worse
+
+An audit found a source-level defect in the labeller. `Sources/TunkLabel/main.swift`
+walks candidate peaks in descending amplitude and commits to the FIRST pair
+inside [80, 600] ms. Its own comment says "the two strongest peaks in the window
+that sit a plausible interval apart", which is not what it does: when two
+partners are of similar height it takes whichever the amplitude sort happened to
+put first, however far away it is.
+
+Session 13e15a group 1 is the proof. Peaks at +905 ms (0.04713 g) and +1767 ms
+(0.04963 g) against a head at +1170 ms. A 5 % amplitude difference bought a
+**597 ms** pair — one millisecond under the tool's own cap, the widest label in
+the corpus — over a legal **265 ms** one. The detector was then scored as missing
+a gesture it had read correctly, and its correct fire counted as a false trigger.
+One labelling bug, charged twice.
+
+### The fix made it worse, and was reverted
+
+Rule tried: among legal pairs, keep those whose weaker peak is within 80 % of the
+best available, then take the tightest. Applied blind to both data roots, it
+moved **32 of 183** labelled groups, and the new intervals collapsed onto the
+80 ms floor:
+
+```
+13e15a  g0  259 -> 86 ms     g5  495 -> 101 ms    g18  284 -> 83 ms
+3fee5b  g14 189 -> 89 ms     a4a257 g15 185 -> 93 ms
+```
+
+Those are ring lobes, not second taps. The rule replaced a bias toward
+implausibly WIDE pairs with a worse bias toward implausibly TIGHT ones — the
+exact failure its own comment warned about. It also rewrote six held-out groups
+toward shorter intervals, which would have flattered the detector, since shorter
+intervals fit the 220 ms join window.
+
+Reverted. Ground truth is unchanged and the held-out numbers are as before.
+
+### What this leaves
+
+Only 5 of 183 labelled intervals exceed 300 ms, and 4 of those sit in one lap
+session. So the defect is narrow, and every general repair tried either fails to
+fix the proven case (maximising the weaker peak still picks the 597 ms pair) or
+does far more damage than it repairs.
+
+The honest reading is that ground truth is *fragile in exactly the sessions where
+the detector struggles*, which is the worst possible place for it to be fragile,
+and the corpus cannot currently distinguish "the operator tapped 597 ms apart"
+from "the labeller mispaired". Settling it needs a recording where the operator
+confirms each gesture, not a cleverer rule.
+
 ## Root cause: the sensor is band-limited near 50 Hz
 
 This is the finding that explains all eleven failed mechanisms, and it was found
