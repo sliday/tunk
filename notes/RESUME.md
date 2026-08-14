@@ -1,6 +1,6 @@
 # Resuming
 
-Everything is committed and pushed. 306 tests pass. Working tree clean.
+Everything is committed and pushed. 308 tests pass. Working tree clean.
 
 ## Where the bar stands
 
@@ -96,8 +96,12 @@ Held-out came out clean. Fixed in the process:
 
 ## Still open, and small
 
-- **`--collect-taps`** is wired and receives every sample; the onset-to-snippet
-  path has never fired because it needs a real tap. One tap settles it.
+- ~~`--collect-taps` onset-to-snippet path never exercised.~~ **Closed.** It was
+  never a data problem: the detector makes real onsets from synthetic samples,
+  and the file simply lived in an executable target no test can import. Moved to
+  `TunkFormat`, covered by `PassiveCaptureEndToEndTests`. What still needs a real
+  tap is whether ordinary use produces onsets worth collecting, which is a claim
+  about the world rather than about the code.
 - **The site's call to action** points at a private repo and 404s.
 - **The motion gate** ships disabled. It needs `confound_handling` recordings.
 - **Per-surface calibration profiles** would help (lap tops at 82.5 % at its own

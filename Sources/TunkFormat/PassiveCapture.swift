@@ -1,6 +1,5 @@
 import Foundation
 import TunkCore
-import TunkFormat
 
 /// Keeps a rolling window of the accelerometer and writes out the seconds
 /// surrounding anything tap-shaped, so ordinary use of the app produces real
@@ -34,31 +33,47 @@ import TunkFormat
 ///
 /// ## Verification status, stated plainly
 ///
-/// Wired and confirmed receiving: the collector is constructed at engine start
-/// and takes every sample and every input event. **The onset-to-snippet path has
-/// not been exercised end to end**, because doing so needs an onset, and an
-/// onset needs a real tap. Speaker impulses at full volume, sparse enough not to
-/// lift the adaptive noise floor, still fall under `DSPTuning.minThresholdG`;
-/// the Taptic Engine measures 2.5x the noise floor against the ~6x needed. The
-/// format contract a snippet must satisfy is under test in
-/// `PassiveCaptureTests`; the trigger path is not, and one real tap settles it.
+/// Wired, receiving, and now exercised end to end. `PassiveCaptureTests` covers
+/// the on-disk format; `PassiveCaptureEndToEndTests` drives a real detector over
+/// synthetic samples and requires a readable snippet on disk, with the onset
+/// that caused it recorded inside.
+///
+/// This header used to say the path could not be tested "because doing so needs
+/// an onset, and an onset needs a real tap". That conflated a real TAP with a
+/// real ONSET: the detector produces genuine onsets from synthetic samples, and
+/// this collector cannot tell where its samples came from. The actual obstacle
+/// was that the file lived in an executable target, which no test can import.
+/// Moving it here cost nothing and closed the gap.
+///
+/// What still needs a real tap is the claim that ordinary use PRODUCES onsets
+/// worth collecting — speaker impulses fall under `DSPTuning.minThresholdG` and
+/// the Taptic Engine measures 2.5x the noise floor against the ~6x needed. That
+/// is a statement about the world, not about this code.
 ///
 /// The written session is marked `passive` in its notes and carries
 /// `expected_triggers = 0`, so the harness treats it as a false-positive set
 /// rather than a detection set. Nothing downstream can mistake it for prompted
 /// ground truth.
-final class PassiveCapture {
-    struct Config {
+public final class PassiveCapture {
+    public struct Config {
+        public init(preRollSeconds: Double = 2.0, postRollSeconds: Double = 2.0,
+                    maxSnippets: Int = 200, outputRoot: URL) {
+            self.preRollSeconds = preRollSeconds
+            self.postRollSeconds = postRollSeconds
+            self.maxSnippets = maxSnippets
+            self.outputRoot = outputRoot
+        }
+
         /// Seconds kept before a candidate. Long enough to hold the run-up and
         /// the quiet before it.
-        var preRollSeconds: Double = 2.0
+        public var preRollSeconds: Double = 2.0
         /// Seconds kept after, which must cover the confirm window and the ring
         /// of a second tap.
-        var postRollSeconds: Double = 2.0
+        public var postRollSeconds: Double = 2.0
         /// Stop after this many snippets, so an afternoon of use does not fill
         /// the disk unattended.
-        var maxSnippets: Int = 200
-        var outputRoot: URL
+        public var maxSnippets: Int = 200
+        public var outputRoot: URL
     }
 
     private let config: Config
@@ -75,19 +90,19 @@ final class PassiveCapture {
     /// Deliberately looser than a trigger: a single onset is enough, because a
     /// tap the grouping logic rejected is exactly the kind of waveform worth
     /// having.
-    init(config: Config, sampleRateHz: Double = 796.3) {
+    public init(config: Config, sampleRateHz: Double = 796.3) {
         self.config = config
         self.ringCapacity = Int((config.preRollSeconds + config.postRollSeconds) * sampleRateHz) + 64
     }
 
-    var snippetsWritten: Int {
+    public var snippetsWritten: Int {
         lock.lock(); defer { lock.unlock() }
         return written
     }
 
-    var isFull: Bool { snippetsWritten >= config.maxSnippets }
+    public var isFull: Bool { snippetsWritten >= config.maxSnippets }
 
-    func ingest(sample: AccelSample) {
+    public func ingest(sample: AccelSample) {
         lock.lock()
         ring.append(sample)
         if ring.count > ringCapacity { ring.removeFirst(ring.count - ringCapacity) }
@@ -97,7 +112,7 @@ final class PassiveCapture {
         if let due, sample.tNs >= due { flush(triggeredAt: due) }
     }
 
-    func ingest(input: InputRecord) {
+    public func ingest(input: InputRecord) {
         lock.lock()
         inputs.append(input)
         // Keep only what the ring can still be about.
@@ -108,7 +123,7 @@ final class PassiveCapture {
     }
 
     /// Call when the detector reports an onset. Starts or extends the window.
-    func noteCandidate(atNs tNs: Int64, strength: Double, suppressed: Bool) {
+    public func noteCandidate(atNs tNs: Int64, strength: Double, suppressed: Bool) {
         guard !isFull else { return }
         lock.lock()
         marks.append(Mark(tNs: tNs,
@@ -183,10 +198,10 @@ final class PassiveCapture {
 
 /// Wiring for `tunk --collect-taps [dir]`. Kept apart from `PassiveCapture` so
 /// the capture logic has no opinion about how it is switched on.
-enum PassiveCollection {
+public enum PassiveCollection {
     nonisolated(unsafe) private(set) static var requestedRoot: URL?
 
-    static func enable(at path: String) {
+    public static func enable(at path: String) {
         let url = URL(fileURLWithPath: path, isDirectory: true)
         requestedRoot = url
         FileHandle.standardError.write(Data("""
@@ -201,7 +216,7 @@ enum PassiveCollection {
         """.utf8))
     }
 
-    static func makeIfRequested() -> PassiveCapture? {
+    public static func makeIfRequested() -> PassiveCapture? {
         guard let root = requestedRoot else { return nil }
         return PassiveCapture(config: .init(outputRoot: root))
     }

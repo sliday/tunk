@@ -1,4 +1,5 @@
 import AppKit
+import TunkFormat
 
 // LSUIElement lives in the bundle's Info.plist (see dist/Info.plist). The
 // activation policy is also set in code so that running the bare SwiftPM binary
