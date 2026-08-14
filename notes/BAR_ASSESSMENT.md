@@ -429,6 +429,48 @@ caution applies as to every other training number in this file: the four-round
 pattern has been that train gains of six to eight gestures deliver one on
 held-out.
 
+## The join window, re-measured at the resonator point, and the default not flipped
+
+The window was measured saturated at the OLD operating point. At the resonator
+point it reopens on training data — 220 ms gives lap 91.25 %, 240 ms gives
+93.75 %, and 240 ms still clears the latency bar at p95 246.5 ms. Three
+independent critics graded 220, 230 and 240 ms on held-out, blind to each other.
+
+**It did not transfer.** All three windows give identical held-out results —
+desk 20/20, soft 20/20, lap 19/20, pooled 59/60, zero false triggers — and the
+wider ones simply charge every gesture on every surface 10 or 20 ms more
+latency. Two of three critics called their own candidate strictly dominated.
+The shipped 220 ms window stands.
+
+### The default stays OFF, against one critic's advice
+
+The operating-point critic recommended making the resonator the default. The
+mechanism's own critic, who examined it far more closely, said the opposite:
+land it with the knob off, do not flip the default yet. Taking the more
+cautious verdict, for three reasons.
+
+1. **Two of the three held-out lap recoveries are questionable.** Groups 1 and 3
+   have onset spreads of 41.3 and 61.3 ms, the two largest on the held-out set.
+   In both, the first onset leads the label by the session's ordinary 30-40 ms,
+   while the SECOND onset lands 81-92 ms early. `strictDetectionRate` passes
+   them because it measures the SPREAD of residuals, which cancels a lead common
+   to every onset by design — it cannot see a shift in one onset only. And
+   41-61 ms is exactly lap ring-lobe scale. Only group 5 is a clean recovery.
+   **This is a real limitation of the strict measure** and it should not be
+   quoted as if it settled the question.
+2. **The false-trigger cost is unpriced.** Train lap in-deck false triggers
+   double, 3 -> 6. `data/holdout` has no typing, idle or confound sessions, so
+   its zero establishes only that the detector does not double-fire inside a tap
+   deck.
+3. Flipping it changes what "a tap" means throughout the synthetic fixtures. The
+   measured chain gain moves from 0.68 to **0.0789** — the resonator passes a
+   narrow slice of a broadband impulse — so a synthetic tap needs about three
+   times the raw amplitude for the same envelope. That migration is real work
+   and should be done deliberately, not as a side effect.
+
+Flipping the default would not reach the lap bar in any case: 95 % against 98 %,
+and at n=20 only 20/20 will do.
+
 ## One lap session carries most of the remaining lap deficit
 
 Per session at the resonator operating point, training data:
