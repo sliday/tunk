@@ -86,6 +86,111 @@ public struct SlidingMax: Sendable, Equatable {
     }
 }
 
+/// Causal matched filter for "a NEW strike is arriving here", with the chassis
+/// ring projected out of the template.
+///
+/// ## Why this exists
+///
+/// The envelope answers "how big is the signal right now". On a lap that
+/// question cannot separate the two halves of a double-tap, because the second
+/// strike and the first strike's ring are the same size in the envelope. This
+/// filter asks a different question: how much of the last 25 ms looks like a
+/// fresh impulse, **after removing whatever a decaying ring would explain**.
+///
+/// ## How the taps were derived
+///
+/// Two 20-sample averages were built from `data/raw` tap decks, on the
+/// high-passed vector magnitude, each window normalised to unit length before
+/// averaging so a loud tap does not dominate a quiet one:
+///
+/// - a STRIKE template, centred on the peak of every `index_in_group == 0`
+///   onset. First strikes are unambiguous — nothing precedes them, so there is
+///   no ring underneath.
+/// - a RING template, centred on the second lobe of those same first strikes,
+///   at +26.4 ms, which is where a damped chassis puts it.
+///
+/// The two are 0.87 correlated, which is the whole problem stated as a number.
+/// What ships is the strike template with the ring component projected out
+/// (Gram-Schmidt) and renormalised, so the filter responds to the part of a
+/// strike a ring cannot imitate. Measured on 123 labelled second strikes
+/// against 671 ring lobes, at a bar admitting the same number of lobes as the
+/// shipped envelope bar admits:
+///
+///     statistic                    2nd strikes admitted   lap
+///     envelope (shipped)                 110/123          67/80
+///     plain matched filter                84/123          41/80
+///     normalised cross-correlation        51/123          48/80   desk 0/23
+///     ring-projected, unnormalised       120/123          77/80
+///
+/// **Normalising by local energy divides out the very ring the filter is meant
+/// to see past**, which is why the NCC row collapses on desk and is not what
+/// ships. The output here is deliberately unnormalised and therefore still in g.
+///
+/// `gain` restores the envelope's scale: it is the median ratio of envelope
+/// peak to filter peak over the same 123 first strikes, so a threshold in g
+/// means roughly the same thing on either signal and the shipped 0.032 does not
+/// have to be reinterpreted.
+public struct MatchedStrikeFilter: Sendable, Equatable {
+    /// Unit-norm taps, oldest first. `taps[peakIndex]` aligns with the strike's
+    /// envelope peak.
+    public let taps: [Double]
+    public let peakIndex: Int
+    public let gain: Double
+
+    private var ring: [Double]
+    private var index: Int = 0
+
+    /// How far the filter's response lags the physical strike, in samples. The
+    /// newest window a causal filter can score ends at the current sample, and
+    /// the strike's peak sits `peakIndex` from that window's start.
+    public var delaySamples: Int { taps.count - 1 - peakIndex }
+
+    public init(taps: [Double], peakIndex: Int, gain: Double) {
+        self.taps = taps
+        self.peakIndex = peakIndex
+        self.gain = gain
+        self.ring = Array(repeating: 0, count: max(1, taps.count))
+    }
+
+    public mutating func reset() {
+        for i in ring.indices { ring[i] = 0 }
+        index = 0
+    }
+
+    /// Correlation of the last `taps.count` samples against the template, in g.
+    /// Negative correlation means "this does not look like a strike at all", and
+    /// is reported as zero rather than as a magnitude.
+    @inline(__always)
+    public mutating func process(_ x: Double) -> Double {
+        ring[index] = x
+        index = (index + 1) % ring.count
+        var acc = 0.0
+        var r = index                       // oldest sample
+        for k in taps.indices {
+            acc += taps[k] * ring[r]
+            r += 1
+            if r == ring.count { r = 0 }
+        }
+        return acc > 0 ? acc * gain : 0
+    }
+
+    /// Fitted on `data/raw` first strikes, pooled across all seven tap decks.
+    /// Leave-one-session-out cosine against this vector is 0.98 or better on
+    /// every session, so no single recording invents it. Per-surface templates
+    /// differ (desk cosine 0.75, lap 0.97) but the surface is not detectable at
+    /// runtime, so the pooled template is the only one that can ship.
+    public static let `default` = MatchedStrikeFilter(
+        taps: [
+            -0.298319497, -0.275965668, -0.263674244, -0.221948152,
+            -0.152444109, -0.075193252, -0.005318239, +0.041896278,
+            +0.032598154, -0.043835328, -0.110543129, -0.098696635,
+            +0.024422441, +0.172835643, +0.300429830, +0.387736266,
+            +0.422322585, +0.369456529, +0.251085810, +0.107130084,
+        ],
+        peakIndex: 16,
+        gain: 0.9752)
+}
+
 /// One-pole low pass. Used to track where the accelerometer settles, so
 /// "the machine is being moved" can be told apart from "the case rang".
 public struct OnePoleLowPass: Sendable, Equatable {
@@ -268,6 +373,11 @@ public struct DSPTuning: Sendable, Equatable {
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
 
+    /// Template for the ring-projected matched filter. Filter design, so it
+    /// lives here; whether it is used at all is
+    /// `DetectorConfig.matchedFilterWeight`, which the settings panel owns.
+    public var matchedFilter: MatchedStrikeFilter = .default
+
     public static let `default` = DSPTuning(
         sampleRateHz: 796.3,
         highPassHz: 20.0,
@@ -350,9 +460,43 @@ public struct SignalChain: Sendable, Equatable {
     private var settledMagnitude: OnePoleLowPass
     private var fastMagnitude: OnePoleLowPass
     private var magnitude: Double = 0
+    private var matched: MatchedStrikeFilter
+
+    /// How much of the envelope comes from the ring-projected matched filter
+    /// instead of the plain transient magnitude. **0 ships**, and at 0 the
+    /// filter is not even evaluated, so the envelope is bit-for-bit what it was
+    /// before this stage existed and the per-sample cost is unchanged.
+    ///
+    /// 1.0 replaces the envelope with the matched filter outright. Values in
+    /// between mix them, which is what the sweep drives. Written by
+    /// `TapDetector` from `DetectorConfig.matchedFilterWeight`.
+    public var matchedFilterWeight: Double = 0
+
+    /// Run the matched filter at all. The blend above is one consumer; the
+    /// detector's second onset path (`DetectorConfig.matchedFilterAdmitG`) is
+    /// the other, and it reads `strikeScore` without touching the envelope.
+    /// False ships, and while it is false the filter costs nothing per sample.
+    public var evaluateMatchedFilter: Bool = false
+
+    /// "How much of the last 25 ms looks like a fresh strike", in g, with the
+    /// ring projected out. Zero unless `evaluateMatchedFilter` is set.
+    public private(set) var strikeScore: Double = 0
 
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
+
+    /// How far the envelope now lags the physical strike, in samples, given the
+    /// current mix. Zero when the matched filter is off. The detector subtracts
+    /// the matching interval from every onset timestamp, so switching the front
+    /// end on does not push the trigger later — the lag is known, constant, and
+    /// entirely in the past, which is the only kind of correction a causal
+    /// detector may make.
+    public var envelopeDelaySamples: Double {
+        matchedFilterWeight > 0 ? Double(matched.delaySamples) * min(matchedFilterWeight, 1.0) : 0
+    }
+
+    /// Group delay of `strikeScore` on its own, in samples.
+    public var strikeScoreDelaySamples: Int { matched.delaySamples }
 
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
     ///
@@ -389,6 +533,7 @@ public struct SignalChain: Sendable, Equatable {
                                           sampleRateHz: tuning.sampleRateHz)
         fastMagnitude = OnePoleLowPass(cutoffHz: tuning.settleFastHz,
                                        sampleRateHz: tuning.sampleRateHz)
+        matched = tuning.matchedFilter
     }
 
     public mutating func reset() {
@@ -396,6 +541,7 @@ public struct SignalChain: Sendable, Equatable {
         hpY.reset()
         hpZ.reset()
         previousSquared = 0
+        matched.reset()
         peak.reset()
         floorTracker.reset()
         settledMagnitude.reset()
@@ -421,7 +567,20 @@ public struct SignalChain: Sendable, Equatable {
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
-        envelope = peak.process(pair)
+
+        // The matched filter runs on the plain high-passed magnitude, not on the
+        // quadrature pair: the pair exists to make a single number repeatable
+        // against sampling phase, and it does that by throwing away the shape
+        // the template is looking for.
+        var shaped = pair
+        if evaluateMatchedFilter {
+            strikeScore = matched.process(squared.squareRoot())
+            if matchedFilterWeight > 0 {
+                let w = min(matchedFilterWeight, 1.0)
+                shaped = (1 - w) * pair + w * strikeScore
+            }
+        }
+        envelope = peak.process(shaped)
         if !holdNoiseFloor { floorTracker.update(envelope) }
         return envelope
     }

@@ -133,6 +133,9 @@ public final class TapDetector: TapDetecting {
         self.effectiveConfig = config.madeCoherent()
         self.firingCounts = Self.resolveFiringCounts(config: self.effectiveConfig,
                                                      armed: armedTapCounts)
+        // Stored-property assignment in `init` does not run `didSet`, so the
+        // front-end knobs have to be pushed by hand here as well.
+        applyFrontEndConfig()
     }
 
     // MARK: - State
@@ -183,6 +186,13 @@ public final class TapDetector: TapDetecting {
     private var onsetLog: [OnsetEvent] = []
     private var groupLog: [TapGroupEvent] = []
     private var firingCounts: Set<Int>
+    /// Constant front-end group delay, subtracted from every onset timestamp.
+    /// Zero unless `DetectorConfig.matchedFilterWeight` is on. See `onsetLag`.
+    private var onsetLagNs: Int64 = 0
+    /// Same, for onsets declared by the matched filter alone. That path reads
+    /// `strikeScore` directly, so it carries the filter's whole group delay
+    /// whatever the blend weight is.
+    private var admitLagNs: Int64 = 0
 
     // MARK: - TapDetecting
 
@@ -206,7 +216,9 @@ public final class TapDetector: TapDetecting {
 
         if pending != nil {
             pending!.peak = max(pending!.peak, envelope)
-            if sample.tNs - pending!.tNs >= tuning.peakHoldNs { publishPending() }
+            // `pending.tNs` is the back-dated onset, so the lag goes back on here
+            // to keep the peak tracked for a real `peakHoldNs`.
+            if sample.tNs - pending!.tNs >= tuning.peakHoldNs + onsetLagNs { publishPending() }
         }
 
         let threshold = currentThreshold()
@@ -216,7 +228,11 @@ public final class TapDetector: TapDetecting {
         if armed {
             if sampleIndex > tuning.warmupSamples && envelope >= threshold {
                 armed = false
-                lastOnsetNs = sample.tNs
+                // The strike happened `onsetLagNs` ago, in samples this detector
+                // has already seen. Dating the onset from the crossing instead
+                // would push the trigger later by the front end's group delay.
+                let onsetNs = sample.tNs - onsetLagNs
+                lastOnsetNs = onsetNs
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
 
                 // The chassis is in motion, not merely ringing. Lifting the
@@ -228,16 +244,40 @@ public final class TapDetector: TapDetecting {
                 let moving = effectiveConfig.motionGateG > 0
                     && chain.bulkMotion > effectiveConfig.motionGateG
                 if moving {
-                    append(OnsetEvent(tNs: sample.tNs, strength: envelope, suppressedByGate: true))
+                    append(OnsetEvent(tNs: onsetNs, strength: envelope, suppressedByGate: true))
                     clearGroup()
                 } else {
-                    onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
+                    onsetTrigger = acceptOnset(at: onsetNs, strength: envelope)
                 }
             }
         } else if envelope <= threshold * tuning.releaseFraction,
                   let onset = lastOnsetNs,
                   sample.tNs - onset >= tuning.onsetDebounceNs {
             armed = true
+        } else if effectiveConfig.matchedFilterAdmitG > 0,
+                  chain.strikeScore >= effectiveConfig.matchedFilterAdmitG,
+                  let onset = lastOnsetNs,
+                  sample.tNs - onset >= tuning.onsetDebounceNs {
+            // Deaf, and a fresh strike arrived anyway. The envelope cannot say
+            // so — the first strike's ring is still holding it up — but the
+            // matched filter is looking at shape, not level, and the ring has
+            // been projected out of its template.
+            //
+            // The detector stays disarmed: this path does not re-arm on a tail,
+            // it declares one onset on evidence and leaves the envelope's own
+            // hysteresis to decide when listening resumes. `onsetDebounceNs`
+            // still bounds how often it can speak.
+            let onsetNs = sample.tNs - admitLagNs
+            lastOnsetNs = onsetNs
+            noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
+            let moving = effectiveConfig.motionGateG > 0
+                && chain.bulkMotion > effectiveConfig.motionGateG
+            if moving {
+                append(OnsetEvent(tNs: onsetNs, strength: chain.strikeScore, suppressedByGate: true))
+                clearGroup()
+            } else {
+                onsetTrigger = acceptOnset(at: onsetNs, strength: chain.strikeScore)
+            }
         }
 
         // Onsets first, deadlines second: an onset landing on the same sample as
@@ -338,6 +378,35 @@ public final class TapDetector: TapDetecting {
     private func refreshDerivedConfig() {
         effectiveConfig = config.madeCoherent()
         firingCounts = Self.resolveFiringCounts(config: effectiveConfig, armed: armedTapCounts)
+        applyFrontEndConfig()
+    }
+
+    /// Push the front-end knobs into the signal chain and recompute the lag the
+    /// onset timestamps are corrected by. One place, called from `init` (which
+    /// does not run `didSet`) and from every config write.
+    private func applyFrontEndConfig() {
+        chain.matchedFilterWeight = effectiveConfig.matchedFilterWeight
+        chain.evaluateMatchedFilter = effectiveConfig.matchedFilterWeight > 0
+            || effectiveConfig.matchedFilterAdmitG > 0
+        onsetLagNs = Self.lagNs(samples: chain.envelopeDelaySamples, tuning: tuning)
+        admitLagNs = chain.evaluateMatchedFilter
+            ? Self.lagNs(samples: Double(chain.strikeScoreDelaySamples), tuning: tuning)
+            : 0
+    }
+
+    /// The front end's group delay, in ns, as a whole number of sample periods.
+    ///
+    /// The matched filter cannot respond to a strike until the strike is inside
+    /// its window, so its peak lands a fixed few samples after the strike. Every
+    /// onset timestamp has that constant subtracted, which is not lookahead: the
+    /// correction points backwards into samples already ingested, it is the same
+    /// for every onset, and it is zero unless the filter is mixed in.
+    ///
+    /// Without it, switching the front end on would push every trigger later by
+    /// the same amount and spend latency the budget does not have.
+    private static func lagNs(samples: Double, tuning: DSPTuning) -> Int64 {
+        guard samples > 0, tuning.sampleRateHz > 0 else { return 0 }
+        return Int64((samples / tuning.sampleRateHz * 1_000_000_000).rounded())
     }
 
     private func currentThreshold() -> Double {

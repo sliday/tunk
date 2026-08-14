@@ -509,11 +509,12 @@ Closing lap needs one of:
 
 1. ~~A latency budget above 250 ms.~~ **Measured and closed.** The window
    saturates at 280 ms and lap tops out at 77.5 % with an unlimited budget.
-2. **A front end that separates a strike from a ring at the same amplitude.**
-   Every mechanism tried operates on the existing envelope, and on a lap the
-   second strike and the first strike's tail are the same size in that envelope.
-   This is the only remaining candidate and it is research, not tuning: a new
-   front end, re-tuned from scratch, re-graded on all three surfaces.
+2. ~~A front end that separates a strike from a ring at the same amplitude.~~
+   **Attempted and measured shut**, see the matched-filter section below. A
+   causal correlator against a strike template with the ring projected out cures
+   the deafness outright (the signal falls back between the strikes in 80/80 lap
+   gestures) and still loses: pooled detection 82.11 % to 62.60 %, because
+   re-arming and hearing the ripple are the same act.
 3. **Shipping lap as unsupported**, and saying so.
 
 Ten mechanisms have now been built and independently graded — four amplitude,
@@ -521,6 +522,174 @@ three re-arm, plus threshold, debounce and window sweeps. None reached the bar
 on lap. The evidence that this is structural rather than a tuning failure is no
 longer one measurement; it is ten, from agents that did not see each other's
 work, every one graded on data its builder could not touch.
+
+## Matched filter: the ring projected out of the front end, and measured shut
+
+Candidate 2 above asked for a front end that separates a strike from a ring at
+the same amplitude. This is the first mechanism to attack the ring itself rather
+than threshold around it, and it does not reach the bar. Both knobs ship at 0.
+
+### What was built
+
+Two 20-sample (25 ms) templates, on the high-passed vector magnitude, each window
+normalised to unit length before averaging so a loud tap cannot dominate a quiet
+one, pooled across all seven `data/raw` tap decks:
+
+- a STRIKE template, centred on the peak of every `index_in_group == 0` onset.
+  First strikes are unambiguous: nothing precedes them, so there is no ring
+  underneath.
+- a RING template, centred on the second lobe of those same first strikes, at
+  +26.4 ms, where the damped chassis puts it.
+
+The two templates correlate at **0.874**, which is the whole problem written as
+one number. What runs is the strike template with the ring component projected
+out and renormalised, correlated causally against the live signal, so the filter
+answers "how much of the last 25 ms looks like a fresh impulse, after removing
+whatever a decaying ring would explain". It is unnormalised, so its output stays
+in g, and a fixed gain (0.9752, the median ratio of envelope peak to filter peak
+over 123 first strikes) keeps the shipped 0.032 g bar meaning the same thing.
+
+Leave-one-session-out cosine against the pooled template is 0.98 or better on
+every session, so no single recording invents it. Per-surface templates do
+differ (desk cosine 0.75, soft 0.78, lap 0.97), and the pooled template is
+therefore mostly lap's, but the surface is not detectable at runtime so a
+per-surface template cannot ship anyway.
+
+### Measure first: the offline separation
+
+123 labelled second strikes against 671 ring lobes (local envelope maxima 30 to
+250 ms after a first strike, at least 40 ms from any label). At a bar admitting
+the same number of ring lobes as the shipped envelope bar admits:
+
+| statistic | 2nd strikes admitted | lap | of the 13 under-bar lap strikes |
+|---|---|---|---|
+| envelope (shipped) | 110/123 | 67/80 | 0/13 |
+| plain matched filter | 84/123 | 41/80 | 0/13 |
+| normalised cross-correlation | 51/123 | 48/80 (desk **0/23**) | 12/13 |
+| **ring-projected, unnormalised** | **120/123** | **77/80** | 10/13 |
+
+**Normalising by local energy divides out the very ring the filter exists to see
+past.** Amplitude-matched on lap the NCC scores AUC 0.565 against the envelope's
+0.842, and on desk it admits nothing at all. That row is the reason the shipped
+statistic is unnormalised. The two-template forms (ring projected out, and a
+strike-minus-ring likelihood ratio) both reach lap AUC 0.88 amplitude-matched
+against the envelope's 0.84.
+
+The deafness test looked decisive. Per lap gesture, does the signal fall back
+under `releaseFraction * threshold` between the two strikes, so the detector
+could re-arm?
+
+```
+                    falls back    falls back AND clears the bar at the 2nd strike
+ring-projected MF   80/80         62/80
+envelope            (65/80 by the same test)
+```
+
+Deafness is cured outright: the ring-suppressed signal falls back in **every**
+lap gesture. That is the measurement that justified building it.
+
+### What the harness said
+
+`matchedFilterWeight` mixes the filter into the envelope; 1.0 replaces it.
+`data/raw`, threshold unchanged:
+
+| weight | pooled | desk | soft | lap | typing FP | FP/20min | p95 |
+|---|---|---|---|---|---|---|---|
+| 0 (ships) | 82.11 % | 95.65 % | 100 % | 73.75 % | 0 | 1.22 | 225.2 ms |
+| 0.2 | 69.92 % | | | | 0 | 1.22 | 225.2 ms |
+| 0.4 | 65.85 % | | | | 0 | 0.41 | 225.2 ms |
+| 0.6 | 62.60 % | | | | 0 | 0.00 | 226.4 ms |
+| 0.8 | 63.41 % | | | | 0 | 0.00 | 226.4 ms |
+| 1.0 | 62.60 % | 95.65 % | 60.00 % | 53.75 % | 0 | 0.00 | 225.2 ms |
+
+Re-sweeping the threshold on the new front end does not rescue it: the best
+value is 0.024, at 69.92 % pooled, still twelve points under baseline. Every
+swept value held typing false triggers at zero.
+
+**Why it fails is the interesting part, and it is the same wall as before.**
+Replacing the envelope also replaces its hysteresis. The ring-suppressed signal
+collapses between lobes, the detector re-arms, and every later lobe that still
+clears the bar becomes its own onset: the soft session went from 40 declared
+onsets to 48, and the extra ones sit 109 to 138 ms after a real strike, inside
+the join window, turning doubles into ungrouped triples. Curing deafness and
+hearing the ripple are the same act, measured for the eighth time.
+
+The offline table above missed this because it scored the statistic at candidate
+positions without simulating the arm state. A statistic that admits fewer ring
+lobes in absolute terms can still produce more onsets, if it is armed when they
+arrive. Any future front-end measurement has to include the arm state.
+
+### The additive path, also measured shut
+
+Since replacing the envelope loses its hysteresis, the second attempt keeps the
+envelope path byte-identical and adds one thing: while the detector is disarmed
+and past the onset debounce, a matched-filter score over `matchedFilterAdmitG`
+declares an onset anyway. This is the brief's "run the correlator continuously as
+a detection statistic in its own right".
+
+| bar (g) | pooled | lap | triggers | FP | typing FP |
+|---|---|---|---|---|---|
+| 0.02 | 60.16 % | | 74 | 0 | 0 |
+| 0.03 | 67.48 % | | 83 | 0 | 0 |
+| 0.04 | 72.36 % | | 89 | 0 | 0 |
+| 0.05 | 75.61 % | | 93 | 0 | 0 |
+| 0.06 | 78.05 % | | 98 | 2 | 0 |
+| 0.07 | 80.49 % | 71.25 % | 103 | 4 | 0 |
+| 0.09 and up | 82.11 % | 73.75 % | 104 | 3 | 0 |
+
+It is monotone in the wrong direction and converges to baseline only when the
+bar is above every score the filter ever produces, which is the same as being
+off. **Recovery: zero gestures, at any bar.**
+
+The reason is visible offline. Restricted to the band where an extra onset is
+even possible (at least 100 ms after the previous onset, inside the join window),
+a bar of 0.036 g admits 0 of the 13 lap second strikes that sit under the
+envelope bar, and the bar that admits 11 of them (0.024 g) also admits 45 ring
+lobes. **A second strike that is weak in the envelope is weak in the matched
+filter too**, because both are linear in the signal. The shape gain is real and
+it is small: lap AUC 0.88 against 0.84, amplitude-matched. That buys separation
+between populations; it does not move a detection rate that needs 98 %.
+
+### Per-session, and the strict rate
+
+| session | off | weight 1.0 | admit 0.07 |
+|---|---|---|---|
+| desk 090700 | 2/3 (strict 2) | 2/3 (2) | 2/3 (2) |
+| desk 090935 | 20/20 (20) | 20/20 (20) | 20/20 (20) |
+| lap 104745 | 14/20 (strict 8) FT 3 | **4/20** (4) FT 0 | 12/20 (7) FT 3 |
+| lap 110347 | 16/20 (16) | 15/20 (15) | 16/20 (16) |
+| lap 110809 | 15/20 (15) | 11/20 (11) | 15/20 (15) |
+| lap 111032 | 14/20 (14) | 13/20 (13) | 14/20 (14) |
+| soft 104124 | 20/20 (strict 19) | 12/20 (12) | 20/20 (19) |
+
+Pooled strict detection goes 76.42 % to 62.60 % at weight 1.0 and to 75.61 % at
+admit 0.07. Nothing here lifts the contract rate while the strict rate stays
+flat, because nothing here lifts the contract rate at all.
+
+Two things did improve, and neither is worth the trade. At weight 1.0 the false
+triggers go 3 to 0 and the loose credits go 7 to 0: the ring suppression works
+exactly as designed on the false side. The hand-on-chassis session (`lap
+104745`, the posture outlier) is where both effects live. Its baseline 14/20 is
+only 8/20 strict, so six of its credits were landing on ring lobes; weight 1.0
+removes those and lands at 4/20. Even read strictly, it is worse.
+
+### Cost
+
+0.333 us/sample with the front end off, 2.280 us/sample with the 20-tap
+correlation running. At 796 Hz that is **0.18 % of one core**, so cost is not
+what rules this out. Held by `MatchedFilterTests.testPerSampleCostIsReported`.
+
+### What ships
+
+Nothing. `matchedFilterWeight` and `matchedFilterAdmitG` both default to 0, the
+filter is not evaluated while they are, and `run --json` output with the knobs
+off is byte-identical to the run before this round (checked field by field, only
+`generatedAt` and the two new config keys differ).
+`MatchedFilterTests.testOffReproducesTheEnvelopeBitForBit` compares the envelope
+against a chain rewritten from its own documentation, sample by sample, on the
+`bitPattern`.
+
+Fifteen mechanisms, fifteen measured negatives on lap.
 
 ## Coverage limits
 

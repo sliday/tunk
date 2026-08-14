@@ -194,6 +194,19 @@ extension DetectorConfig {
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
         }
 
+        // A weight outside 0...1 is not a louder version of the same idea: above
+        // 1 it scales the whole envelope and silently moves the threshold, below
+        // 0 it subtracts a strike-shaped signal from the transient magnitude.
+        // Both would read as "the matched filter did something strange".
+        if !out.matchedFilterWeight.isFinite || out.matchedFilterWeight < 0 || out.matchedFilterWeight > 1 {
+            let applied = !out.matchedFilterWeight.isFinite ? 0
+                : min(max(out.matchedFilterWeight, 0), 1)
+            issues.append(CoherenceIssue(field: "matchedFilterWeight",
+                                         reason: "a mix has to sit between 0 (off) and 1 (all)",
+                                         applied: "\(applied)"))
+            out.matchedFilterWeight = applied
+        }
+
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {
             issues.append(CoherenceIssue(field: "calibratedThreshold",
                                          reason: "not a positive threshold in g",

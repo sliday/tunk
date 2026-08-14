@@ -219,6 +219,37 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// How much of the onset envelope comes from the ring-projected matched
+    /// filter rather than from the plain transient magnitude. **0, off.**
+    ///
+    /// The lap failure is that a second strike and the first strike's ring are
+    /// the same size in the envelope, so no level test can separate them. This
+    /// weight mixes in a front end that asks a different question — see
+    /// `MatchedStrikeFilter` — and at 1.0 replaces the envelope with it.
+    ///
+    /// Measured on `data/raw`, weight 1.0 against 0.0, same threshold:
+    /// see `notes/BAR_ASSESSMENT.md`. It ships at 0 until it is graded on data
+    /// its builder could not touch.
+    ///
+    /// Clamped to 0...1 by `madeCoherent()`.
+    public var matchedFilterWeight: Double
+
+    /// Bar, in g, on the ring-projected matched filter for the detector's SECOND
+    /// onset path. **0, off.**
+    ///
+    /// The envelope path is unchanged and still owns arming and hysteresis. This
+    /// adds one thing on top: while the detector is disarmed — deaf, because the
+    /// first strike's ring keeps the envelope elevated — a matched-filter score
+    /// over this bar declares an onset anyway, because a fresh strike arriving
+    /// on a tail looks different from the tail even when it does not look
+    /// bigger. `DSPTuning.onsetDebounceNs` still applies, so this path cannot
+    /// double-count one strike.
+    ///
+    /// Off by default and, on the evidence in `notes/BAR_ASSESSMENT.md`, it
+    /// should stay off: the second strikes the envelope misses are weak in this
+    /// statistic too.
+    public var matchedFilterAdmitG: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -260,7 +291,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
         onsetCeilingG: 2.5,
-        motionGateG: 0
+        motionGateG: 0,
+        matchedFilterWeight: 0,
+        matchedFilterAdmitG: 0
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
@@ -269,6 +302,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                matchedFilterWeight: Double = 0,
+                matchedFilterAdmitG: Double = 0,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +316,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.matchedFilterWeight = matchedFilterWeight
+        self.matchedFilterAdmitG = matchedFilterAdmitG
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +340,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case matchedFilterWeight, matchedFilterAdmitG
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +358,10 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        matchedFilterWeight = try c.decodeIfPresent(Double.self, forKey: .matchedFilterWeight)
+            ?? d.matchedFilterWeight
+        matchedFilterAdmitG = try c.decodeIfPresent(Double.self, forKey: .matchedFilterAdmitG)
+            ?? d.matchedFilterAdmitG
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +385,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(matchedFilterWeight, forKey: .matchedFilterWeight)
+        try c.encode(matchedFilterAdmitG, forKey: .matchedFilterAdmitG)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
