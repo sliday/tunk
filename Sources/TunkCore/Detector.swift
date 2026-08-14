@@ -151,6 +151,27 @@ public final class TapDetector: TapDetecting {
         var joinedGroup: Bool
     }
 
+    /// A crossing of the reduced second-tap bar that has not been accepted yet.
+    ///
+    /// The shape test needs a few samples *after* the crossing, so the decision
+    /// is deferred by `tuning.secondTapShapeWindowSamples` and the detector
+    /// stays armed in the meantime. Deferring costs no latency: if the candidate
+    /// is accepted it is accepted **at its crossing time**, which is what
+    /// grouping and the confirm deadline use, and the deadline is a whole
+    /// confirm window away. Staying armed is the point — a candidate that turns
+    /// out to be ring-down must not have eaten the debounce that the real second
+    /// strike needs.
+    private struct ShapeCandidate {
+        var tNs: Int64
+        /// Envelope at the crossing, kept only for the report.
+        var crossing: Double
+        var peak: Double
+        var sumSquares: Double
+        var samples: Int
+        /// Samples still to collect after the crossing.
+        var remaining: Int
+    }
+
     private var chain: SignalChain
 
     private var sampleIndex: Int = 0
@@ -158,6 +179,14 @@ public final class TapDetector: TapDetecting {
     private var armed: Bool = true
     private var lastOnsetNs: Int64?
     private var pending: PendingOnset?
+    private var shapeCandidate: ShapeCandidate?
+    /// One sub-threshold admission per gesture, no more. Two of them would let a
+    /// ring build a whole gesture out of one strike.
+    private var admittedInGroup: Bool = false
+    /// The last few pre-sliding-max envelope values, so the shape window can
+    /// start just before the crossing. Fixed size; no allocation on the sample
+    /// path.
+    private var preHoldHistory: (Double, Double, Double, Double) = (0, 0, 0, 0)
 
     /// Members of the live group, kept only while the group could still fire.
     /// A rhythmic disturbance can chain hundreds of onsets, and once the count
@@ -212,8 +241,15 @@ public final class TapDetector: TapDetecting {
         let threshold = currentThreshold()
         var onsetTrigger: Trigger?
 
+        // A candidate from an earlier sample may complete its shape window here
+        // and be accepted, at its own crossing time.
+        if shapeCandidate != nil {
+            onsetTrigger = advanceShapeCandidate(now: sample.tNs, envelope: envelope)
+        }
+
         if armed {
             if sampleIndex > tuning.warmupSamples && envelope >= threshold {
+                shapeCandidate = nil
                 armed = false
                 lastOnsetNs = sample.tNs
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
@@ -232,12 +268,23 @@ public final class TapDetector: TapDetecting {
                 } else {
                     onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
                 }
+            } else if shapeCandidate == nil,
+                      sampleIndex > tuning.warmupSamples,
+                      let bar = secondTapAdmitBar(now: sample.tNs, threshold: threshold),
+                      envelope >= bar {
+                startShapeCandidate(at: sample.tNs, envelope: envelope)
             }
         } else if envelope <= threshold * tuning.releaseFraction,
                   let onset = lastOnsetNs,
                   sample.tNs - onset >= tuning.onsetDebounceNs {
             armed = true
         }
+
+        // History for the next candidate's shape window. Written after the
+        // arming logic so a candidate starting on this sample sees only the
+        // samples that came before it.
+        preHoldHistory = (preHoldHistory.1, preHoldHistory.2, preHoldHistory.3,
+                          chain.preHoldEnvelope)
 
         // Onsets first, deadlines second: an onset landing on the same sample as
         // an expiring wait window is inside the window, per "min...max join".
@@ -293,6 +340,7 @@ public final class TapDetector: TapDetecting {
         armed = true
         lastOnsetNs = nil
         pending = nil
+        preHoldHistory = (0, 0, 0, 0)
         clearGroup()
         lastGroupingOnsetNs = nil
         refractoryUntilNs = Int64.min
@@ -355,6 +403,75 @@ public final class TapDetector: TapDetecting {
         return base * tuning.inGestureThresholdFraction
     }
 
+    /// The reduced bar a second tap may clear right now, or nil if the
+    /// sub-threshold admission does not apply to this sample.
+    ///
+    /// Everything about this is narrow on purpose. It exists only while the live
+    /// group holds exactly one onset, only inside the window where a second tap
+    /// could legally join that onset, and only once per group. Outside those
+    /// conditions — which is all of typing, all of idle, and every sample of
+    /// every gesture after the second strike — the threshold is untouched.
+    private func secondTapAdmitBar(now tNs: Int64, threshold: Double) -> Double? {
+        let fraction = effectiveConfig.secondTapAdmitFraction
+        guard fraction < 1.0 else { return nil }
+        guard !admittedInGroup, groupCount == 1, let last = groupLastOnsetNs else { return nil }
+        guard tNs >= last + effectiveConfig.minInterTapNs,
+              tNs <= last + effectiveConfig.maxInterTapNs else { return nil }
+        return threshold * fraction
+    }
+
+    private func startShapeCandidate(at tNs: Int64, envelope: Double) {
+        let lookback = max(0, min(4, tuning.secondTapShapeLookbackSamples))
+        var sum = 0.0
+        let history = [preHoldHistory.0, preHoldHistory.1, preHoldHistory.2, preHoldHistory.3]
+        for k in 0..<lookback {
+            let v = history[history.count - 1 - k]
+            sum += v * v
+        }
+        let now = chain.preHoldEnvelope
+        sum += now * now
+        shapeCandidate = ShapeCandidate(tNs: tNs, crossing: envelope, peak: envelope,
+                                        sumSquares: sum, samples: lookback + 1,
+                                        remaining: max(0, tuning.secondTapShapeWindowSamples - 1))
+    }
+
+    /// Collect one more sample into the live candidate and, when the window is
+    /// full, decide. Returns a trigger if admitting the onset closed a group
+    /// that fired.
+    private func advanceShapeCandidate(now tNs: Int64, envelope: Double) -> Trigger? {
+        guard var candidate = shapeCandidate else { return nil }
+        // The gesture the candidate belonged to is gone, or a second admission
+        // is being attempted. Either way it has nothing to join.
+        guard !admittedInGroup, groupCount == 1, groupLastOnsetNs != nil else {
+            shapeCandidate = nil
+            return nil
+        }
+        let value = chain.preHoldEnvelope
+        candidate.sumSquares += value * value
+        candidate.samples += 1
+        candidate.peak = max(candidate.peak, envelope)
+        candidate.remaining -= 1
+        guard candidate.remaining <= 0 else {
+            shapeCandidate = candidate
+            return nil
+        }
+        shapeCandidate = nil
+
+        let meanSquare = candidate.sumSquares / Double(max(candidate.samples, 1))
+        let rms = meanSquare.squareRoot()
+        let crest = rms > 0 ? candidate.peak / rms : 0
+        guard crest >= effectiveConfig.secondTapAdmitMinCrest else { return nil }
+
+        // Accepted, and accepted at the crossing — the samples spent looking at
+        // its shape do not move the onset the gesture is timed from.
+        armed = false
+        lastOnsetNs = candidate.tNs
+        noiseFloorHoldUntilNs = max(noiseFloorHoldUntilNs,
+                                    candidate.tNs + tuning.noiseFloorHoldNs)
+        admittedInGroup = true
+        return acceptOnset(at: candidate.tNs, strength: candidate.peak)
+    }
+
     /// Drop everything derived from the sample stream, keeping gate and
     /// refractory (they are driven by wall-order events, not by the filters).
     private func dropSignalState() {
@@ -364,6 +481,7 @@ public final class TapDetector: TapDetecting {
         lastOnsetNs = nil
         lastGroupingOnsetNs = nil
         noiseFloorHoldUntilNs = Int64.min
+        preHoldHistory = (0, 0, 0, 0)
         publishPending()
         clearGroup()
     }
@@ -493,6 +611,8 @@ public final class TapDetector: TapDetecting {
         groupCount = 0
         groupLastOnsetNs = nil
         groupDeadlineNs = nil
+        shapeCandidate = nil
+        admittedInGroup = false
     }
 
     private func checkGroupDeadline(now tNs: Int64) -> Trigger? {

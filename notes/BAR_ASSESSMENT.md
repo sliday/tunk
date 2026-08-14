@@ -170,6 +170,66 @@ Closing lap needs one of:
    candidate.
 3. **Shipping lap as unsupported**, and saying so.
 
+## What option 2 turned out to be worth
+
+Measured on `data/raw` only, behind `DetectorConfig.secondTapAdmitFraction`,
+which ships at 1.0 (off).
+
+### The soft collapse was never about spurious triples
+
+`inGestureThresholdFraction` lowered the crossing level and the **release** level
+together, because the detector re-arms at `releaseFraction * threshold`. Replay
+of the soft session with the in-gesture bar at 0.6 and everything else shipped:
+
+```
+              onsets lost   extra onsets
+  soft            8 of 40        1
+  lap             3              22
+```
+
+Soft did not gain spurious onsets. It lost real ones: the detector sat disarmed
+through the second strike. That is the whole 100 % -> 55 %, and it is fixable by
+leaving the hysteresis alone, which is what the admission below does.
+
+### Shape, measured before the sliding maximum
+
+`SignalChain.preHoldEnvelope` exposes the quadrature pair ahead of the 3-sample
+peak hold. Over the 24 crossings the admission window offers at fraction 0.7 —
+13 real second taps the shipped detector misses (all lap) and 11 spurious ones
+(7 lap, 4 soft, 0 desk):
+
+```
+  statistic                       AUC    real p50   spurious p50   spurious p90
+  crest (peak / rms, 12 samples)  0.66     1.31        1.11           1.35
+  local SNR                       0.70     2.11        1.76           2.83
+  spectral centroid proxy         0.62    17.19        6.68          20.65
+  high-band energy ratio (150 Hz) 0.56     0.0082      0.0011         0.0156
+```
+
+**None of these separates.** The distributions overlap end to end; crest at 1.15
+keeps 11 of 13 real taps and 5 of 11 spurious ones. Rise time was measured shut
+before, and spectral content is now measured weak. What the crest test earns is
+narrower than a discriminator: a candidate it rejects has not consumed the
+100 ms debounce, so the real strike behind it can still be seen.
+
+### End to end
+
+Fraction 0.8, crest 1.15, one admission per gesture, only inside
+`minInterTap ... maxInterTap` of a group holding exactly one onset:
+
+```
+             detection            false triggers      latency p95
+  desk       95.65 % -> 95.65 %     0 -> 0            200.1 ms (unchanged)
+  soft      100.00 % -> 100.00 %    0 -> 0            208.9 ms (unchanged)
+  lap        73.75 % ->  82.50 %    3 -> 5            225.2 ms (unchanged)
+  typing     0 false triggers on all three surfaces, unchanged
+```
+
+Lap gains 7 gestures across three of its four sessions and loses one in the
+fourth; it buys them with **two extra lap false triggers**, on a surface whose
+false-trigger rate already fails the bar (6.54 -> 10.90 per 20 min). It is a
+detection lever, not a fix, and it does not get lap to 98 %.
+
 ## Coverage limits
 
 One operator, one machine, one session per surface for soft, four for lap. No

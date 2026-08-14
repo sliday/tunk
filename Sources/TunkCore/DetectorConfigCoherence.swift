@@ -91,6 +91,8 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "secondTapAdmitFraction":  return "Second-tap admission bar"
+        case "secondTapAdmitMinCrest":  return "Second-tap shape test"
         default:                    return field
         }
     }
@@ -192,6 +194,22 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // A fraction at or above 1 is how the sub-threshold admission is turned
+        // off, so it is not an issue worth reporting; anything outside (0, 1] is
+        // meaningless and lands on the same off value.
+        if !(out.secondTapAdmitFraction.isFinite && out.secondTapAdmitFraction > 0) {
+            issues.append(CoherenceIssue(field: "secondTapAdmitFraction",
+                                         reason: "not a positive fraction of the threshold",
+                                         applied: "1.0 (off)"))
+            out.secondTapAdmitFraction = 1.0
+        }
+        if !(out.secondTapAdmitMinCrest.isFinite && out.secondTapAdmitMinCrest >= 0) {
+            issues.append(CoherenceIssue(field: "secondTapAdmitMinCrest",
+                                         reason: "not a crest factor",
+                                         applied: "0 (no shape test)"))
+            out.secondTapAdmitMinCrest = 0
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

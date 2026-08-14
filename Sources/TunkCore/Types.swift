@@ -219,6 +219,45 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Fraction of the onset threshold a **second** tap may clear instead of the
+    /// full bar, once a first tap has already been accepted. **1.0, off.**
+    ///
+    /// The dominant lap miss is a second strike that never clears the bar: lap
+    /// coupling roughly halves the tap, and the second of a pair is weaker than
+    /// the first in most gestures. Simply lowering the bar for the whole
+    /// in-gesture window is `DSPTuning.inGestureThresholdFraction`, and that was
+    /// measured and rejected. This is narrower in three ways, each of which was
+    /// needed to stop it costing soft what it gained on lap:
+    ///
+    /// 1. It applies only inside `minInterTapNs ... maxInterTapNs` of a group
+    ///    that holds exactly one onset, and at most once per group.
+    /// 2. It never touches the release level. `inGestureThresholdFraction`
+    ///    lowered the re-arm level along with the crossing level, so the
+    ///    detector stayed disarmed through the real second tap; on the soft
+    ///    session that alone lost 8 of 40 onsets at 0.6, which is the "soft
+    ///    collapses to 55 %" result, and it was never about spurious triples.
+    /// 3. An admission has to pass a shape test read before the front end's
+    ///    sliding maximum — see `secondTapAdmitMinCrest`.
+    ///
+    /// Values at or above 1 disable it, and then the detector is bit-identical
+    /// to the shipped one.
+    public var secondTapAdmitFraction: Double
+
+    /// Minimum crest factor a sub-threshold second tap must show to be admitted.
+    /// **0, no shape test.**
+    ///
+    /// Crest is `peak / rms` of the pre-sliding-max envelope over
+    /// `DSPTuning.secondTapShapeWindowSamples` around the crossing. A finger
+    /// strike concentrates its energy in a couple of samples; the chassis ring
+    /// it excites, and lap noise, spread theirs out. Measured on the training
+    /// corpus over the 24 crossings the admission window offers at fraction
+    /// 0.7 — 13 real second taps the shipped detector misses and 11 spurious
+    /// ones — crest separates them with AUC 0.66, which is weak and overlapping.
+    /// It is not a clean discriminator and is not claimed as one; what it buys
+    /// is that a rejected candidate leaves the debounce free for the real strike
+    /// that follows it.
+    public var secondTapAdmitMinCrest: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -269,7 +308,11 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                secondTapAdmitFraction: Double = 1.0,
+                secondTapAdmitMinCrest: Double = 0,
                 calibratedInterTapNs: Int64? = nil) {
+        self.secondTapAdmitFraction = secondTapAdmitFraction
+        self.secondTapAdmitMinCrest = secondTapAdmitMinCrest
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
         self.defaultThreshold = defaultThreshold
@@ -303,6 +346,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case secondTapAdmitFraction, secondTapAdmitMinCrest
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +364,10 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        secondTapAdmitFraction = try c.decodeIfPresent(Double.self, forKey: .secondTapAdmitFraction)
+            ?? d.secondTapAdmitFraction
+        secondTapAdmitMinCrest = try c.decodeIfPresent(Double.self, forKey: .secondTapAdmitMinCrest)
+            ?? d.secondTapAdmitMinCrest
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +391,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(secondTapAdmitFraction, forKey: .secondTapAdmitFraction)
+        try c.encode(secondTapAdmitMinCrest, forKey: .secondTapAdmitMinCrest)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)

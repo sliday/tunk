@@ -262,7 +262,28 @@ public struct DSPTuning: Sendable, Equatable {
     /// Kept as a tunable rather than deleted, because the idea is worth
     /// revisiting once onsets can be told apart by SHAPE — a decaying tail and a
     /// fresh strike differ in rise time even when they match in height.
+    ///
+    /// The diagnosis above is wrong, and the correction is why
+    /// `DetectorConfig.secondTapAdmitFraction` exists. Replaying the soft
+    /// session with this at 0.6 loses **8 of 40 onsets and adds 1**: the
+    /// re-arm level is `releaseFraction * threshold`, so lowering the threshold
+    /// also lowers the level the envelope has to fall back under, and the
+    /// detector sits disarmed through the real second strike. Soft was not
+    /// gaining spurious triples; it was going deaf.
     public var inGestureThresholdFraction: Double
+
+    /// Length of the shape window used by the sub-threshold second-tap
+    /// admission, in samples after the crossing (~12.5 ms at 796 Hz).
+    ///
+    /// Only read when `DetectorConfig.secondTapAdmitFraction` is below 1, so it
+    /// costs nothing while the admission is off. It is a filter-design constant
+    /// rather than a `DetectorConfig` field for the same reason everything else
+    /// here is: the settings panel has no business showing it.
+    public var secondTapShapeWindowSamples: Int
+    /// Samples of the shape window that sit *before* the crossing, so the RMS
+    /// the crest is measured against includes the quiet immediately ahead of a
+    /// real strike.
+    public var secondTapShapeLookbackSamples: Int
 
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
@@ -286,6 +307,8 @@ public struct DSPTuning: Sendable, Equatable {
         inGestureThresholdFraction: 1.0,
         settleFastHz: 6.0,
         settleSlowHz: 0.3,
+        secondTapShapeWindowSamples: 10,
+        secondTapShapeLookbackSamples: 2,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -299,6 +322,8 @@ public struct DSPTuning: Sendable, Equatable {
                 inGestureThresholdFraction: Double = 1.0,
                 settleFastHz: Double = 6.0,
                 settleSlowHz: Double = 0.3,
+                secondTapShapeWindowSamples: Int = 10,
+                secondTapShapeLookbackSamples: Int = 2,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
@@ -317,6 +342,8 @@ public struct DSPTuning: Sendable, Equatable {
         self.inGestureThresholdFraction = inGestureThresholdFraction
         self.settleFastHz = settleFastHz
         self.settleSlowHz = settleSlowHz
+        self.secondTapShapeWindowSamples = secondTapShapeWindowSamples
+        self.secondTapShapeLookbackSamples = secondTapShapeLookbackSamples
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }
@@ -352,6 +379,16 @@ public struct SignalChain: Sendable, Equatable {
     private var magnitude: Double = 0
 
     public private(set) var envelope: Double = 0
+    /// The same envelope one stage earlier: the quadrature pair, **before** the
+    /// 3-sample sliding maximum.
+    ///
+    /// The sliding max is a peak hold, so by the time anything downstream reads
+    /// `envelope` the shape of the onset has been flattened — a strike and the
+    /// ring lobe that follows it are both reported as the same held peak for
+    /// three samples. Anything that wants to tell those apart has to read the
+    /// signal here instead. Nothing in the shipped path does; the sub-threshold
+    /// second-tap admission does, and only when it is switched on.
+    public private(set) var preHoldEnvelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
 
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
@@ -402,6 +439,7 @@ public struct SignalChain: Sendable, Equatable {
         fastMagnitude.reset()
         magnitude = 0
         envelope = 0
+        preHoldEnvelope = 0
     }
 
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
@@ -421,6 +459,7 @@ public struct SignalChain: Sendable, Equatable {
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
+        preHoldEnvelope = pair
         envelope = peak.process(pair)
         if !holdNoiseFloor { floorTracker.update(envelope) }
         return envelope

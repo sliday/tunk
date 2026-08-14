@@ -71,6 +71,8 @@ enum ConfigParam: String, CaseIterable {
     case tapCountToFire
     case onsetCeilingG
     case motionGateG
+    case secondTapAdmitFraction
+    case secondTapAdmitMinCrest
 
     /// Accepts the canonical name or its `...Ms` alias for the ns fields.
     init?(name: String) {
@@ -113,6 +115,8 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .secondTapAdmitFraction: c.secondTapAdmitFraction = v
+        case .secondTapAdmitMinCrest: c.secondTapAdmitMinCrest = v
         }
     }
 
@@ -129,6 +133,8 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .secondTapAdmitFraction: return c.secondTapAdmitFraction
+        case .secondTapAdmitMinCrest: return c.secondTapAdmitMinCrest
         }
     }
 
