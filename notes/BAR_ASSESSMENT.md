@@ -152,6 +152,47 @@ Sixteen rejected, one shipped (`shipped/resonator-front-end`), one audit of the
 scorer itself. The worktrees they were built in held 20 GB and are gone; the
 commits are not.
 
+## The false-trigger metric conflates two different questions
+
+The lap false-trigger rate is what keeps the resonator off by default: 13.08 per
+20 minutes against a bar of 1, against the shipped detector's 6.54. Broken down
+by what the operator was doing, on training data:
+
+```
+                                        minutes   false triggers   per 20 min
+shipped    not tapping (idle/typing/confound)  39.7        0           0.00
+           tap decks (deliberately tapping)     9.4        3           6.41
+
+resonator  not tapping                         39.7        0           0.00
+           tap decks                            9.4        6          12.82
+```
+
+**Every false trigger in the corpus occurs inside a tap deck.** Across 39.7
+minutes of not tapping — 26 minutes idle, 11.7 typing, 2.1 confound — both
+configurations fire **zero** times.
+
+That is two questions wearing one number:
+
+1. *Will Tunk fire when you are not tapping?* Measured at **0 in 39.7 minutes**
+   for both. This is the question the PRD's "live use" phrasing is about.
+2. *Will Tunk fire spuriously while you ARE tapping?* Measured at 3 and 6 in
+   9.4 minutes. These are real misfires a user would feel — a gesture firing
+   twice, or a fumble between prompted taps counting as one.
+
+**This is not grounds for relaxing the bar.** The second number is a genuine
+defect and the pooled rate is the honest conservative reading. But the pooled
+rate is dominated by a denominator — deliberate tap decks — that is a small
+fraction of real use, and reporting it alone implies Tunk misfires while you work,
+which is measured false on every surface.
+
+The audited label correction bears directly on the second question: 4 of the
+resonator's 6 become detections under corrected labels, because they were fired
+on gestures the labeller had mispaired. That would leave 2 in 9.4 minutes.
+
+What settles it is `confound_handling` — a laptop on a lap being moved while
+nobody taps it. It has never been recorded on any surface, the corpus holds zero
+seconds of it, and `bin/record-for-the-bar.sh` captures it.
+
 ## The scoreboard
 
 | Criterion | Bar | desk | soft | lap | held-out desk |
