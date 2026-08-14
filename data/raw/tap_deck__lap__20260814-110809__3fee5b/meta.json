@@ -1,0 +1,22 @@
+{
+  "category" : "tap_deck",
+  "duration_ns" : 89900489958,
+  "epoch_mach_ns" : 510099449226583,
+  "epoch_wall_iso" : "2026-08-14T09:08:09.721Z",
+  "expected_triggers" : 20,
+  "machine" : {
+    "chip" : "Apple M4 Max",
+    "model" : "Mac16,6",
+    "os" : "26.5.2"
+  },
+  "nominal_interval_ns" : 1250938,
+  "nominal_rate_hz" : 799.4,
+  "operator_notes" : "left hand resting on the MBP body while tapping",
+  "report_interval_us" : 1250,
+  "sample_count" : 71855,
+  "schema" : 1,
+  "session_id" : "tap_deck__lap__20260814-110809__3fee5b",
+  "split" : "train",
+  "surface" : "lap",
+  "tool_version" : "tunk-capture 0.3.0"
+}
