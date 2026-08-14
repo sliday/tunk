@@ -30,6 +30,13 @@ import Foundation
 /// `releaseFraction * T` **and** `onsetDebounceNs` has passed, so one strike is
 /// one onset.
 ///
+/// A return to baseline is not the only way back. With
+/// `config.rearmRiseFraction` above zero the detector also re-arms once the
+/// envelope climbs that fraction of a threshold above the lowest point reached
+/// since the crossing, still behind the same debounce. That is how a second
+/// strike landing on a tail which never decayed gets heard. Off by default; the
+/// field carries the measurement.
+///
 /// The floor keeps tracking the whole time, apart from a bounded
 /// `tuning.noiseFloorHoldNs` after each crossing. It has to: it describes the
 /// surface, not whether the detector currently feels like firing, and the one
@@ -157,6 +164,10 @@ public final class TapDetector: TapDetecting {
     private var lastSampleNs: Int64?
     private var armed: Bool = true
     private var lastOnsetNs: Int64?
+    /// Lowest envelope seen since the last crossing, in g. The reference the
+    /// rise re-arm measures against; see `DetectorConfig.rearmRiseFraction`.
+    /// Only read while disarmed, and rewritten at every crossing.
+    private var valleySinceOnset: Double = .greatestFiniteMagnitude
     private var pending: PendingOnset?
 
     /// Members of the live group, kept only while the group could still fire.
@@ -215,29 +226,32 @@ public final class TapDetector: TapDetecting {
 
         if armed {
             if sampleIndex > tuning.warmupSamples && envelope >= threshold {
-                armed = false
-                lastOnsetNs = sample.tNs
-                noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
+                onsetTrigger = cross(at: sample.tNs, strength: envelope)
+            }
+        } else {
+            // Lowest point of the tail since the crossing. Only meaningful while
+            // disarmed, and reset at every crossing, so it measures the decay of
+            // exactly one strike.
+            valleySinceOnset = min(valleySinceOnset, envelope)
 
-                // The chassis is in motion, not merely ringing. Lifting the
-                // machine or setting it down swings the gravity vector across
-                // the axes and holds it there, and the case rings the whole
-                // time — those rings are individually tap-sized, which is why
-                // amplitude alone cannot reject them. A real tap leaves the
-                // resting attitude where it found it.
-                let moving = effectiveConfig.motionGateG > 0
-                    && chain.bulkMotion > effectiveConfig.motionGateG
-                if moving {
-                    append(OnsetEvent(tNs: sample.tNs, strength: envelope, suppressedByGate: true))
-                    clearGroup()
-                } else {
-                    onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
+            let debounced = (lastOnsetNs.map { sample.tNs - $0 >= tuning.onsetDebounceNs }) ?? false
+            if debounced, envelope <= threshold * tuning.releaseFraction {
+                armed = true
+            } else if debounced,
+                      effectiveConfig.rearmRiseFraction > 0,
+                      envelope >= valleySinceOnset
+                                  + effectiveConfig.rearmRiseFraction * threshold {
+                // The envelope never came back to baseline, but it has climbed
+                // back off its own floor: something struck the case again. Take
+                // the crossing on THIS sample rather than the next one — the
+                // rise and the crossing are the same event, and deferring it
+                // would hand the second strike's peak to the sliding max and
+                // hope it survives another 1.26 ms.
+                armed = true
+                if sampleIndex > tuning.warmupSamples && envelope >= threshold {
+                    onsetTrigger = cross(at: sample.tNs, strength: envelope)
                 }
             }
-        } else if envelope <= threshold * tuning.releaseFraction,
-                  let onset = lastOnsetNs,
-                  sample.tNs - onset >= tuning.onsetDebounceNs {
-            armed = true
         }
 
         // Onsets first, deadlines second: an onset landing on the same sample as
@@ -293,6 +307,7 @@ public final class TapDetector: TapDetecting {
         lastSampleNs = nil
         armed = true
         lastOnsetNs = nil
+        valleySinceOnset = .greatestFiniteMagnitude
         pending = nil
         clearGroup()
         lastGroupingOnsetNs = nil
@@ -369,6 +384,7 @@ public final class TapDetector: TapDetecting {
         sampleIndex = 0
         armed = true
         lastOnsetNs = nil
+        valleySinceOnset = .greatestFiniteMagnitude
         lastGroupingOnsetNs = nil
         noiseFloorHoldUntilNs = Int64.min
         publishPending()
@@ -407,6 +423,34 @@ public final class TapDetector: TapDetecting {
         if onsetLog.count > tuning.onsetLogCapacity {
             onsetLog.removeFirst(onsetLog.count - tuning.onsetLogCapacity)
         }
+    }
+
+    /// The envelope crossed the bar. Disarm, start a fresh valley for the tail
+    /// this strike is about to leave, and either accept the onset or throw it
+    /// away as bulk motion. Returns a trigger if taking it closed a live group.
+    ///
+    /// Reached from two places — an armed crossing, and a rise off the valley
+    /// that re-armed and cleared the bar on the same sample — so the two cannot
+    /// drift apart.
+    private func cross(at tNs: Int64, strength: Double) -> Trigger? {
+        armed = false
+        lastOnsetNs = tNs
+        valleySinceOnset = strength
+        noiseFloorHoldUntilNs = tNs + tuning.noiseFloorHoldNs
+
+        // The chassis is in motion, not merely ringing. Lifting the machine or
+        // setting it down swings the gravity vector across the axes and holds it
+        // there, and the case rings the whole time — those rings are
+        // individually tap-sized, which is why amplitude alone cannot reject
+        // them. A real tap leaves the resting attitude where it found it.
+        let moving = effectiveConfig.motionGateG > 0
+            && chain.bulkMotion > effectiveConfig.motionGateG
+        if moving {
+            append(OnsetEvent(tNs: tNs, strength: strength, suppressedByGate: true))
+            clearGroup()
+            return nil
+        }
+        return acceptOnset(at: tNs, strength: strength)
     }
 
     /// Returns a trigger if taking this onset closed a live group that fired.

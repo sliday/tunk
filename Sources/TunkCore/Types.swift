@@ -219,6 +219,66 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Re-arm the detector on a RISE above the local valley, as a fraction of
+    /// the current threshold. **0, disabled.**
+    ///
+    /// The shipped re-arm rule needs the envelope to fall back under
+    /// `DSPTuning.releaseFraction * threshold`. On a damped surface the case
+    /// rings for hundreds of milliseconds, so between the two halves of one
+    /// gesture the envelope never returns to baseline and the detector is still
+    /// disarmed when the second strike lands. Measured on three lap gestures no
+    /// amplitude change could reach: deaf by 70, 120 and 67 ms, with second taps
+    /// at 1.20, 1.35 and 2.01 times the threshold. They were strong; nothing was
+    /// listening.
+    ///
+    /// So track the lowest envelope seen since the last crossing and re-arm when
+    /// the envelope climbs back `rearmRiseFraction * threshold` above it. A
+    /// second strike on a decaying tail is a genuine re-rise; a decaying tail on
+    /// its own only falls. This is the causal twin of the prominence test the
+    /// offline labeller already uses for the same job — see
+    /// `OnsetPicker.prominenceFraction`.
+    ///
+    /// `DSPTuning.onsetDebounceNs` still applies unchanged, which is what keeps
+    /// the +26.4 ms second lobe of a single strike from re-arming anything.
+    ///
+    /// **It works, and it does not pay.** Second taps the detector never heard,
+    /// over every `data/raw` tap deck:
+    ///
+    ///     rise      desk deaf   soft deaf   lap deaf
+    ///     off (0)       0           3          12
+    ///     0.4           0           0           2
+    ///     0.75          0           0           3
+    ///     1.4           0           0           5
+    ///     2.0           0           2          11
+    ///
+    /// Deafness is close to solved at 0.4. Gesture detection collapses anyway:
+    /// pooled 82.11 % to 64.23 %, soft 100 % to 60 %, lap 73.75 % to 62.50 %.
+    /// `explain` gives the same reason on every new miss — "a third onset
+    /// aborting the group". The sensitivity that hears a second strike on a tail
+    /// also hears the tail after the second strike, and one phantom third onset
+    /// turns a good double into an un-armed triple. `DSPTuning`'s
+    /// `inGestureThresholdFraction` died of exactly this.
+    ///
+    /// Two ways of spending the sensitivity more narrowly were measured and are
+    /// not kept, because neither beat the noise floor of one gesture:
+    ///
+    /// - re-arm on a rise only while a live group is short of a firing count and
+    ///   still inside `maxInterTapNs`: best 102/123 at 1.4 against 101/123 off,
+    ///   false triggers 3 to 4, and deafness barely moves (lap 12 to 10).
+    /// - let a rise-path onset complete a group but never start, close or abort
+    ///   one: best 102/123 at 1.4, false triggers 3 to 6.
+    ///
+    /// The reason the deaf count and the detection rate do not move together is
+    /// in the intervals. Of the 15 deaf second taps in `data/raw`, 10 belong to
+    /// gestures whose own two taps sit 238-306 ms apart — past `maxInterTapNs`,
+    /// so hearing the second one groups nothing — and 3 more belong to soft
+    /// gestures the detector already reports as detected off a different pair of
+    /// onsets. Two lap gestures remain. Deafness is real, and on this corpus it
+    /// is worth two gestures out of 123.
+    ///
+    /// Zero disables the rise path entirely, leaving the release rule alone.
+    public var rearmRiseFraction: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -260,7 +320,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
         onsetCeilingG: 2.5,
-        motionGateG: 0
+        motionGateG: 0,
+        rearmRiseFraction: 0
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
@@ -269,6 +330,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                rearmRiseFraction: Double = 0,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +343,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.rearmRiseFraction = rearmRiseFraction
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +366,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case rearmRiseFraction
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +384,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        rearmRiseFraction = try c.decodeIfPresent(Double.self, forKey: .rearmRiseFraction)
+            ?? d.rearmRiseFraction
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +409,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(rearmRiseFraction, forKey: .rearmRiseFraction)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)

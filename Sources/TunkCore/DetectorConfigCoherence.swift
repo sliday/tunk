@@ -91,6 +91,7 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "rearmRiseFraction":   return "Re-arm on rise"
         default:                    return field
         }
     }
@@ -192,6 +193,16 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // A negative or NaN rise fraction would re-arm on the first sample after
+        // the debounce, which is the deafness fix turned into a phantom-onset
+        // generator. Off is the safe reading of a nonsense value.
+        if !(out.rearmRiseFraction.isFinite && out.rearmRiseFraction >= 0) {
+            issues.append(CoherenceIssue(field: "rearmRiseFraction",
+                                         reason: "not a rise height at or above zero",
+                                         applied: "0 (rise re-arm off)"))
+            out.rearmRiseFraction = 0
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

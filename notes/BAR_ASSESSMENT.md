@@ -65,6 +65,39 @@ during typing, which stayed at zero.
 | Wider join window | lap 65 → 70 %, **latency p95 209 → 389 ms** |
 | Per-surface calibration | desk 95.65 %, soft 100 %, **lap 82.5 % at its own best** |
 | Learned join window (235 ms) | held-out lap **80 % → 80 %**, latency 208.9 → 223.9 ms |
+| Re-arm on a rise off the valley | deafness all but gone, detection **82.11 → 64.23 %** |
+
+### Deafness is real, and it is worth two gestures
+
+The detector re-arms only once the envelope falls back under
+`releaseFraction * threshold`. On a damped surface the case rings for hundreds of
+milliseconds, so it can still be disarmed when the second strike lands. Counting
+every missed second tap across the training decks as "the detector was disarmed
+and the transient would have crossed" (deaf) against "genuinely under the bar"
+(weak): desk 0 deaf, soft 3 deaf and 0 weak, lap 12 deaf and 13 weak.
+
+`DetectorConfig.rearmRiseFraction` re-arms instead on a rise above the lowest
+point since the crossing — the causal twin of the prominence test the offline
+labeller uses in `OnsetPicker` — with the 100 ms debounce untouched, so the
++26.4 ms second lobe is still swallowed. At 0.4 it does its job: soft deaf 3 → 0,
+lap deaf 12 → 2, desk still 0.
+
+Detection falls anyway: pooled 82.11 % → 64.23 %, soft 100 % → 40 %, lap 73.75 %
+→ 61.25 %, typing false triggers still 0. `explain` gives one reason on every new
+miss — "a third onset aborting the group". The sensitivity that hears a second
+strike on a tail also hears the tail after the second strike, and one phantom
+third onset turns a good double into an un-armed triple. Restricting the rise to
+groups that can still grow, and demoting rise-path onsets so they can only
+complete a group, were both measured: each recovers exactly one gesture
+(101/123 → 102/123) and each costs false triggers (3 → 4 and 3 → 6).
+
+The intervals say why. Of the 15 deaf second taps, 10 belong to gestures whose
+own taps sit 238–306 ms apart, past the 220 ms join window, so hearing the second
+tap groups nothing; 3 more belong to soft gestures already reported as detected
+off a different pair of onsets. Two lap gestures are left. **Deafness is a real
+defect with a working fix and a ceiling of two gestures out of 123**, and the
+lever that would cash it in is the join window, which the latency budget owns.
+The knob ships at 0.
 
 ### What the learned window does and does not fix
 

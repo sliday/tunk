@@ -11,6 +11,39 @@ final class ArmStateDiagnosisTests: XCTestCase {
     /// should drive `deaf` down, and that must pass, while any change that makes
     /// the detector deafer must fail here loudly.
     func testDeafSecondTapsDoNotGrow() throws {
+        let tally = try self.tally(config: .default)
+        print("  --- shipped config, rearmRiseFraction 0")
+        report(tally)
+        XCTAssertEqual(tally["desk"]?.deaf, 0, "a hard desk has never been deaf")
+        XCTAssertLessThanOrEqual(tally["soft"]?.deaf ?? 99, 3)
+        XCTAssertLessThanOrEqual(tally["lap"]?.deaf ?? 99, 12)
+        // The point of the split: on soft, EVERY miss is deafness, not weakness.
+        XCTAssertEqual(tally["soft"]?.weak, 0)
+    }
+
+    /// The rise re-arm exists to fix exactly this number, and it does. Detection
+    /// is a separate question and this test deliberately does not ask it — see
+    /// `DetectorConfig.rearmRiseFraction` for why the knob still ships off.
+    func testRiseRearmClearsMostDeafness() throws {
+        var cfg = DetectorConfig.default
+        cfg.rearmRiseFraction = 0.4
+        let tally = try self.tally(config: cfg)
+        print("  --- rearmRiseFraction 0.4")
+        report(tally)
+        XCTAssertEqual(tally["desk"]?.deaf, 0)
+        XCTAssertEqual(tally["soft"]?.deaf, 0, "soft deafness is fully recoverable")
+        XCTAssertLessThanOrEqual(tally["lap"]?.deaf ?? 99, 2, "lap deafness 12 -> 2")
+    }
+
+    private func report(_ tally: [String: (deaf: Int, weak: Int, hit: Int)]) {
+        for (surface, t) in tally.sorted(by: { $0.key < $1.key }) {
+            let total = t.deaf + t.weak + t.hit
+            print(String(format: "  %-5@  gestures %3d   2nd tap seen %3d   DEAF %3d   weak %3d",
+                         surface as NSString, total, t.hit, t.deaf, t.weak))
+        }
+    }
+
+    private func tally(config: DetectorConfig) throws -> [String: (deaf: Int, weak: Int, hit: Int)] {
         let root = "/Users/stas/Playground/tunk/data/raw/"
         let fm = FileManager.default
         let dirs = try fm.contentsOfDirectory(atPath: root)
@@ -25,13 +58,12 @@ final class ArmStateDiagnosisTests: XCTestCase {
             guard !samples.isEmpty, !groups.isEmpty else { continue }
 
             // Replay once, recording arm-state and envelope at every sample.
-            let d = TapDetector(config: .default)
+            let d = TapDetector(config: config)
             var armedAt: [Bool] = []; armedAt.reserveCapacity(samples.count)
             var envAt: [Double] = []; envAt.reserveCapacity(samples.count)
             var thrAt: [Double] = []; thrAt.reserveCapacity(samples.count)
-            var fired = 0
             for s in samples {
-                if d.ingest(sample: s) != nil { fired += 1 }
+                _ = d.ingest(sample: s)
                 armedAt.append(d.isArmedForTesting)
                 envAt.append(d.envelopeForTesting)
                 thrAt.append(d.activeThreshold)
@@ -61,15 +93,6 @@ final class ArmStateDiagnosisTests: XCTestCase {
             }
             tally[String(surface)] = t
         }
-        for (surface, t) in tally.sorted(by: { $0.key < $1.key }) {
-            let total = t.deaf + t.weak + t.hit
-            print(String(format: "  %-5@  gestures %3d   2nd tap seen %3d   DEAF %3d   weak %3d",
-                         surface as NSString, total, t.hit, t.deaf, t.weak))
-        }
-        XCTAssertEqual(tally["desk"]?.deaf, 0, "a hard desk has never been deaf")
-        XCTAssertLessThanOrEqual(tally["soft"]?.deaf ?? 99, 3)
-        XCTAssertLessThanOrEqual(tally["lap"]?.deaf ?? 99, 12)
-        // The point of the split: on soft, EVERY miss is deafness, not weakness.
-        XCTAssertEqual(tally["soft"]?.weak, 0)
+        return tally
     }
 }
