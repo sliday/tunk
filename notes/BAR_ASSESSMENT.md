@@ -522,6 +522,100 @@ on lap. The evidence that this is structural rather than a tuning failure is no
 longer one measurement; it is ten, from agents that did not see each other's
 work, every one graded on data its builder could not touch.
 
+## Ring subtraction in the front end: the echo canceller fails, the short comb does not
+
+Item 2 above, attempted. The idea was echo cancellation on a chassis: the tail
+after a strike is that strike's own waveform delayed and decayed, so predict it
+from the first strike and subtract it, leaving whatever else is there. It runs
+on the signed high-passed axes ahead of the magnitude, because the magnitude
+throws the sign away and a rectified tail cannot be cancelled by anything:
+
+    r[n] = (h[n] - a * h[n-P]) / (1 + |a|)
+
+behind `DetectorConfig.ringCombDelaySamples` (P, in samples, **0 = off, shipped
+off**) and `ringCombCoefficient` (a). Causal, index-domain, no lookahead, no
+clock, no window widened. With P at 0 the code path is skipped and the whole
+`tunk-score --json` report is byte-identical to the build before it existed.
+
+### At the ring period it does not work, and that was measured first
+
+On the 80 real lap gestures in `data/raw`, with P at the measured 26.4 ms lobe
+spacing and a = 0.8, comparing the envelope before and after subtraction:
+
+| what | window | after / before |
+|---|---|---|
+| ring where the second strike lands | t2 - 45 ms .. t2 - 8 ms | **1.199** |
+| second strike itself | t2 - 2 ms .. t2 + 12 ms | **1.004** |
+| first strike's own second lobe | t1 + 15 ms .. t1 + 45 ms | **1.799** |
+
+The ring comes out 20 % LOUDER and the strike unchanged, so the contrast between
+them falls to **0.837** of what it was. Every lap session agrees (0.90, 0.75,
+0.77, and 1.35 on the outlier session). Graded through the harness the same
+setting scores lap 57.5 % at its best threshold against a 73.75 % baseline.
+
+The reason is that a 26.4 ms comb has its gain peak near 19 Hz and its null near
+38 Hz, and the ring lives at 26 Hz. Subtracting a delayed copy of a resonance
+adds to it as often as it cancels. **The mechanism as conceived is dead.**
+
+### The same delay line at a short lag moves the soft/lap frontier
+
+At P around 10 samples (12.5 ms) the filter stops being a canceller and becomes
+a first-difference pre-emphasis, which tilts the band toward the one spectral
+difference that survived amplitude matching: real second strikes centre at
+31.4 Hz, ring lobes at 26.1 Hz. Measured on real lap gestures at P = 10, a = 1,
+second-strike to ring contrast rises **1.60x** and the ratio of the strike to the
+quietest point between the two strikes, which is what the detector has to fall
+through to re-arm, rises **2.87x**.
+
+Graded on `data/raw`, P = 10, a = 1.0, threshold 0.022 (the normalisation
+shrinks the residual, so the threshold moves with it):
+
+| | desk | soft | lap | pooled |
+|---|---|---|---|---|
+| detection, off | 95.65 % | 100.00 % | 73.75 % | 82.11 % |
+| detection, on | 95.65 % | 100.00 % | **83.75 %** | **88.62 %** |
+| strict, off | 95.65 % | 95.00 % | 66.25 % | 76.42 % |
+| strict, on | 95.65 % | **100.00 %** | **77.50 %** | **84.55 %** |
+| false triggers | 0 -> 0 | 0 -> 0 | 3 -> 3 | 3 -> 3 |
+| latency p95 | 200 -> 203 ms | 209 -> 209 ms | 225 -> 225 ms | |
+
+Typing false triggers stayed at **0 across all 136 swept configurations**, as did
+confound. Idle stayed at 0 for this setting; at threshold 0.0205 and below the
+subtractor finds one onset in 26 minutes of an untouched machine, which is where
+the sweep stops.
+
+The strict rate moves with the contract rate, so the extra credits are landing on
+the labelled physical event rather than on ring lobes.
+
+### It is not the threshold move in disguise
+
+With the subtractor off, no threshold reaches this. The best any threshold does
+while soft stays at 100 % is the shipped 0.032, at lap 73.75 %. Drop it to 0.026
+and lap reaches 82.5 % while soft collapses to 75 %. The subtractor buys the lap
+gain **without** the soft collapse, and lifts soft's strict rate on the way.
+
+### What it costs, and what it does not fix
+
+Per session, which is where the posture variable shows:
+
+| lap session | detection off -> on | strict off -> on |
+|---|---|---|
+| 104745 | 70 % -> **50 %** | 40 % -> **30 %** |
+| 110347 | 80 % -> 95 % | 80 % -> 95 % |
+| 110809 | 75 % -> 90 % | 75 % -> 85 % |
+| 111032 | 70 % -> 100 % | 70 % -> 100 % |
+
+Three sessions gain 15 to 30 points. The fourth, the one that scores below chance
+on every statistic and is believed to be the session where the operator rests a
+hand on the chassis, loses 20. A single pooled number would have hidden that.
+
+Lap latency max rises 226 ms to 308 ms on one gesture credited late. The p95 does
+not move and no window was widened.
+
+So: 83.75 % on lap against a 98 % bar. The front end is no longer the whole story
+on lap, and it is still not enough to ship lap. It stays off by default until a
+recording of the hand-on-chassis posture explains session 104745.
+
 ## Coverage limits
 
 One operator, one machine, one session per surface for soft, four for lap. No

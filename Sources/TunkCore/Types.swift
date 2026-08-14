@@ -219,6 +219,37 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Delay of the front-end ring subtractor, in SAMPLES. **0, disabled.**
+    ///
+    /// The chassis rings after every strike, and on a lap the second lobe of the
+    /// first strike is the same size in the envelope as the second strike. This
+    /// runs `r[n] = (h[n] - a * h[n - P]) / (1 + |a|)` on each high-passed axis
+    /// before the magnitude, with `P` here and `a` in `ringCombCoefficient`, and
+    /// feeds the residual to the envelope. Samples, not milliseconds, because
+    /// the whole front end is index-domain and never reads a clock.
+    ///
+    /// Zero is the shipped value and the code path is skipped entirely, so the
+    /// envelope is bit-for-bit what it was before this existed.
+    ///
+    /// The name says "ring subtraction" because that is what it was built for —
+    /// predicting the tail from the strike that caused it and cancelling it, the
+    /// way an echo canceller does. **At the ring period it does not work.** With
+    /// `P` at the measured 26.4 ms lobe spacing and `a = 0.8`, the ring at the
+    /// moment the second strike lands comes out 1.20x LARGER, the second strike
+    /// 1.00x, so the contrast between them falls to 0.84 of what it was. The
+    /// mechanism as conceived is dead and the measurement is in the round notes.
+    ///
+    /// What survives is the same delay line at a SHORT lag, where it stops being
+    /// a canceller and becomes a first-difference pre-emphasis. See the sweep in
+    /// the round notes for what it is worth on real data.
+    public var ringCombDelaySamples: Int
+
+    /// Decay factor `a` of the ring subtractor. Ignored while
+    /// `ringCombDelaySamples` is 0. The residual is divided by `1 + |a|`, the
+    /// filter's worst-case amplitude gain, so it can never amplify and the
+    /// threshold keeps its meaning in g.
+    public var ringCombCoefficient: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -260,7 +291,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
         onsetCeilingG: 2.5,
-        motionGateG: 0
+        motionGateG: 0,
+        ringCombDelaySamples: 0,
+        ringCombCoefficient: 0.8
     )
 
     public init(sensitivity: Double, calibratedThreshold: Double?, defaultThreshold: Double,
@@ -269,6 +302,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                ringCombDelaySamples: Int = 0,
+                ringCombCoefficient: Double = 0.8,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
@@ -281,6 +316,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         self.armedTapCounts = armedTapCounts
         self.onsetCeilingG = onsetCeilingG
         self.motionGateG = motionGateG
+        self.ringCombDelaySamples = ringCombDelaySamples
+        self.ringCombCoefficient = ringCombCoefficient
         self.calibratedInterTapNs = calibratedInterTapNs
     }
 
@@ -303,6 +340,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case ringCombDelaySamples, ringCombCoefficient
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +358,10 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        ringCombDelaySamples = try c.decodeIfPresent(Int.self, forKey: .ringCombDelaySamples)
+            ?? d.ringCombDelaySamples
+        ringCombCoefficient = try c.decodeIfPresent(Double.self, forKey: .ringCombCoefficient)
+            ?? d.ringCombCoefficient
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +385,14 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        // Written only when the ring subtractor is on. With it off — the shipped
+        // state — the encoded settings file and every harness report are the
+        // exact bytes they were before this feature existed, which is how the
+        // "off reproduces baseline" claim is checked rather than asserted.
+        if ringCombDelaySamples != 0 {
+            try c.encode(ringCombDelaySamples, forKey: .ringCombDelaySamples)
+            try c.encode(ringCombCoefficient, forKey: .ringCombCoefficient)
+        }
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)

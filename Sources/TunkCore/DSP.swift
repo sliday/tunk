@@ -351,6 +351,19 @@ public struct SignalChain: Sendable, Equatable {
     private var fastMagnitude: OnePoleLowPass
     private var magnitude: Double = 0
 
+    /// Delay line for the ring subtractor, one slot per axis per sample. Always
+    /// written, even while the subtractor is off, so turning the knob on mid
+    /// stream does not read stale history. Writing it changes no output.
+    private var delayX: [Double]
+    private var delayY: [Double]
+    private var delayZ: [Double]
+    private var delayIndex: Int = 0
+
+    /// Longest ring-subtractor delay the chain will honour, in samples. 64
+    /// samples is 80 ms at 796 Hz, past the second ring lobe at 26.4 ms and past
+    /// anything a chassis resonance below 50 Hz can put there.
+    public static let maxRingCombDelaySamples = 64
+
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
 
@@ -389,12 +402,17 @@ public struct SignalChain: Sendable, Equatable {
                                           sampleRateHz: tuning.sampleRateHz)
         fastMagnitude = OnePoleLowPass(cutoffHz: tuning.settleFastHz,
                                        sampleRateHz: tuning.sampleRateHz)
+        delayX = Array(repeating: 0, count: Self.maxRingCombDelaySamples)
+        delayY = delayX
+        delayZ = delayX
     }
 
     public mutating func reset() {
         hpX.reset()
         hpY.reset()
         hpZ.reset()
+        for i in delayX.indices { delayX[i] = 0; delayY[i] = 0; delayZ[i] = 0 }
+        delayIndex = 0
         previousSquared = 0
         peak.reset()
         floorTracker.reset()
@@ -407,17 +425,56 @@ public struct SignalChain: Sendable, Equatable {
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
     /// ring-down after a crossing so the tap cannot lift its own reference. The
     /// caller decides how long that lasts; it must not be open-ended.
+    ///
+    /// `combDelaySamples` and `combCoefficient` drive the ring subtractor, which
+    /// sits between the per-axis high pass and the magnitude. Zero delay skips
+    /// it entirely and the returned envelope is bit-for-bit the old one. The
+    /// subtractor only ever reads samples already ingested, so it costs no
+    /// latency and stays causal.
     @discardableResult
-    public mutating func process(x: Double, y: Double, z: Double, holdNoiseFloor: Bool) -> Double {
+    public mutating func process(x: Double, y: Double, z: Double, holdNoiseFloor: Bool,
+                                 combDelaySamples: Int = 0,
+                                 combCoefficient: Double = 0) -> Double {
         // Raw magnitude first: the bulk-motion tracker must see gravity, which
         // is exactly what the high pass exists to remove.
         magnitude = (x * x + y * y + z * z).squareRoot()
         settledMagnitude.process(magnitude)
         fastMagnitude.process(magnitude)
 
-        let ax = hpX.process(x)
-        let ay = hpY.process(y)
-        let az = hpZ.process(z)
+        var ax = hpX.process(x)
+        var ay = hpY.process(y)
+        var az = hpZ.process(z)
+
+        // Ring subtraction. The tail after a strike is that strike's own
+        // waveform, delayed and decayed, so subtracting a delayed copy of the
+        // signed axis waveform removes the part of the tail the chassis was
+        // always going to produce and leaves whatever else arrived. The sign
+        // matters, which is why this happens here and not on the envelope: the
+        // magnitude below throws the sign away and a rectified tail cannot be
+        // cancelled by anything.
+        //
+        // Normalising by `1 + |a|` — the largest amplitude gain the filter can
+        // have at any frequency — keeps the residual in the same g units as the
+        // threshold instead of silently rescaling the calibration.
+        let d = min(max(combDelaySamples, 0), Self.maxRingCombDelaySamples)
+        if d > 0 {
+            let n = delayX.count
+            let past = (delayIndex - d + n) % n
+            let gain = 1.0 / (1.0 + abs(combCoefficient))
+            let px = delayX[past], py = delayY[past], pz = delayZ[past]
+            delayX[delayIndex] = ax
+            delayY[delayIndex] = ay
+            delayZ[delayIndex] = az
+            ax = (ax - combCoefficient * px) * gain
+            ay = (ay - combCoefficient * py) * gain
+            az = (az - combCoefficient * pz) * gain
+        } else {
+            delayX[delayIndex] = ax
+            delayY[delayIndex] = ay
+            delayZ[delayIndex] = az
+        }
+        delayIndex = (delayIndex + 1) % delayX.count
+
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared

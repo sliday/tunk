@@ -91,6 +91,8 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "ringCombDelaySamples": return "Ring subtraction delay"
+        case "ringCombCoefficient": return "Ring subtraction decay"
         default:                    return field
         }
     }
@@ -192,6 +194,32 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // The delay line is a fixed-size ring, so a delay past its length would
+        // read a slot that has already been overwritten by a newer sample and
+        // subtract the present from itself.
+        if out.ringCombDelaySamples < 0 || out.ringCombDelaySamples > SignalChain.maxRingCombDelaySamples {
+            let kept = min(max(out.ringCombDelaySamples, 0), SignalChain.maxRingCombDelaySamples)
+            issues.append(CoherenceIssue(
+                field: "ringCombDelaySamples",
+                reason: "the delay line holds \(SignalChain.maxRingCombDelaySamples) samples",
+                applied: "\(kept) samples"))
+            out.ringCombDelaySamples = kept
+        }
+
+        // Outside -1...1 the subtraction feeds back more than it removes and the
+        // residual grows on every ring lobe, which turns a quiet room into
+        // onsets. Bounded here rather than trusted.
+        if !(out.ringCombCoefficient.isFinite && abs(out.ringCombCoefficient) <= 1) {
+            let kept = out.ringCombCoefficient.isFinite
+                ? min(max(out.ringCombCoefficient, -1), 1)
+                : DetectorConfig.default.ringCombCoefficient
+            issues.append(CoherenceIssue(
+                field: "ringCombCoefficient",
+                reason: "a decay outside -1...1 amplifies the tail it is meant to remove",
+                applied: "\(kept)"))
+            out.ringCombCoefficient = kept
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

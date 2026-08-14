@@ -202,7 +202,9 @@ public final class TapDetector: TapDetecting {
         let envelope = chain.process(x: Double(sample.x),
                                      y: Double(sample.y),
                                      z: Double(sample.z),
-                                     holdNoiseFloor: sample.tNs < noiseFloorHoldUntilNs)
+                                     holdNoiseFloor: sample.tNs < noiseFloorHoldUntilNs,
+                                     combDelaySamples: effectiveConfig.ringCombDelaySamples,
+                                     combCoefficient: effectiveConfig.ringCombCoefficient)
 
         if pending != nil {
             pending!.peak = max(pending!.peak, envelope)
