@@ -391,6 +391,80 @@ on lap. The evidence that this is structural rather than a tuning failure is no
 longer one measurement; it is ten, from agents that did not see each other's
 work, every one graded on data its builder could not touch.
 
+## The twelfth mechanism: rank the candidates instead of gating them
+
+Every mechanism above asked "is this sample a real tap?". This one asks "which
+of the candidates already inside the confirm window is the second tap?", and
+answers it by ranking them within the group. It ships behind
+`rankCandidateFraction`, **default 0, off**.
+
+Measured on `data/raw` at `rankCandidateFraction 0.7`, `rankAgreement 3`,
+weights on cos_first_xy, decay residual and kurtosis:
+
+| surface | detection | was | typing FP | idle/confound FP | p95 |
+|---|---|---|---|---|---|
+| desk | 95.65 % | 95.65 % | 0 | 0 | 200.1 ms |
+| soft | 100.00 % | 100.00 % | 0 | 0 | 208.9 ms |
+| lap | **87.50 %** | 73.75 % | 0 | 0 | 226.4 ms |
+| pooled | **91.06 %** | 82.11 % | 0 | 0 | 225.2 ms |
+
+Per lap session, detected of 20: `13e15a` 14 → 14, `ad3fd3` 16 → 20,
+`3fee5b` 15 → 17, `a4a257` 14 → 19. Lap false triggers 3 → 5 in 9.2 minutes,
+so the `< 1 / 20 min` bar still fails on lap and now fails by more.
+
+**Lap posture is not fixed by any of this.** `13e15a` is the session where
+`cos_first_xy` scores below chance, and it gains nothing: its inter-tap
+intervals run p50 258 ms and max 597 ms, so twelve of its twenty second taps
+land outside a 220 ms join window and no in-window mechanism can reach them.
+
+### The ranking numbers, and the baseline that matches them
+
+Within-group AUC over shadow candidates, scanning at 0.25 of the threshold so
+there are pairs to rank (each column ranks candidates inside one gesture):
+
+```
+session                      pairs   cos    crest  kurt   decay  RANK3  RANK4  latest
+tap_deck__lap__...13e15a         4   0.250  0.250  0.750  0.750  0.750  0.500  0.500
+tap_deck__lap__...ad3fd3        19   0.789  0.737  0.579  1.000  0.947  0.921  1.000
+tap_deck__lap__...3fee5b        15   0.600  0.533  0.667  0.933  0.800  0.733  0.933
+tap_deck__lap__...a4a257        21   0.905  0.905  0.762  0.952  1.000  1.000  1.000
+tap_deck__soft__...fe9b8c       22   0.455  0.409  0.727  0.955  0.886  0.818  1.000
+tap_deck__desk__...5f07e8       20   0.400  0.050  0.050  0.900  0.300  0.175  1.000
+```
+
+RANK3 is the rank-average of cos, decay residual and kurtosis; RANK4 adds crest.
+
+Three findings, in order of how much they cost to learn:
+
+1. **The combination does fix the posture session.** `cos_first_xy` is below
+   chance there (0.250) and RANK3 reads 0.750. Rank-averaging degrades to the
+   statistics that still work rather than to the broken one, which is what it
+   was built to do.
+2. **Crest is not rescued by ranking.** RANK4 is worse than RANK3 on five of
+   six sessions. A within-group rank cancels a constant offset, and crest's
+   problem is a sign flip, which it does not cancel.
+3. **`latest` beats all of it.** That column is "pick the last candidate in the
+   window" — no statistics at all — and it scores 1.000, 0.933, 1.000 on the
+   three lap sessions where RANK3 scores 0.947, 0.800, 1.000. The four
+   statistics are largely re-encoding "ring ripple comes early, the real second
+   tap comes late". They earn their place only on the posture session
+   (0.750 against 0.500) and only by four pairs.
+
+At the operating point that keeps typing and idle false triggers at zero (a
+candidate floor of 0.7, not 0.25) most groups hold **one** candidate, so the
+ranking rarely has a choice at all: of the 13 gestures where the mechanism
+selected an onset, 11 matched a label and 2 became false triggers. Most of the
+recovery is admission, not ranking. What ranking demonstrably buys is on the
+false-trigger side: requiring three statistics to agree removes the idle-session
+and typing false triggers that a floor of 0.25 produced (idle 3, typing 1) at a
+cost of two lap gestures.
+
+### Why it is still off
+
+Lap false triggers went 3 → 5 while the bar asks for under one per twenty
+minutes, and the whole gain rests on 11 gestures from one operator on one
+machine. It is a knob, defaulted off, with the measurement written down.
+
 ## Coverage limits
 
 One operator, one machine, one session per surface for soft, four for lap. No

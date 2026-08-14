@@ -268,6 +268,37 @@ public struct DSPTuning: Sendable, Equatable {
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
 
+    // MARK: - Within-group candidate ranking (see `DetectorConfig.rankCandidateFraction`)
+    //
+    // Shape constants for the shadow candidate scan. They only run when the
+    // ranking knob is on, and none of them changes the shipped signal chain.
+
+    /// A shadow candidate closes when the envelope falls back to this fraction
+    /// of its own tracked peak. Relative to the candidate's peak, not to the
+    /// threshold, because the whole point is to hear a strike sitting on a tail
+    /// that never returns to baseline.
+    public var rankCandidateReleaseFraction: Double
+    /// Minimum spacing between two shadow candidates. 55 ms swallows the second
+    /// lobe of one tap (measured at +26.4 ms) and still leaves room for two
+    /// candidates inside a 120 ms join window.
+    public var rankCandidateDebounceNs: Int64
+    /// How long after a crossing the candidate's peak sample is searched for.
+    /// 20 ms is one full cycle of the 50 Hz ceiling the sensor imposes; a
+    /// shorter window lands on the rising edge, where the lateral direction has
+    /// the opposite sign and `cos_first_xy` reads backwards.
+    public var rankPeakWindowNs: Int64
+    /// How long after a candidate's crossing its statistics can be computed.
+    /// The kurtosis window runs to +45 ms past the peak, and the peak itself can
+    /// be 20 ms past the crossing. Selection waits this long after the join
+    /// window closes; it costs no latency because a recovered gesture still
+    /// fires one confirm window after its own second onset.
+    public var rankStatTailNs: Int64
+    /// Sample ring held for the statistics, in samples. 256 at 796 Hz is 320 ms,
+    /// which covers the whole join window plus the widest statistic window: the
+    /// earliest candidate sits 100 ms after the first onset and is scored 190 ms
+    /// later, so a shorter ring would score it against samples it had dropped.
+    public var rankRingCapacity: Int
+
     public static let `default` = DSPTuning(
         sampleRateHz: 796.3,
         highPassHz: 20.0,
@@ -299,7 +330,17 @@ public struct DSPTuning: Sendable, Equatable {
                 inGestureThresholdFraction: Double = 1.0,
                 settleFastHz: Double = 6.0,
                 settleSlowHz: Double = 0.3,
-                onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
+                onsetLogCapacity: Int, groupLogCapacity: Int = 256,
+                rankCandidateReleaseFraction: Double = 0.55,
+                rankCandidateDebounceNs: Int64 = 55_000_000,
+                rankPeakWindowNs: Int64 = 20_000_000,
+                rankStatTailNs: Int64 = 70_000_000,
+                rankRingCapacity: Int = 256) {
+        self.rankCandidateReleaseFraction = rankCandidateReleaseFraction
+        self.rankCandidateDebounceNs = rankCandidateDebounceNs
+        self.rankPeakWindowNs = rankPeakWindowNs
+        self.rankStatTailNs = rankStatTailNs
+        self.rankRingCapacity = rankRingCapacity
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
         self.envelopePeakSamples = envelopePeakSamples
@@ -354,6 +395,16 @@ public struct SignalChain: Sendable, Equatable {
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
 
+    /// The high-passed acceleration for the current sample, per axis, in g —
+    /// before the magnitude, the quadrature pair and the sliding max.
+    ///
+    /// Everything downstream of here is rectified and peak-held, which is what
+    /// makes the envelope a stable amplitude and destroys every trace of the
+    /// waveform's direction and shape. Shape statistics have to read this.
+    public private(set) var highPassX: Double = 0
+    public private(set) var highPassY: Double = 0
+    public private(set) var highPassZ: Double = 0
+
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
     ///
     /// The high-passed envelope above answers "did something ring". This answers
@@ -402,6 +453,9 @@ public struct SignalChain: Sendable, Equatable {
         fastMagnitude.reset()
         magnitude = 0
         envelope = 0
+        highPassX = 0
+        highPassY = 0
+        highPassZ = 0
     }
 
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
@@ -418,6 +472,9 @@ public struct SignalChain: Sendable, Equatable {
         let ax = hpX.process(x)
         let ay = hpY.process(y)
         let az = hpZ.process(z)
+        highPassX = ax
+        highPassY = ay
+        highPassZ = az
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared

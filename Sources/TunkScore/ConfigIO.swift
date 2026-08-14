@@ -71,6 +71,12 @@ enum ConfigParam: String, CaseIterable {
     case tapCountToFire
     case onsetCeilingG
     case motionGateG
+    case rankCandidateFraction
+    case rankAgreement
+    case rankWeightCos
+    case rankWeightCrest
+    case rankWeightDecay
+    case rankWeightKurtosis
 
     /// Accepts the canonical name or its `...Ms` alias for the ns fields.
     init?(name: String) {
@@ -113,6 +119,12 @@ enum ConfigParam: String, CaseIterable {
         // by sweeping through zero rather than needing a separate flag.
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
+        case .rankCandidateFraction: c.rankCandidateFraction = v
+        case .rankAgreement: c.rankAgreement = v
+        case .rankWeightCos: c.rankWeightCos = v
+        case .rankWeightCrest: c.rankWeightCrest = v
+        case .rankWeightDecay: c.rankWeightDecay = v
+        case .rankWeightKurtosis: c.rankWeightKurtosis = v
         }
     }
 
@@ -129,6 +141,12 @@ enum ConfigParam: String, CaseIterable {
         case .tapCountToFire: return Double(c.tapCountToFire)
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
+        case .rankCandidateFraction: return c.rankCandidateFraction
+        case .rankAgreement: return c.rankAgreement
+        case .rankWeightCos: return c.rankWeightCos
+        case .rankWeightCrest: return c.rankWeightCrest
+        case .rankWeightDecay: return c.rankWeightDecay
+        case .rankWeightKurtosis: return c.rankWeightKurtosis
         }
     }
 

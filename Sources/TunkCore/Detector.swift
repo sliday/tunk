@@ -172,6 +172,10 @@ public final class TapDetector: TapDetecting {
     /// cannot reassemble itself into a legal-looking pair.
     private var lastGroupingOnsetNs: Int64?
 
+    /// Within-group ranking of shadow candidates for the second tap. Dormant
+    /// unless `config.rankCandidateFraction > 0`; see `DetectorRanking.swift`.
+    private var rank = RankSelector()
+
     private var refractoryUntilNs: Int64 = Int64.min
     private var gateUntilNs: Int64 = Int64.min
     /// The adaptive noise floor is frozen until this instant, so the strike that
@@ -240,6 +244,17 @@ public final class TapDetector: TapDetecting {
             armed = true
         }
 
+        // The shadow scan runs after the onset rule, so the sample that starts a
+        // group is the first one it sees — that sample carries the first
+        // strike's peak, which every statistic is measured against. It never
+        // touches the arm state, so the detector stays exactly as deterministic
+        // as it was.
+        if rank.isActive {
+            rank.ingest(tNs: sample.tNs,
+                        hx: chain.highPassX, hy: chain.highPassY, hz: chain.highPassZ,
+                        env: envelope, config: effectiveConfig, tuning: tuning)
+        }
+
         // Onsets first, deadlines second: an onset landing on the same sample as
         // an expiring wait window is inside the window, per "min...max join".
         // `acceptOnset` closes any group that the onset is too late to join, so
@@ -295,6 +310,7 @@ public final class TapDetector: TapDetecting {
         lastOnsetNs = nil
         pending = nil
         clearGroup()
+        rank.reset()
         lastGroupingOnsetNs = nil
         refractoryUntilNs = Int64.min
         gateUntilNs = Int64.min
@@ -488,6 +504,29 @@ public final class TapDetector: TapDetecting {
         }
         groupLastOnsetNs = tNs
         groupDeadlineNs = tNs + effectiveConfig.confirmWindowNs
+
+        guard groupCount == 1, rankSelectionEligible else {
+            // A second onset arrived unaided, or the count is past anything
+            // ranking could help. Either way there is nothing left to choose.
+            rank.stop()
+            return
+        }
+        rank.begin(firstOnsetNs: tNs, threshold: currentThreshold(),
+                   config: effectiveConfig, tuning: tuning)
+        // Hold the confirm decision until the candidates can be scored. A group
+        // of one fires nothing, so this costs no latency: the gesture it might
+        // become still fires one confirm window after its own second onset.
+        if let selection = rank.selectionDeadlineNs {
+            groupDeadlineNs = max(groupDeadlineNs ?? selection, selection)
+        }
+    }
+
+    /// Whether ranking may run at all. It may not lengthen the wait for a count
+    /// that fires on its own, so a build with single-tap armed opts out.
+    private var rankSelectionEligible: Bool {
+        effectiveConfig.rankCandidateFraction > 0
+            && firingCounts.contains(2)
+            && !firingCounts.contains(1)
     }
 
     /// How many members are worth keeping. One past the largest bindable count,
@@ -500,11 +539,42 @@ public final class TapDetector: TapDetecting {
         groupCount = 0
         groupLastOnsetNs = nil
         groupDeadlineNs = nil
+        rank.stop()
     }
 
     private func checkGroupDeadline(now tNs: Int64) -> Trigger? {
+        if let selection = rank.selectionDeadlineNs, tNs >= selection {
+            takeRankSelection(now: tNs)
+        }
         guard let deadline = groupDeadlineNs, tNs >= deadline else { return nil }
         return closeGroup(now: tNs)
+    }
+
+    /// Ask the ranker which candidate was the second tap, and adopt it as a real
+    /// onset if it answered.
+    ///
+    /// The whole decision happens inside a window that has already elapsed, so
+    /// nothing here is a prediction about the future. Declining is always
+    /// available and is what happens when the statistics disagree: the group
+    /// keeps the count it already had and the gesture is missed exactly as it is
+    /// missed today.
+    private func takeRankSelection(now tNs: Int64) {
+        guard groupCount == 1, rankSelectionEligible else { rank.stop(); return }
+        let chosen = rank.select(now: tNs, config: effectiveConfig, tuning: tuning)
+        rank.stop()
+        guard let chosen else { return }
+        // The gate and the refractory period outrank the ranker. Both are
+        // false-trigger defences, and a selected onset is weaker evidence than
+        // an onset that cleared the full threshold on its own.
+        guard chosen.tNs >= gateUntilNs, chosen.tNs >= refractoryUntilNs else { return }
+        guard let first = groupLastOnsetNs,
+              chosen.tNs - first >= effectiveConfig.minInterTapNs,
+              chosen.tNs - first <= effectiveConfig.maxInterTapNs else { return }
+
+        // Published like any other onset so the tap monitor and the harness see
+        // the gesture the way the detector saw it, in ascending time order.
+        append(OnsetEvent(tNs: chosen.tNs, strength: chosen.strength, suppressedByGate: false))
+        extendGroup(to: chosen.tNs, strength: chosen.strength)
     }
 
     /// Give the live group its confirm decision and retire it. The group is gone

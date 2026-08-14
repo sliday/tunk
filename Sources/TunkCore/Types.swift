@@ -219,6 +219,54 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Fraction of the onset threshold a **shadow candidate** must beat, inside
+    /// the join window of a group that has only one onset. **0, disabled.**
+    ///
+    /// This is the entry point to within-group ranking, and it is a different
+    /// question from every earlier mechanism. Those all asked "is this sample a
+    /// real tap?", which is detection, and the best statistic measured kept 10 %
+    /// of real second strikes at a threshold admitting 1 % of ring lobes. This
+    /// asks "which of the candidates already inside the confirm window is the
+    /// second tap?", which is ranking, and a statistic too weak to gate can
+    /// still order two or three candidates.
+    ///
+    /// While the knob is zero the detector does not even record the samples the
+    /// statistics read, so the shipped path is byte-identical to the build
+    /// before this existed. `DetectorRankSelectionTests` asserts that.
+    public var rankCandidateFraction: Double
+
+    /// How many of the enabled statistics must independently put the winner
+    /// first before the selection is taken. **2.**
+    ///
+    /// The graceful-degradation clause. Lap posture is a hidden variable — one
+    /// of four recorded lap sessions scores below chance on `cos_first_xy` while
+    /// the other three score 0.79 to 0.91 — and neither the surface nor the
+    /// posture is detectable at runtime. Requiring agreement means a posture
+    /// that breaks one statistic leaves the group alone, which is today's
+    /// behaviour, rather than promoting a ring lobe to a tap.
+    ///
+    /// Zero disables the requirement and takes the rank-average winner outright.
+    public var rankAgreement: Double
+
+    /// Weight on `cos_first_xy`: the cosine between the lateral (x, y)
+    /// high-passed direction at the candidate's peak sample and the same
+    /// direction at the first strike's peak. A fresh strike from the same hand
+    /// pushes the chassis the same way; a ring lobe is whatever phase the
+    /// oscillation happens to be in.
+    public var rankWeightCos: Double
+    /// Weight on the crest factor over -5..+30 ms of the projected waveform.
+    /// **0.** It inverts between surfaces (lap AUC 0.835 in the amplitude
+    /// overlap band, desk 0.108) and within-group ranking did not rescue it:
+    /// with crest in the average, lap within-group AUC fell on three of four
+    /// sessions. Kept as a knob so the measurement can be repeated, not because
+    /// it earns its place.
+    public var rankWeightCrest: Double
+    /// Weight on the decay residual: how far the candidate sits above the
+    /// exponential decay fitted to the preceding strike's own envelope.
+    public var rankWeightDecay: Double
+    /// Weight on the kurtosis of the projected waveform over ~55 ms.
+    public var rankWeightKurtosis: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -269,7 +317,19 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
-                calibratedInterTapNs: Int64? = nil) {
+                calibratedInterTapNs: Int64? = nil,
+                rankCandidateFraction: Double = 0,
+                rankAgreement: Double = 2,
+                rankWeightCos: Double = 1,
+                rankWeightCrest: Double = 0,
+                rankWeightDecay: Double = 1,
+                rankWeightKurtosis: Double = 1) {
+        self.rankCandidateFraction = rankCandidateFraction
+        self.rankAgreement = rankAgreement
+        self.rankWeightCos = rankWeightCos
+        self.rankWeightCrest = rankWeightCrest
+        self.rankWeightDecay = rankWeightDecay
+        self.rankWeightKurtosis = rankWeightKurtosis
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
         self.defaultThreshold = defaultThreshold
@@ -303,6 +363,8 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case rankCandidateFraction, rankAgreement
+        case rankWeightCos, rankWeightCrest, rankWeightDecay, rankWeightKurtosis
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +382,14 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        rankCandidateFraction = try c.decodeIfPresent(Double.self, forKey: .rankCandidateFraction)
+            ?? d.rankCandidateFraction
+        rankAgreement = try c.decodeIfPresent(Double.self, forKey: .rankAgreement) ?? d.rankAgreement
+        rankWeightCos = try c.decodeIfPresent(Double.self, forKey: .rankWeightCos) ?? d.rankWeightCos
+        rankWeightCrest = try c.decodeIfPresent(Double.self, forKey: .rankWeightCrest) ?? d.rankWeightCrest
+        rankWeightDecay = try c.decodeIfPresent(Double.self, forKey: .rankWeightDecay) ?? d.rankWeightDecay
+        rankWeightKurtosis = try c.decodeIfPresent(Double.self, forKey: .rankWeightKurtosis)
+            ?? d.rankWeightKurtosis
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +413,12 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(rankCandidateFraction, forKey: .rankCandidateFraction)
+        try c.encode(rankAgreement, forKey: .rankAgreement)
+        try c.encode(rankWeightCos, forKey: .rankWeightCos)
+        try c.encode(rankWeightCrest, forKey: .rankWeightCrest)
+        try c.encode(rankWeightDecay, forKey: .rankWeightDecay)
+        try c.encode(rankWeightKurtosis, forKey: .rankWeightKurtosis)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)
