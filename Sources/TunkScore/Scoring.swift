@@ -152,6 +152,15 @@ struct CountStats: Codable {
     /// with the labelled one by more than `Scoring.onsetAgreementNs`. Counted so
     /// a detection rate can be read strictly as well as by the contract.
     var looseOnsetCredits = 0
+    /// Onset spreads of every credit, so a reader can see HOW MUCH the trigger's
+    /// onsets disagreed with the label rather than only whether they crossed one
+    /// line. The 80 ms line is the labeller's own two-tap floor and is
+    /// defensible, but a lap ring lobe sits about 25 ms from its strike, so a
+    /// credit disagreeing by 40-60 ms may still be firing on a lobe two steps
+    /// away and pass. That case is real: two of three held-out lap gestures a
+    /// front-end change recovered had spreads of 41.3 and 61.3 ms. Publishing
+    /// the distribution stops one threshold from having to carry the argument.
+    var onsetSpreadsNs: [Int64] = []
     var ambiguousGroups = 0
     var missedGroups = 0
     /// Labelled groups of this count that the detector is not armed for.
@@ -183,6 +192,12 @@ struct CountStats: Codable {
         guard armed, labelledGroups > 0 else { return nil }
         return Double(detectedGroups - looseOnsetCredits) / Double(labelledGroups)
     }
+    /// Credits whose onsets disagree with the label by more than 40 ms — half
+    /// the labeller's two-tap floor, and above the ~25 ms lap ring-lobe spacing.
+    /// Reported alongside, never instead of, the contract rate.
+    var creditsOver40ms: Int { onsetSpreadsNs.filter { $0 > 40_000_000 }.count }
+    var onsetSpreadP50Ns: Int64? { Percentile.of(onsetSpreadsNs, 0.50) }
+    var onsetSpreadMaxNs: Int64? { onsetSpreadsNs.max() }
     var latencyP50Ns: Int64? { Percentile.of(latenciesNs, 0.50) }
     var latencyP95Ns: Int64? { Percentile.of(latenciesNs, 0.95) }
     var latencyMaxNs: Int64? { latenciesNs.max() }
@@ -192,6 +207,7 @@ struct CountStats: Codable {
         labelledGroups += o.labelledGroups
         detectedGroups += o.detectedGroups
         looseOnsetCredits += o.looseOnsetCredits
+        onsetSpreadsNs.append(contentsOf: o.onsetSpreadsNs)
         ambiguousGroups += o.ambiguousGroups
         missedGroups += o.missedGroups
         mustNotFireGroups += o.mustNotFireGroups
@@ -204,6 +220,7 @@ struct CountStats: Codable {
 
     enum CodingKeys: String, CodingKey {
         case count, armed, labelledGroups, detectedGroups, looseOnsetCredits
+        case onsetSpreadsNs, creditsOver40ms, onsetSpreadP50Ns, onsetSpreadMaxNs
         case ambiguousGroups, missedGroups
         case mustNotFireGroups, mustNotFireViolations, triggers, falseTriggers
         case latencyExcluded, latenciesNs
@@ -217,6 +234,10 @@ struct CountStats: Codable {
         try c.encode(labelledGroups, forKey: .labelledGroups)
         try c.encode(detectedGroups, forKey: .detectedGroups)
         try c.encode(looseOnsetCredits, forKey: .looseOnsetCredits)
+        try c.encode(onsetSpreadsNs, forKey: .onsetSpreadsNs)
+        try c.encode(creditsOver40ms, forKey: .creditsOver40ms)
+        try c.encodeIfPresent(onsetSpreadP50Ns, forKey: .onsetSpreadP50Ns)
+        try c.encodeIfPresent(onsetSpreadMaxNs, forKey: .onsetSpreadMaxNs)
         try c.encode(ambiguousGroups, forKey: .ambiguousGroups)
         try c.encode(missedGroups, forKey: .missedGroups)
         try c.encode(mustNotFireGroups, forKey: .mustNotFireGroups)
@@ -239,6 +260,7 @@ struct CountStats: Codable {
         labelledGroups = try c.decode(Int.self, forKey: .labelledGroups)
         detectedGroups = try c.decode(Int.self, forKey: .detectedGroups)
         looseOnsetCredits = try c.decodeIfPresent(Int.self, forKey: .looseOnsetCredits) ?? 0
+        onsetSpreadsNs = try c.decodeIfPresent([Int64].self, forKey: .onsetSpreadsNs) ?? []
         ambiguousGroups = try c.decode(Int.self, forKey: .ambiguousGroups)
         missedGroups = try c.decode(Int.self, forKey: .missedGroups)
         mustNotFireGroups = try c.decode(Int.self, forKey: .mustNotFireGroups)
@@ -423,6 +445,7 @@ enum SessionScorer {
                     detected += 1
                     s.detectedGroups += 1
                     if loose { looseOnsetCredits += 1; s.looseOnsetCredits += 1 }
+                    if let spread = outcome.onsetSpreadNs { s.onsetSpreadsNs.append(spread) }
                     if confidence == .promptWindow {
                         latencyExcluded += 1
                         s.latencyExcluded += 1

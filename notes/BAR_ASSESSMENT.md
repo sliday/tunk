@@ -429,6 +429,35 @@ caution applies as to every other training number in this file: the four-round
 pattern has been that train gains of six to eight gestures deliver one on
 held-out.
 
+## How much of the resonator's held-out gain is clean
+
+The strict measure had a weakness worth fixing rather than arguing about. It
+flags a credit when the trigger's onset vector disagrees with the label by more
+than 80 ms — the labeller's own two-tap floor. But a lap ring lobe sits about
+25 ms from its strike, so a credit disagreeing by 40-60 ms may be firing on a
+lobe two steps away and still pass.
+
+The harness now publishes the whole distribution instead of one line. Held-out:
+
+| config | lap detections | credits with spread > 40 ms | clean |
+|---|---|---|---|
+| shipped default | 16/20 | 2 (59, 58 ms) | **14** |
+| resonator on | 19/20 | 4 (61, 59, 58, 41 ms) | **15** |
+
+Two of the resonator's three new credits have spreads of 61 and 41 ms. Counting
+only credits whose onsets agree with the label to within 40 ms, the gain is
+**14 -> 15 — one gesture, not three**, and held-out lap reads 75 % rather than
+95 %.
+
+Desk and soft have **zero** credits over 40 ms under either config (p50 spreads
+1.2-2.5 ms, max 12.5 ms). The loose credits are entirely a lap phenomenon, which
+is what ring lobes predict and what the whole front-end argument was about.
+
+So the resonator's honest held-out claim is: one clean lap gesture recovered,
+two more that the corpus cannot adjudicate, desk and soft untouched at 20/20,
+latency unchanged, and a doubling of train lap false triggers. That is a
+narrower result than "80 % -> 95 %" and it is the one to quote.
+
 ## The join window, re-measured at the resonator point, and the default not flipped
 
 The window was measured saturated at the OLD operating point. At the resonator
