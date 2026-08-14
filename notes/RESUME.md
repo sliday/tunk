@@ -29,8 +29,23 @@ cd /Users/stas/Playground/tunk
 ```
 
 Headphones on: the tool speaks and beeps, and through speakers both shake the
-chassis into the data. Ctrl-C at any point flushes the stream and writes a valid
-session, so stopping early costs only what has not been recorded yet.
+chassis into the data. Ctrl-C flushes the current session, writes it valid, and
+stops the script — capture exits 130 and `set -e` halts the run.
+
+An audit of the capture path ran before this script was trusted with 28 minutes,
+and it would not have worked. Four defects, all fixed and covered:
+
+- **`say` blocked forever.** `/usr/bin/say` and `afplay` hang on this machine
+  (virtual audio drivers). `doctor --seconds 3` ran until the 2-minute timeout;
+  it now returns in 11.4 s, because speech is bounded at 8 s and gives up once.
+- **The beep mark was stamped before the beep.** Beeps stalled about 16 s, so
+  ground truth sat 16 s ahead of anything the operator heard, every gesture fell
+  outside the labeller's 2600 ms window, and `tunk-label` would have written 60
+  prompt-window labels at moments when nothing happened. The beep now precedes
+  the mark and reports its own start latency; over 250 ms prints a stop-and-fix.
+- **Ctrl-C exited 0**, so the shell walked into the next phase and recorded an
+  empty room as the next surface. Measured, not hypothesised: 22 s into phase A.
+- **An inert confound session was credited as evidence.** See below.
 
 It records three things:
 
@@ -85,6 +100,31 @@ with fresh context who rebuilt from source and graded on data the builder could
 not see. None reached the bar on lap. The latency-budget escape is measured shut
 (the join window saturates at 280 ms and 77.5 %), and so is the sensor-bandwidth
 escape.
+
+## One confound session in `data/raw` is a recording of nothing
+
+`confound_music__desk__20260813-213400__93cb8f` is quieter than an empty room.
+Peak sample-to-sample step at p99.9, in g:
+
+| session | p99.9 |
+|---|---|
+| `confound_music ...93cb8f` | **0.0007** |
+| `idle ...7da427` | 0.0014 |
+| `idle ...75bdf7` | 0.0026 |
+| `confound_music ...84bfc0` | 0.0076 |
+
+It ran its 0.6 minutes and bought a green "0 false triggers in 2 confound
+sessions". The harness now measures that number on the raw samples — a first
+difference, so it cannot depend on any threshold the detector is graded on — and
+drops any confound session below 0.004 g from the count, naming it in the text.
+The desk check reads `0 in 1 session(s), 0.6 min — 1 inert session(s) excluded`.
+All-inert reads `no usable confound sessions`, not a pass.
+
+This is the second time the same hole was patched. First it was empty
+directories, closed with a minimum duration; a full-length recording of silence
+walked straight through that. `Tests/TunkScoreTests/InertConfoundTests.swift`
+holds both cases, and the scorer now has a test target at all — `TunkScoreTests`
+was never declared in `Package.swift`.
 
 ## The referee has been audited
 

@@ -46,6 +46,16 @@ struct ReplayResult {
     var deliveryOrderViolations = 0
     /// Wall-clock seconds the replay itself took. Diagnostics only.
     var replaySeconds = 0.0
+    /// How hard the chassis was actually disturbed during the recording, in g
+    /// between consecutive samples, at the 99.9th percentile.
+    ///
+    /// A first difference rather than the shipped filter chain, deliberately:
+    /// this number has to answer "did anything happen in the room" for a
+    /// recording the detector is *supposed* to ignore, so it must not depend on
+    /// any threshold the detector is being graded on. `data/raw` separates
+    /// cleanly — idle 0.0014 and 0.0026, a real music session 0.0076, and one
+    /// `confound_music` session at 0.0007, quieter than an empty room.
+    var disturbanceP999 = 0.0
 
     var spanNs: Int64 { max(0, lastNs - firstNs) }
 }
@@ -169,8 +179,27 @@ enum Replay {
         }
 
         result.onsets.append(contentsOf: detector.drainOnsets())
+        result.disturbanceP999 = disturbanceP999(of: samples)
         result.replaySeconds = Date().timeIntervalSince(started)
         return result
+    }
+
+    /// 99.9th percentile of the sample-to-sample acceleration step.
+    ///
+    /// Needs a few hundred samples before a p99.9 means anything; below that it
+    /// reports 0, which reads as "no evidence" rather than "quiet".
+    static func disturbanceP999(of samples: [AccelSample]) -> Double {
+        guard samples.count >= 400 else { return 0 }
+        var steps = [Double]()
+        steps.reserveCapacity(samples.count - 1)
+        for i in 1..<samples.count {
+            let dx = Double(samples[i].x - samples[i - 1].x)
+            let dy = Double(samples[i].y - samples[i - 1].y)
+            let dz = Double(samples[i].z - samples[i - 1].z)
+            steps.append((dx * dx + dy * dy + dz * dz).squareRoot())
+        }
+        steps.sort()
+        return steps[min(steps.count - 1, Int(0.999 * Double(steps.count)))]
     }
 
     /// Convenience: load a session off disk and replay it with a fresh detector.

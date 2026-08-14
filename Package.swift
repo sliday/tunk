@@ -43,5 +43,10 @@ let package = Package(
         .executableTarget(name: "TunkApp", dependencies: ["TunkIMU", "TunkCore", "TunkFormat", "TunkEmit"]),
 
         .testTarget(name: "TunkCoreTests", dependencies: ["TunkCore", "TunkFormat", "TunkEmit", "TunkLabelCore"]),
+
+        // The scorer is the referee, so its own guards need cover. SwiftPM can
+        // test an executable target directly; TunkApp is the one that cannot,
+        // because a SwiftUI @main links differently.
+        .testTarget(name: "TunkScoreTests", dependencies: ["TunkScore", "TunkCore", "TunkFormat"]),
     ]
 )

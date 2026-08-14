@@ -75,7 +75,19 @@ enum Runtime {
         } else {
             Console.line("no session was open.")
         }
-        exitNow(0)
+        // Non-zero, because an interrupt is not a success.
+        //
+        // This exited 0, and a shell script running several captures in sequence
+        // therefore saw a clean finish and ran the NEXT one. Measured: SIGINT
+        // 22 s into phase A flushed a valid session, exited 0, and bash went
+        // straight into phase B and recorded an empty room as the next surface,
+        // reaching the end of the script and exiting 0. The operator, who had
+        // been told "Ctrl-C at any point flushes the stream and writes a valid
+        // session", pressed it once and got a full run of stub sessions.
+        //
+        // 130 is the shell convention for SIGINT (128 + 2), so `set -e` stops
+        // the script and the session on disk stays valid either way.
+        exitNow(130)
     }
 
     static func exitNow(_ code: Int32) -> Never {

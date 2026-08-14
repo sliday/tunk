@@ -112,17 +112,31 @@ enum PassLine {
         // it is still one session, and it used to satisfy this check outright:
         // an empty directory bought a green "0 false triggers in 1 session".
         // Recorded seconds is the thing that makes the check mean something.
+        //
+        // Recorded seconds was not enough either. A full-length recording of a
+        // quiet room is still a quiet room, and `data/raw` holds one: a
+        // `confound_music` session whose loudest sample step is 0.0007 g, below
+        // both idle sessions. It ran the clock and bought the same green. Any
+        // confound session that never disturbed the chassis is dropped from the
+        // count here and named in the text, so an operator who mis-records one
+        // reads "1 inert" instead of a pass.
+        let inertNote = agg.inertConfoundSessions == 0 ? ""
+            : String(format: " — %d inert session(s) excluded (nothing above an idle room)",
+                     agg.inertConfoundSessions)
         out.append(Check(
             name: "false triggers, confound sessions",
             scope: scope,
             requirement: "= 0",
-            actual: agg.confoundSessions == 0 ? "no confound sessions"
+            actual: agg.confoundSessions == 0
+                ? (agg.inertConfoundSessions == 0 ? "no confound sessions"
+                   : String(format: "no usable confound sessions — all %d were inert",
+                            agg.inertConfoundSessions))
                 : agg.confoundSeconds < minimumMeaningfulSeconds
                     ? String(format: "%d confound session(s) holding only %.1f s of data",
                              agg.confoundSessions, agg.confoundSeconds)
                     : String(format: "%d in %d session(s), %.1f min",
                              agg.confoundFalsePositives, agg.confoundSessions,
-                             agg.confoundSeconds / 60),
+                             agg.confoundSeconds / 60) + inertNote,
             status: agg.confoundSessions == 0 || agg.confoundSeconds < minimumMeaningfulSeconds
                 ? .noData : (agg.confoundFalsePositives == 0 ? .pass : .fail)
         ))

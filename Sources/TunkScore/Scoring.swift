@@ -291,6 +291,19 @@ struct SessionScore: Codable {
     var unsortedSamples: Int
     var unsortedInputs: Int
     var deliveryOrderViolations: Int
+    /// Peak sample-to-sample acceleration step, g, 99.9th percentile. See
+    /// `ReplayResult.disturbanceP999`.
+    var disturbanceP999: Double = 0
+
+    /// A confound recording with nothing in it. The category promises music, or
+    /// handling, or a fan — something the detector has to sit through without
+    /// firing. A session that never exceeded an idle room proves nothing, and
+    /// crediting it turns "0 false triggers in 2 confound sessions" into a
+    /// sentence about a silent recording. `data/raw` holds one already.
+    var confoundIsInert: Bool {
+        category.hasPrefix("confound_") && sampleCount >= 400
+            && disturbanceP999 < Aggregate.minimumConfoundDisturbance
+    }
 
     var armedCounts: [Int]
     /// Labelled gesture groups whose tap count is armed. The detection denominator.
@@ -555,6 +568,7 @@ enum SessionScorer {
             unsortedSamples: replay.unsortedSamples,
             unsortedInputs: replay.unsortedInputs,
             deliveryOrderViolations: replay.deliveryOrderViolations,
+            disturbanceP999: replay.disturbanceP999,
             armedCounts: policy.armedCounts,
             armedGroups: armedGroups,
             detectedGroups: detected,
@@ -588,6 +602,14 @@ struct Aggregate: Codable {
     var tapSessions: Int = 0
     var typingSessions: Int = 0
     var confoundSessions: Int = 0
+    /// Confound sessions excluded from the count above because nothing happened
+    /// in them. Reported, never credited.
+    var inertConfoundSessions: Int = 0
+    /// Floor a confound recording has to clear to count as evidence, in g of
+    /// sample-to-sample step at p99.9. The loudest idle session in `data/raw`
+    /// reads 0.0026 and the one real music session reads 0.0076, so this sits
+    /// between them with margin on both sides.
+    static let minimumConfoundDisturbance = 0.004
     var durationSeconds: Double = 0
     /// Samples behind `durationSeconds`, so the pass line can derive the actual
     /// rate and compare it against the one the filters were designed for.
@@ -671,9 +693,13 @@ struct Aggregate: Codable {
             typingFalsePositives += c.falseTriggers
         }
         if s.category.hasPrefix("confound_") {
-            confoundSessions += 1
-            confoundSeconds += s.durationSeconds
-            confoundFalsePositives += c.falseTriggers
+            if s.confoundIsInert {
+                inertConfoundSessions += 1
+            } else {
+                confoundSessions += 1
+                confoundSeconds += s.durationSeconds
+                confoundFalsePositives += c.falseTriggers
+            }
         }
         if Category(rawValue: s.category)?.isTapCategory == true {
             tapSessions += 1
@@ -705,9 +731,13 @@ struct Aggregate: Codable {
             typingFalsePositives += s.falsePositives
         }
         if s.category.hasPrefix("confound_") {
-            confoundSessions += 1
-            confoundSeconds += s.durationSeconds
-            confoundFalsePositives += s.falsePositives
+            if s.confoundIsInert {
+                inertConfoundSessions += 1
+            } else {
+                confoundSessions += 1
+                confoundSeconds += s.durationSeconds
+                confoundFalsePositives += s.falsePositives
+            }
         }
         if Category(rawValue: s.category)?.isTapCategory == true {
             tapSessions += 1
@@ -726,7 +756,7 @@ struct Aggregate: Codable {
 
     enum CodingKeys: String, CodingKey {
         case label, tapCount, armed, labelledGroups
-        case sessions, tapSessions, typingSessions, confoundSessions
+        case sessions, tapSessions, typingSessions, confoundSessions, inertConfoundSessions
         case durationSeconds, typingSeconds, typingUngatedSeconds, confoundSeconds
         case armedGroups, detectedGroups, ambiguousGroups
         case mustNotFireGroups, mustNotFireViolations
@@ -749,6 +779,7 @@ struct Aggregate: Codable {
         try c.encode(tapSessions, forKey: .tapSessions)
         try c.encode(typingSessions, forKey: .typingSessions)
         try c.encode(confoundSessions, forKey: .confoundSessions)
+        try c.encode(inertConfoundSessions, forKey: .inertConfoundSessions)
         try c.encode(durationSeconds, forKey: .durationSeconds)
         try c.encode(typingSeconds, forKey: .typingSeconds)
         try c.encode(typingUngatedSeconds, forKey: .typingUngatedSeconds)
@@ -787,6 +818,7 @@ struct Aggregate: Codable {
         tapSessions = try c.decode(Int.self, forKey: .tapSessions)
         typingSessions = try c.decode(Int.self, forKey: .typingSessions)
         confoundSessions = try c.decode(Int.self, forKey: .confoundSessions)
+        inertConfoundSessions = try c.decodeIfPresent(Int.self, forKey: .inertConfoundSessions) ?? 0
         durationSeconds = try c.decode(Double.self, forKey: .durationSeconds)
         typingSeconds = try c.decodeIfPresent(Double.self, forKey: .typingSeconds) ?? 0
         typingUngatedSeconds = try c.decodeIfPresent(Double.self, forKey: .typingUngatedSeconds) ?? 0

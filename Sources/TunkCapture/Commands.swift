@@ -465,10 +465,18 @@ private func runTapPhase(recorder: SessionRecorder, cue: Cue, phase: Phase,
     for g in 0..<phase.taps {
         if Runtime.isAborting { return false }
         recorder.mark(kind: "prompt", text: "double-tap: \(phase.category.title)", group: g)
-        // Mark and tone as close together as the process can manage; the player is
-        // already prepared, so the gap is a handful of milliseconds.
+        // Tone first, mark second. The mark has to sit at the moment the
+        // operator could hear the cue, not the moment we asked for it: with a
+        // stalled audio path `play()` took ~16 s, and stamping first put every
+        // beep mark 16 s before the sound, which puts every gesture outside the
+        // labeller's window and turns the session into labels for silence.
+        let beepDelay = cue.beep()
         recorder.mark(kind: "beep", group: g)
-        cue.beep()
+        if Cue.beepIsUnreliable {
+            Console.line(String(format: "  !! the beep took %.1f s to start - audio is not "
+                                + "keeping up, and these prompts are not trustworthy. "
+                                + "Stop, fix audio, and re-record.", beepDelay))
+        }
         Console.line("  >>> TAP  \(g + 1)/\(phase.taps)")
         // Randomised rest so no labeller or detector can lock onto a fixed period.
         let rest = Double.random(in: minRest...maxRest)

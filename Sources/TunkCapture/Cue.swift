@@ -27,16 +27,53 @@ final class Cue {
         }
     }
 
-    /// Starts the tone. Returns immediately; stamp the mark right before calling.
-    func beep() {
-        guard let p = player else { return }
+    /// Longest a beep may take to start before the cue is called unreliable.
+    static let beepStartBudget: TimeInterval = 0.25
+    nonisolated(unsafe) static var beepIsUnreliable = false
+
+    /// Starts the tone and reports how long that took.
+    ///
+    /// `play()` is documented as returning immediately and does not always: on
+    /// this machine, with virtual audio drivers installed, it stalled about 16 s
+    /// per call. That turned a 23 s tap phase into 117 s, with beep marks
+    /// 18-20 s apart against a configured rest of 2.5-4.5 s.
+    ///
+    /// The damage is not the delay, it is the ground truth. The caller used to
+    /// stamp the beep mark and then call this, so with a stalled player every
+    /// mark sat ~16 s before the operator heard anything, every gesture fell
+    /// outside the labeller's 2600 ms window, and the session became sixty
+    /// labels at moments when nothing happened. Callers now stamp AFTER this
+    /// returns, and a slow start sets `beepIsUnreliable` so the run can say so
+    /// rather than quietly recording rubbish.
+    @discardableResult
+    func beep() -> TimeInterval {
+        guard let p = player else { return 0 }
         p.currentTime = 0
+        let t0 = Date()
         p.play()
+        let took = Date().timeIntervalSince(t0)
+        if took > Cue.beepStartBudget { Cue.beepIsUnreliable = true }
+        return took
     }
 
+    /// How long to wait for `/usr/bin/say` before giving up on speech entirely.
+    static let speechTimeout: TimeInterval = 8
+    nonisolated(unsafe) static var speechGaveUp = false
+
     /// Speaks and blocks until done, so prompts stay in order with the script.
+    ///
+    /// Bounded, because `/usr/bin/say` can block forever. Measured on this
+    /// machine: `say` and `afplay` both hang indefinitely, and
+    /// `tunk-capture doctor --seconds 3` -- the FIRST LINE of the recording
+    /// script -- never returned, showing only its banner. The same command with
+    /// `--no-speech` finished in 3.13 s. The catch below handles `say` failing
+    /// to LAUNCH; it never handled `say` failing to RETURN, which is the case
+    /// that costs an operator their whole session with no diagnostic at all.
+    ///
+    /// After one timeout, speech is off for the rest of the run and says so
+    /// once, rather than paying the timeout on every prompt.
     func say(_ text: String) {
-        guard speechEnabled else { return }
+        guard speechEnabled, !Cue.speechGaveUp else { return }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
         p.arguments = ["-r", String(rate), text]
@@ -44,7 +81,20 @@ final class Cue {
         p.standardError = FileHandle.nullDevice
         do {
             try p.run()
-            p.waitUntilExit()
+            let deadline = Date().addingTimeInterval(Cue.speechTimeout)
+            while p.isRunning, Date() < deadline { usleep(20_000) }
+            if p.isRunning {
+                p.terminate()
+                Cue.speechGaveUp = true
+                let note = "\n  !! Speech is not responding: /usr/bin/say did not return"
+                    + " within \(Int(Cue.speechTimeout)) s.\n"
+                    + "     Continuing without it; the printed prompts still stand."
+                    + " A wedged audio\n"
+                    + "     output does this, and virtual audio drivers are a common"
+                    + " cause.\n"
+                    + "     Re-run with --no-speech to skip it entirely.\n\n"
+                FileHandle.standardError.write(Data(note.utf8))
+            }
         } catch {
             // No speech available; the printed prompt still stands.
         }

@@ -13,9 +13,10 @@
 # Headphones on. The tool speaks and beeps, and through speakers both of those
 # shake the chassis into the data.
 #
-# Around 28 minutes of recording plus repositioning. Ctrl-C at any point flushes
-# the stream and writes a valid session, so stopping early costs only what has
-# not been recorded yet.
+# Around 28 minutes of recording plus repositioning. Ctrl-C flushes the current
+# session, writes it valid, and STOPS THE SCRIPT: capture exits 130 and `set -e`
+# halts here. It used to exit 0, so one Ctrl-C let the shell run every remaining
+# phase and record an empty room as the next surface.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
