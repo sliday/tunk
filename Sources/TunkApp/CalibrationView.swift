@@ -15,6 +15,10 @@ struct CalibrationView: View {
     @State private var result: CalibrationResult?
     @State private var revealed = false
     @State private var poll: Timer?
+    /// Completed gestures, not loose onsets. The dots used to count onsets while
+    /// the copy asked for ten double-taps, so the step ended halfway through what
+    /// it had just asked for.
+    @State private var gestures: [(strengths: [Double], intervalNs: Int64)] = []
 
     private static let target = 10
 
@@ -57,15 +61,15 @@ struct CalibrationView: View {
             HStack(spacing: 6) {
                 ForEach(0..<Self.target, id: \.self) { index in
                     Circle()
-                        .fill(index < strengths.count ? Color.accentColor
+                        .fill(index < gestures.count ? Color.accentColor
                               : Color.primary.opacity(0.12))
                         .frame(width: 12, height: 12)
-                        .scaleEffect(index < strengths.count ? 1 : 0.72)
-                        .tunkAnimation(.tunkSnappy, value: strengths.count,
+                        .scaleEffect(index < gestures.count ? 1 : 0.72)
+                        .tunkAnimation(.tunkSnappy, value: gestures.count,
                                        reduceMotion: reduceMotion)
                 }
                 Spacer()
-                Text("\(strengths.count) / \(Self.target)")
+                Text("\(gestures.count) / \(Self.target)")
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
@@ -140,7 +144,42 @@ struct CalibrationView: View {
                 .opacity(revealed ? 1 : 0)
                 .tunkAnimation(.tunkSnappy.delay(Metrics.stagger * 2), value: revealed,
                                reduceMotion: reduceMotion)
+            if let timing = timingNote {
+                Text(timing)
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(result?.interTapClamped == true
+                                     ? Color.orange : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(revealed ? 1 : 0)
+                    .tunkAnimation(.tunkSnappy.delay(Metrics.stagger * 3), value: revealed,
+                                   reduceMotion: reduceMotion)
+            }
         }
+    }
+
+    /// What the learned rhythm means, in the two cases that differ for the user.
+    ///
+    /// When the fit is clamped they are being told something real: their gesture
+    /// is slower than the responsiveness budget allows, so some of their own
+    /// double-taps will be read as two singles. That is a trade between latency
+    /// and reliability, and it is theirs to make — the alternative is silently
+    /// cutting the window and letting them wonder why Tunk misses them.
+    private var timingNote: String? {
+        guard let result, let window = result.interTapNs,
+              let p10 = result.interTapP10Ns, let p90 = result.interTapP90Ns else { return nil }
+        let ms = { (ns: Int64) in Int((Double(ns) / 1e6).rounded()) }
+        if result.interTapClamped {
+            return String(format: "Your two taps land %d–%d ms apart, which is slower than the "
+                          + "%d ms Tunk can wait and still fire promptly. The window is set to "
+                          + "%d ms, so your slowest double-taps may read as two singles. "
+                          + "Tapping a little quicker fixes it.",
+                          ms(p10), ms(p90),
+                          ms(TapCalibration.latencySafeWindowNs), ms(window))
+        }
+        return String(format: "Your two taps land %d–%d ms apart, so Tunk will wait %d ms "
+                      + "before acting. That wait is the delay you will feel.",
+                      ms(p10), ms(p90), ms(window))
     }
 
     /// The bar the detector will run once this is committed. Calibration
@@ -247,7 +286,7 @@ struct CalibrationView: View {
             Button("Start over", action: restart)
                 .buttonStyle(TunkButtonStyle())
             if phase == .review {
-                Button("Use this threshold") { finish(commit: result?.threshold) }
+                Button("Use this") { finish(commit: result) }
                     .buttonStyle(TunkButtonStyle(prominent: true))
             }
         }
@@ -263,6 +302,7 @@ struct CalibrationView: View {
     private func restart() {
         engine.clearCalibrationSamples()
         strengths = []
+        gestures = []
         suppressed = 0
         result = nil
         revealed = false
@@ -278,21 +318,31 @@ struct CalibrationView: View {
     private func step() {
         let progress = engine.calibrationProgress()
         suppressed = progress.suppressed
-        strengths = Array(progress.strengths.prefix(Self.target))
-        guard strengths.count >= Self.target else { return }
+        var runs = TapCalibration.gestures(onsetTimesNs: progress.onsetTimesNs,
+                                           strengths: progress.strengths)
+        // The newest run is provisional: a second tap may still be on its way,
+        // and counting it now would score a half-finished gesture as done and
+        // learn an interval of zero from it.
+        if let last = progress.onsetTimesNs.last,
+           engine.nowNs() - last < TapCalibration.gestureSpanNs, !runs.isEmpty {
+            runs.removeLast()
+        }
+        gestures = Array(runs.prefix(Self.target))
+        strengths = gestures.flatMap(\.strengths)
+        guard gestures.count >= Self.target else { return }
         poll?.invalidate()
         poll = nil
-        result = TapCalibration.calibrate(tapStrengths: strengths,
+        result = TapCalibration.calibrate(gestures: gestures,
                                           noiseFloor: progress.noiseFloor)
         phase = result == nil ? .failed : .review
         // One genuine one-shot sequence: numbers, then bars, then the note.
         DispatchQueue.main.async { revealed = true }
     }
 
-    private func finish(commit threshold: Double?) {
+    private func finish(commit result: CalibrationResult?) {
         poll?.invalidate()
         poll = nil
-        engine.endCalibration(commit: threshold)
+        engine.endCalibration(commit: result)
         onClose()
     }
 

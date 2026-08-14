@@ -19,9 +19,32 @@ public struct CalibrationResult: Sendable, Equatable {
     public var noiseLimited: Bool
     public var sampleCount: Int
 
+    // MARK: - Learned gesture timing
+
+    /// Join window fitted to the user's own inter-tap intervals, in ns. Nil when
+    /// calibration saw no complete gestures to measure.
+    ///
+    /// The threshold was never the whole story. Measured across three surfaces,
+    /// one operator: desk intervals run 168-199 ms, soft 149-371, lap 91-597.
+    /// A shipped 220 ms window fits desk almost perfectly and misses 8 of 80 lap
+    /// gestures outright — not because the taps were weak, but because the
+    /// gesture is simply slower and more variable when the machine is on a lap.
+    /// That is exactly the per-user, per-surface variation the PRD's
+    /// learn-my-tap step exists to absorb, and nothing was writing it.
+    public var interTapNs: Int64?
+    /// The observed spread, so the panel can show why it chose what it chose.
+    public var interTapP10Ns: Int64?
+    public var interTapP90Ns: Int64?
+    /// True when the fitted window had to be cut to stay inside the latency
+    /// budget. The user is then choosing between reliability and responsiveness
+    /// and deserves to be told, rather than having it decided for them.
+    public var interTapClamped: Bool
+
     public init(threshold: Double, lowPercentileStrength: Double, weakestStrength: Double,
                 medianStrength: Double, noiseFloor: Double, margin: Double,
-                noiseLimited: Bool, sampleCount: Int) {
+                noiseLimited: Bool, sampleCount: Int,
+                interTapNs: Int64? = nil, interTapP10Ns: Int64? = nil,
+                interTapP90Ns: Int64? = nil, interTapClamped: Bool = false) {
         self.threshold = threshold
         self.lowPercentileStrength = lowPercentileStrength
         self.weakestStrength = weakestStrength
@@ -30,6 +53,10 @@ public struct CalibrationResult: Sendable, Equatable {
         self.margin = margin
         self.noiseLimited = noiseLimited
         self.sampleCount = sampleCount
+        self.interTapNs = interTapNs
+        self.interTapP10Ns = interTapP10Ns
+        self.interTapP90Ns = interTapP90Ns
+        self.interTapClamped = interTapClamped
     }
 }
 
@@ -114,8 +141,54 @@ public enum TapCalibration {
             noiseFloor: max(noiseFloor, 0),
             margin: threshold > 0 ? strengths[0] / threshold : .infinity,
             noiseLimited: clamp > raw,
-            sampleCount: strengths.count
+            sampleCount: strengths.count,
+            interTapNs: nil,
+            interTapP10Ns: nil,
+            interTapP90Ns: nil,
+            interTapClamped: false
         )
+    }
+
+    /// Widest join window the latency bar allows, in ns.
+    ///
+    /// The window IS the latency: a gesture fires one confirm window after its
+    /// last onset, and `maxInterTapNs <= confirmWindowNs` is enforced. The PRD's
+    /// p95 budget is 250 ms and the measured overhead above the window is about
+    /// 1 ms at p50, so 235 ms leaves honest headroom.
+    public static let latencySafeWindowNs: Int64 = 235_000_000
+
+    /// Absolute ceiling when the user knowingly trades responsiveness for
+    /// reliability. Beyond this the gesture stops feeling like a double-tap.
+    public static let maxWindowNs: Int64 = 400_000_000
+
+    /// Fit the join window to the user's own gesture, from the intervals
+    /// observed during calibration.
+    ///
+    /// Aims at the 90th percentile plus a small margin, so nine gestures in ten
+    /// land inside the window with room, rather than at the median, which would
+    /// leave half of them outside.
+    ///
+    /// - Parameter allowExceedingLatencyBudget: when false the result is capped
+    ///   at `latencySafeWindowNs` and `interTapClamped` says so. The caller is
+    ///   expected to surface that rather than swallow it: on a lap this operator
+    ///   produced intervals up to 597 ms, and honouring them costs latency the
+    ///   PRD's bar does not have.
+    public static func fitInterTap(intervalsNs: [Int64],
+                                   allowExceedingLatencyBudget: Bool = false,
+                                   minimumNs: Int64 = 100_000_000) -> (window: Int64,
+                                                                       p10: Int64,
+                                                                       p90: Int64,
+                                                                       clamped: Bool)? {
+        let v = intervalsNs.filter { $0 > 0 }.sorted()
+        guard v.count >= 3 else { return nil }
+        func pct(_ p: Double) -> Int64 {
+            v[min(v.count - 1, Int((Double(v.count - 1) * p).rounded()))]
+        }
+        let p90 = pct(0.90)
+        let aim = Int64(Double(p90) * 1.15)
+        let ceiling = allowExceedingLatencyBudget ? maxWindowNs : latencySafeWindowNs
+        let window = max(minimumNs, min(aim, ceiling))
+        return (window, pct(0.10), p90, aim > ceiling)
     }
 
     /// Convenience: apply a calibration to a config without touching anything
@@ -123,7 +196,75 @@ public enum TapCalibration {
     public static func apply(_ result: CalibrationResult, to config: DetectorConfig) -> DetectorConfig {
         var out = config
         out.calibratedThreshold = result.threshold
+        // The learned window, when calibration measured complete gestures.
+        // `maxInterTapNs <= confirmWindowNs` is the invariant, and the window is
+        // the latency, so both move together — writing one and not the other
+        // would be clamped straight back by madeCoherent().
+        if let interTap = result.interTapNs {
+            out.calibratedInterTapNs = interTap
+            out.maxInterTapNs = interTap
+            out.confirmWindowNs = interTap
+        }
         return out
+    }
+
+    /// Widest gap that can still be two halves of one gesture, for grouping
+    /// calibration onsets. Deliberately far wider than any window that will be
+    /// fitted: the point is to *observe* how slowly this user actually taps,
+    /// including intervals the shipped window would reject. Fitting against a
+    /// span that already assumed the answer would only ever confirm it.
+    public static let gestureSpanNs: Int64 = 600_000_000
+
+    /// Turn a flat run of calibration onsets into gestures.
+    ///
+    /// Only pairs are used for timing. A run of three or more inside one span is
+    /// ambiguous — a fumble, or a damped case ringing loudly enough to publish a
+    /// second lobe as an onset — and learning a window from it would bake that
+    /// artifact into the user's config. Their strengths still count toward the
+    /// threshold; only their timing is discarded.
+    ///
+    /// - Parameters:
+    ///   - onsetTimesNs: ascending onset times.
+    ///   - strengths: same order and count as `onsetTimesNs`.
+    public static func gestures(onsetTimesNs: [Int64], strengths: [Double],
+                                spanNs: Int64 = gestureSpanNs)
+        -> [(strengths: [Double], intervalNs: Int64)] {
+        guard onsetTimesNs.count == strengths.count, !onsetTimesNs.isEmpty else { return [] }
+        var runs: [[Int]] = [[0]]
+        for i in 1..<onsetTimesNs.count {
+            if onsetTimesNs[i] - onsetTimesNs[i - 1] <= spanNs {
+                runs[runs.count - 1].append(i)
+            } else {
+                runs.append([i])
+            }
+        }
+        return runs.map { run in
+            let s = run.map { strengths[$0] }
+            // 0 means "no timing from this run"; fitInterTap drops non-positive.
+            let interval: Int64 = run.count == 2 ? onsetTimesNs[run[1]] - onsetTimesNs[run[0]] : 0
+            return (strengths: s, intervalNs: interval)
+        }
+    }
+
+    /// Calibrate from complete gestures rather than loose strengths, so the
+    /// timing can be learned alongside the threshold.
+    ///
+    /// - Parameter gestures: one entry per recorded double-tap: the strength of
+    ///   each onset, and the interval between them.
+    public static func calibrate(gestures: [(strengths: [Double], intervalNs: Int64)],
+                                 noiseFloor: Double = 0,
+                                 allowExceedingLatencyBudget: Bool = false,
+                                 tuning: DSPTuning = .default) -> CalibrationResult? {
+        guard var result = calibrate(tapStrengths: gestures.flatMap(\.strengths),
+                                     noiseFloor: noiseFloor, tuning: tuning) else { return nil }
+        if let fit = fitInterTap(intervalsNs: gestures.map(\.intervalNs),
+                                 allowExceedingLatencyBudget: allowExceedingLatencyBudget) {
+            result.interTapNs = fit.window
+            result.interTapP10Ns = fit.p10
+            result.interTapP90Ns = fit.p90
+            result.interTapClamped = fit.clamped
+        }
+        return result
     }
 
     /// Linear-interpolated percentile of an ascending array.

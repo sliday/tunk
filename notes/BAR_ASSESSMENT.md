@@ -64,6 +64,33 @@ during typing, which stayed at zero.
 | Lower bar for the 2nd tap | lap 73.75 → 75 %, **soft collapses 100 → 55 %** |
 | Wider join window | lap 65 → 70 %, **latency p95 209 → 389 ms** |
 | Per-surface calibration | desk 95.65 %, soft 100 %, **lap 82.5 % at its own best** |
+| Learned join window (235 ms) | held-out lap **80 % → 80 %**, latency 208.9 → 223.9 ms |
+
+### What the learned window does and does not fix
+
+Calibration now fits the join window to the operator's own intervals rather than
+shipping 220 ms for everyone. Fitted per surface on training sessions only:
+
+```
+desk  p90 198 ms  ->  227 ms
+soft  p90 208 ms  ->  235 ms  (clamped from 239)
+lap   p90 259 ms  ->  235 ms  (clamped from 298)
+```
+
+Graded on held-out lap, the wider window recovers **nothing**, and costs 15 ms of
+latency. The four held-out lap misses break down as:
+
+- **3 amplitude** — only one onset was ever declared; the second tap never
+  cleared the bar.
+- **1 timing** — two onsets 240 ms apart, which a 235 ms window still misses by
+  five.
+
+So on this operator's lap the dominant failure is force, not rhythm, and the
+earlier training-set figure (8 of 19 misses out of window) overstated how much
+timing was to blame. The window fit is still worth shipping — it is what stops a
+naturally slower tapper from being failed by a number chosen for someone else,
+and the clamp is now reported to the user instead of applied silently — but it is
+not the lap fix, and nothing here should be read as one.
 
 **Soft and lap pull in opposite directions.** Every step that helps one costs the
 other about twice as much. Even with perfect per-surface calibration — the PRD's

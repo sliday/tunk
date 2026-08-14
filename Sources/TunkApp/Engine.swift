@@ -134,6 +134,10 @@ final class Engine: ObservableObject {
 
     // Calibration.
     private var calibrationStrengths: [Double] = []
+    /// Onset times as well as strengths, so calibration can learn the user's
+    /// gesture *rhythm* and not just how hard they hit. Same order as
+    /// `calibrationStrengths`.
+    private var calibrationOnsetTimes: [Int64] = []
     private var calibrationSuppressed = 0
     private var configBeforeCalibration: DetectorConfig?
     /// Floor used while learning a tap, so weak taps still produce an onset to
@@ -382,6 +386,7 @@ final class Engine: ObservableObject {
             calibrationSuppressed += 1
         } else {
             calibrationStrengths.append(onset.strength)
+            calibrationOnsetTimes.append(onset.tNs)
         }
     }
 
@@ -485,6 +490,7 @@ final class Engine: ObservableObject {
         detector.config = probe
         detector.reset()
         calibrationStrengths.removeAll(keepingCapacity: true)
+        calibrationOnsetTimes.removeAll(keepingCapacity: true)
         calibrationSuppressed = 0
         detectorLock.unlock()
         isCalibrating = true
@@ -492,10 +498,13 @@ final class Engine: ObservableObject {
 
     /// Strengths gathered so far, plus how many onsets the gate threw away —
     /// the user needs to know when their resting hand is eating their taps —
-    /// plus the noise floor the calibration has to clear.
-    func calibrationProgress() -> (strengths: [Double], suppressed: Int, noiseFloor: Double) {
+    /// plus the noise floor the calibration has to clear, plus the time each
+    /// onset landed so the gesture's rhythm can be fitted as well as its force.
+    func calibrationProgress() -> (strengths: [Double], onsetTimesNs: [Int64],
+                                   suppressed: Int, noiseFloor: Double) {
         detectorLock.lock(); defer { detectorLock.unlock() }
-        return (calibrationStrengths, calibrationSuppressed, readout?.noiseFloor ?? 0)
+        return (calibrationStrengths, calibrationOnsetTimes,
+                calibrationSuppressed, readout?.noiseFloor ?? 0)
     }
 
     /// The sensitivity slider's value, which is held out of the way while taps
@@ -546,18 +555,25 @@ final class Engine: ObservableObject {
     func clearCalibrationSamples() {
         detectorLock.lock()
         calibrationStrengths.removeAll(keepingCapacity: true)
+        calibrationOnsetTimes.removeAll(keepingCapacity: true)
         calibrationSuppressed = 0
         detectorLock.unlock()
     }
 
-    /// Ends the learn step. `commit` writes the derived threshold into the one
+    /// Ends the learn step. `commit` writes the derived calibration into the one
     /// `DetectorConfig` everything reads.
+    ///
+    /// Commits a whole calibration, not just its threshold: the learned join
+    /// window has to travel with it. `TapCalibration.apply` is the single place
+    /// that decides which fields a calibration owns, so the window and the
+    /// confirm window move together and the coherence clamp does not undo one
+    /// of them on the way out.
     @discardableResult
-    func endCalibration(commit threshold: Double?) -> Bool {
+    func endCalibration(commit result: CalibrationResult?) -> Bool {
         detectorLock.lock()
-        guard var restored = configBeforeCalibration else { detectorLock.unlock(); return false }
+        guard let before = configBeforeCalibration else { detectorLock.unlock(); return false }
         configBeforeCalibration = nil
-        if let threshold { restored.calibratedThreshold = threshold }
+        let restored = result.map { TapCalibration.apply($0, to: before) } ?? before
         detector.config = restored
         arm(for: restored)
         detector.reset()
@@ -565,7 +581,7 @@ final class Engine: ObservableObject {
 
         isCalibrating = false
         settings.config = restored          // persists, and hands the same struct back
-        return threshold != nil
+        return result != nil
     }
 
     // MARK: - sleep, wake, and a stuck sensor
