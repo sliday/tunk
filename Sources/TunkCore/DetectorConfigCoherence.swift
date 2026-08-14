@@ -91,6 +91,9 @@ extension DetectorConfig {
         case "tapCountToFire":      return "Taps to fire"
         case "defaultThreshold":    return "Default threshold"
         case "calibratedThreshold": return "Calibrated threshold"
+        case "secondOnsetFraction": return "Second-tap bar"
+        case "directionSelect":     return "Pick the second tap by direction"
+        case "directionMinCos":     return "Direction match floor"
         default:                    return field
         }
     }
@@ -192,6 +195,25 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "\(DetectorConfig.default.defaultThreshold)"))
             out.defaultThreshold = DetectorConfig.default.defaultThreshold
+        }
+
+        // A fraction above 1 raises the bar for the second tap, which is the
+        // opposite of what the field means, and one at or below 0 admits every
+        // sample as an onset for as long as a group is open.
+        if !(out.secondOnsetFraction.isFinite && out.secondOnsetFraction > 0
+             && out.secondOnsetFraction <= 1) {
+            issues.append(CoherenceIssue(
+                field: "secondOnsetFraction",
+                reason: "a second-tap bar must be a fraction of the first, in (0, 1]",
+                applied: "1.0"))
+            out.secondOnsetFraction = 1.0
+        }
+
+        if !(out.directionMinCos.isFinite && out.directionMinCos >= -1 && out.directionMinCos <= 1) {
+            issues.append(CoherenceIssue(field: "directionMinCos",
+                                         reason: "a cosine lies in [-1, 1]",
+                                         applied: "-1"))
+            out.directionMinCos = -1
         }
 
         if let calibrated = out.calibratedThreshold, !(calibrated.isFinite && calibrated > 0) {

@@ -354,6 +354,33 @@ public struct SignalChain: Sendable, Equatable {
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
 
+    /// High-passed acceleration for the sample just processed, per axis, in g,
+    /// **before** the quadrature pair and the sliding max.
+    ///
+    /// The envelope above is deliberately shape-free: the sliding max holds a
+    /// peak for three samples and the quadrature pair mixes two, which is what
+    /// makes it a repeatable amplitude and useless as a direction. The raw
+    /// vector still carries which way the chassis was pushed, and the direction
+    /// at a strike's peak sample is the one statistic measured to separate a
+    /// real second strike from the first strike's ring lobe (lap AUC 0.79) that
+    /// is not amplitude in disguise. Published rather than recomputed so the
+    /// detector reads the same numbers the filters produced, once per sample.
+    public private(set) var lateralX: Double = 0
+    public private(set) var lateralY: Double = 0
+    /// Squared LATERAL high-passed magnitude of the sample just processed,
+    /// before the pair and the sliding max. Squared, not rooted, because the
+    /// only use is "which sample of this transient is the lateral peak", and a
+    /// square root would be one per sample bought for nothing.
+    ///
+    /// Lateral rather than three-axis on purpose, and measured. Picking the peak
+    /// sample by TOTAL energy — which z dominates — reads the lateral direction
+    /// at whatever phase the z ring happened to be in, and the cosine between a
+    /// gesture's two strikes then runs median -0.06 on the soft deck and -0.39
+    /// on one lap deck. Picking it by lateral energy gives +0.974 and +0.754 on
+    /// the same recordings. Same statistic, same data; the difference is which
+    /// sample is called the peak.
+    public private(set) var lateralEnergy: Double = 0
+
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
     ///
     /// The high-passed envelope above answers "did something ring". This answers
@@ -402,6 +429,9 @@ public struct SignalChain: Sendable, Equatable {
         fastMagnitude.reset()
         magnitude = 0
         envelope = 0
+        lateralX = 0
+        lateralY = 0
+        lateralEnergy = 0
     }
 
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
@@ -419,6 +449,9 @@ public struct SignalChain: Sendable, Equatable {
         let ay = hpY.process(y)
         let az = hpZ.process(z)
         let squared = ax * ax + ay * ay + az * az
+        lateralX = ax
+        lateralY = ay
+        lateralEnergy = ax * ax + ay * ay
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
         envelope = peak.process(pair)

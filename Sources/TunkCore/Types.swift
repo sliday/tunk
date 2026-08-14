@@ -219,6 +219,41 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Zero disables the gate.
     public var motionGateG: Double
 
+    /// Multiplier on the onset bar for an onset arriving inside an open group's
+    /// join window. **1.0, off.** Only the crossing test is reduced; the re-arm
+    /// test keeps the full bar, so lowering this cannot make the detector deafer
+    /// (which is what `DSPTuning.inGestureThresholdFraction`, applied to both
+    /// tests, did).
+    ///
+    /// On its own this is a mechanism already measured to fail: a lap tail's own
+    /// ripple crosses the reduced bar too, the group reaches three or more
+    /// onsets, and the grouper fires on exactly two. It exists to be paired with
+    /// `directionSelect`, which picks the real second strike back out.
+    public var secondOnsetFraction: Double
+
+    /// Pick the real second tap out of an over-long group at the confirm
+    /// deadline, by lateral direction. **Off.**
+    ///
+    /// A group holding three or more onsets fires nothing. When one of those
+    /// onsets is the real second strike and the rest are the first strike's ring
+    /// lobes, the information needed to fire was present and nothing was
+    /// choosing. This chooses: the candidate whose lateral (x,y) high-passed
+    /// direction at its peak sample best matches the first strike's is kept, the
+    /// rest are discarded, and the group fires as a two-tap.
+    ///
+    /// Ranking rather than gating is the point. As an admission test the same
+    /// statistic keeps 10 % of real second strikes at a 1 % ring-lobe rate,
+    /// which is useless; as a tie-break among two to four candidates that all
+    /// came from the same gesture on the same surface, an AUC of 0.79 is a
+    /// different proposition. It costs no latency: the confirm window has
+    /// already elapsed when the choice is made.
+    public var directionSelect: Bool
+
+    /// Floor on the winning cosine. A candidate below this is not selected and
+    /// the group keeps its original count, so the mechanism can be made
+    /// conservative without turning it off. -1 accepts any winner.
+    public var directionMinCos: Double
+
     /// Inter-tap interval learned from the user's own taps during calibration.
     /// Coupling and cadence vary per person and per surface far more than any
     /// shipped constant can cover. Nil until calibrated.
@@ -269,7 +304,13 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 armedTapCounts: Set<Int> = [2],
                 onsetCeilingG: Double? = 2.5,
                 motionGateG: Double = 0,
+                secondOnsetFraction: Double = 1.0,
+                directionSelect: Bool = false,
+                directionMinCos: Double = -1.0,
                 calibratedInterTapNs: Int64? = nil) {
+        self.secondOnsetFraction = secondOnsetFraction
+        self.directionSelect = directionSelect
+        self.directionMinCos = directionMinCos
         self.sensitivity = sensitivity
         self.calibratedThreshold = calibratedThreshold
         self.defaultThreshold = defaultThreshold
@@ -303,6 +344,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         case sensitivity, calibratedThreshold, defaultThreshold
         case gateWindowNs, minInterTapNs, maxInterTapNs, confirmWindowNs, refractoryNs
         case armedTapCounts, calibratedInterTapNs, onsetCeilingG, motionGateG
+        case secondOnsetFraction, directionSelect, directionMinCos
         case tapCountToFire   // legacy
     }
 
@@ -320,6 +362,10 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
         onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
+        secondOnsetFraction = try c.decodeIfPresent(Double.self, forKey: .secondOnsetFraction)
+            ?? d.secondOnsetFraction
+        directionSelect = try c.decodeIfPresent(Bool.self, forKey: .directionSelect) ?? d.directionSelect
+        directionMinCos = try c.decodeIfPresent(Double.self, forKey: .directionMinCos) ?? d.directionMinCos
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
         } else if let legacy = try c.decodeIfPresent(Int.self, forKey: .tapCountToFire) {
@@ -343,6 +389,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
         try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
+        try c.encode(secondOnsetFraction, forKey: .secondOnsetFraction)
+        try c.encode(directionSelect, forKey: .directionSelect)
+        try c.encode(directionMinCos, forKey: .directionMinCos)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
         try c.encode(tapCountToFire, forKey: .tapCountToFire)

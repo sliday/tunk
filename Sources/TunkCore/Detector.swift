@@ -140,6 +140,10 @@ public final class TapDetector: TapDetecting {
     private struct GroupOnset {
         var tNs: Int64
         var strength: Double
+        /// Lateral high-passed acceleration at this onset's peak sample, in g,
+        /// pre-sliding-max. Zero until the peak window closes.
+        var latX: Double = 0
+        var latY: Double = 0
     }
 
     /// An onset whose peak is still being tracked. Its crossing time is already
@@ -149,6 +153,15 @@ public final class TapDetector: TapDetecting {
         var peak: Double
         var suppressedByGate: Bool
         var joinedGroup: Bool
+        /// Largest raw LATERAL high-passed energy seen since the crossing, and
+        /// the lateral direction of the sample that carried it. Tracked on the
+        /// raw signal because the envelope's sliding max holds one value for
+        /// three samples, which would pick the peak sample by luck — see
+        /// `SignalChain.lateralEnergy` for what picking it by total energy
+        /// instead does to the statistic.
+        var peakEnergy: Double
+        var latX: Double
+        var latY: Double
     }
 
     private var chain: SignalChain
@@ -182,6 +195,7 @@ public final class TapDetector: TapDetecting {
 
     private var onsetLog: [OnsetEvent] = []
     private var groupLog: [TapGroupEvent] = []
+    private var selectionLog: [SelectionEvent] = []
     private var firingCounts: Set<Int>
 
     // MARK: - TapDetecting
@@ -206,6 +220,11 @@ public final class TapDetector: TapDetecting {
 
         if pending != nil {
             pending!.peak = max(pending!.peak, envelope)
+            if chain.lateralEnergy > pending!.peakEnergy {
+                pending!.peakEnergy = chain.lateralEnergy
+                pending!.latX = chain.lateralX
+                pending!.latY = chain.lateralY
+            }
             if sample.tNs - pending!.tNs >= tuning.peakHoldNs { publishPending() }
         }
 
@@ -214,7 +233,7 @@ public final class TapDetector: TapDetecting {
         var onsetTrigger: Trigger?
 
         if armed {
-            if sampleIndex > tuning.warmupSamples && envelope >= threshold {
+            if sampleIndex > tuning.warmupSamples && envelope >= onsetThreshold(base: threshold) {
                 armed = false
                 lastOnsetNs = sample.tNs
                 noiseFloorHoldUntilNs = sample.tNs + tuning.noiseFloorHoldNs
@@ -287,6 +306,16 @@ public final class TapDetector: TapDetecting {
         return out
     }
 
+    /// Every time `directionSelect` chose a second tap out of an over-long
+    /// group, since the last drain. Diagnostic only: nothing in the detector
+    /// reads it back, and it lets the harness score the CHOICE against labels
+    /// separately from the detection rate.
+    public func drainSelections() -> [SelectionEvent] {
+        let out = selectionLog
+        selectionLog.removeAll(keepingCapacity: true)
+        return out
+    }
+
     public func reset() {
         chain.reset()
         sampleIndex = 0
@@ -301,6 +330,7 @@ public final class TapDetector: TapDetecting {
         noiseFloorHoldUntilNs = Int64.min
         onsetLog.removeAll(keepingCapacity: true)
         groupLog.removeAll(keepingCapacity: true)
+        selectionLog.removeAll(keepingCapacity: true)
     }
 
     // MARK: - Readouts for the tap monitor and the harness
@@ -362,6 +392,25 @@ public final class TapDetector: TapDetecting {
         return base * tuning.inGestureThresholdFraction
     }
 
+    /// The bar an onset must cross right now, as opposed to the bar the envelope
+    /// must fall back under to re-arm.
+    ///
+    /// The two were one number, and `DSPTuning.inGestureThresholdFraction` moved
+    /// both: lowering the in-gesture bar also lowered the re-arm level by the
+    /// same factor, so the mechanism that was meant to hear a weaker second tap
+    /// made the detector slower to start listening for it. `secondOnsetFraction`
+    /// moves only this one.
+    ///
+    /// The reduction lives strictly inside an open group's join window, so it
+    /// exists only after an onset that cleared the full bar, and it expires with
+    /// the window rather than lasting as long as the group does.
+    private func onsetThreshold(base: Double) -> Double {
+        let fraction = effectiveConfig.secondOnsetFraction
+        guard fraction < 1.0, !group.isEmpty, let last = groupLastOnsetNs else { return base }
+        guard let now = lastSampleNs, now <= last + effectiveConfig.maxInterTapNs else { return base }
+        return base * fraction
+    }
+
     /// Drop everything derived from the sample stream, keeping gate and
     /// refractory (they are driven by wall-order events, not by the filters).
     private func dropSignalState() {
@@ -391,6 +440,8 @@ public final class TapDetector: TapDetecting {
             clearGroup()
         } else if p.joinedGroup, let i = group.indices.last, group[i].tNs == p.tNs {
             group[i].strength = p.peak
+            group[i].latX = p.latX
+            group[i].latY = p.latY
         }
         pending = nil
     }
@@ -399,6 +450,13 @@ public final class TapDetector: TapDetecting {
         groupLog.append(event)
         if groupLog.count > tuning.groupLogCapacity {
             groupLog.removeFirst(groupLog.count - tuning.groupLogCapacity)
+        }
+    }
+
+    private func appendSelection(_ event: SelectionEvent) {
+        selectionLog.append(event)
+        if selectionLog.count > tuning.groupLogCapacity {
+            selectionLog.removeFirst(selectionLog.count - tuning.groupLogCapacity)
         }
     }
 
@@ -441,7 +499,9 @@ public final class TapDetector: TapDetecting {
         }
 
         pending = PendingOnset(tNs: tNs, peak: strength,
-                               suppressedByGate: suppressed, joinedGroup: joined)
+                               suppressedByGate: suppressed, joinedGroup: joined,
+                               peakEnergy: chain.lateralEnergy,
+                               latX: chain.lateralX, latY: chain.lateralY)
         return trigger
     }
 
@@ -507,6 +567,69 @@ public final class TapDetector: TapDetecting {
         return closeGroup(now: tNs)
     }
 
+    /// Ranking, not detection. Among the candidates an over-long group is
+    /// holding, keep the one whose lateral direction best matches the first
+    /// strike's and discard the rest, so the group fires as a two-tap.
+    ///
+    /// Returns true when it changed the group. Called once, at the confirm
+    /// deadline, with the window already elapsed — so it spends no latency, and
+    /// it reads nothing that arrived after the deadline.
+    ///
+    /// It can only ever turn a group that fires nothing into a two-tap:
+    ///
+    /// - a group of two is left alone, since it already fires;
+    /// - a group whose own count is bound is left alone, so wiring triple-tap
+    ///   does not start losing triples to this;
+    /// - a candidate must sit a legal inter-tap interval from the FIRST onset,
+    ///   not merely from its predecessor, or the pair that fires would not be a
+    ///   gesture the config admits;
+    /// - a truncated group (more onsets than `groupOnsetRetentionLimit`) is left
+    ///   alone: that is a knock train, and the candidate list is incomplete.
+    private func selectSecondTap(in members: inout [GroupOnset], count: Int,
+                                 closedAt tNs: Int64) -> Bool {
+        guard effectiveConfig.directionSelect,
+              count > 2,
+              members.count == count,
+              firingCounts.contains(2),
+              !firingCounts.contains(count) else { return false }
+        let first = members[0]
+        let firstNorm = (first.latX * first.latX + first.latY * first.latY).squareRoot()
+        guard firstNorm > 0 else { return false }
+
+        var bestIndex = -1
+        var bestCos = -Double.infinity
+        // Sized once at the retention limit, so the audit trail costs no
+        // allocation per group: the array is written in place and copied only
+        // when a selection is actually published.
+        var cosines = [Double](repeating: -2, count: members.count - 1)
+        for i in 1..<members.count {
+            let dt = members[i].tNs - first.tNs
+            guard dt >= effectiveConfig.minInterTapNs, dt <= effectiveConfig.maxInterTapNs else { continue }
+            let m = members[i]
+            let norm = (m.latX * m.latX + m.latY * m.latY).squareRoot()
+            guard norm > 0 else { continue }
+            let cos = (first.latX * m.latX + first.latY * m.latY) / (firstNorm * norm)
+            cosines[i - 1] = cos
+            if cos > bestCos { bestCos = cos; bestIndex = i }
+        }
+        let applied = bestIndex >= 0 && bestCos >= effectiveConfig.directionMinCos
+        // Logged on every attempt, not only on the ones that changed the group.
+        // A veto and a group with no eligible candidate are results; counting
+        // only the successes would report the accuracy of the cases that worked.
+        appendSelection(SelectionEvent(
+            tNs: tNs, firstOnsetNs: first.tNs,
+            candidateOnsetsNs: members.dropFirst().map(\.tNs),
+            cosines: cosines,
+            chosenOnsetNs: bestIndex >= 0 ? members[bestIndex].tNs : 0,
+            chosenCos: bestIndex >= 0 ? bestCos : -2,
+            originalCount: count, applied: applied))
+        guard applied else { return false }
+
+        members[1] = members[bestIndex]
+        members.removeLast(members.count - 2)
+        return true
+    }
+
     /// Give the live group its confirm decision and retire it. The group is gone
     /// afterwards either way, and it always leaves a `TapGroupEvent` behind, so
     /// the tap monitor sees every gesture that got as far as being counted.
@@ -519,9 +642,10 @@ public final class TapDetector: TapDetecting {
         // Normally the peak window closed long ago; it only bites if someone
         // configures a confirm window shorter than the peak hold.
         if pending?.joinedGroup == true { publishPending() }
-        let members = group
-        let count = groupCount
+        var members = group
+        var count = groupCount
         clearGroup()
+        if selectSecondTap(in: &members, count: count, closedAt: tNs) { count = 2 }
 
         // Score is the weakest tap in the gesture, in g. The harness can sweep a
         // score cutoff offline and get exactly what raising the threshold would
@@ -563,6 +687,47 @@ public struct TapGroupEvent: Sendable, Equatable {
         self.tapCount = tapCount
         self.score = score
         self.fired = fired
+    }
+}
+
+/// One decision made by `DetectorConfig.directionSelect`: an over-long group,
+/// the candidates it was holding, and which one was kept.
+///
+/// Published so the choice can be graded on its own. "Selection is right 90 % of
+/// the time" and "detection moved by two gestures" are different claims, and a
+/// mechanism can be true on the first and worthless on the second — which is
+/// exactly what has to be reported rather than pooled away.
+public struct SelectionEvent: Sendable, Equatable {
+    /// When the group closed, i.e. when the choice was made.
+    public var tNs: Int64
+    /// The onset treated as the first strike; the reference direction.
+    public var firstOnsetNs: Int64
+    /// Every onset after the first that was in the group, ascending.
+    public var candidateOnsetsNs: [Int64]
+    /// Cosine against the first strike for each entry of `candidateOnsetsNs`.
+    /// A candidate ruled out on timing carries `-2`, which no cosine can reach.
+    public var cosines: [Double]
+    public var chosenOnsetNs: Int64
+    /// Cosine between the chosen onset's lateral direction and the first's.
+    public var chosenCos: Double
+    /// The group's count before the discard.
+    public var originalCount: Int
+    /// Whether the choice was acted on. False when every candidate fell below
+    /// `directionMinCos`, or when none sat a legal interval from the first
+    /// onset; the group then keeps its original count and fires nothing.
+    public var applied: Bool
+
+    public init(tNs: Int64, firstOnsetNs: Int64, candidateOnsetsNs: [Int64],
+                cosines: [Double], chosenOnsetNs: Int64, chosenCos: Double,
+                originalCount: Int, applied: Bool) {
+        self.tNs = tNs
+        self.firstOnsetNs = firstOnsetNs
+        self.candidateOnsetsNs = candidateOnsetsNs
+        self.cosines = cosines
+        self.chosenOnsetNs = chosenOnsetNs
+        self.chosenCos = chosenCos
+        self.originalCount = originalCount
+        self.applied = applied
     }
 }
 

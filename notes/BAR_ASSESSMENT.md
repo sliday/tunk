@@ -391,6 +391,88 @@ on lap. The evidence that this is structural rather than a tuning failure is no
 longer one measurement; it is ten, from agents that did not see each other's
 work, every one graded on data its builder could not touch.
 
+## Ranking inside the confirm window: measured, train only
+
+Twelfth mechanism, and the first that does not try to admit an onset. Two knobs,
+both off by default (`secondOnsetFraction`, `directionSelect`, plus its floor
+`directionMinCos`); with them off the detector is byte-identical, proved on every
+recorded session in `DirectionSelectTests`.
+
+(a) Inside an open group's join window the onset bar drops to 0.8x. Only the
+crossing test drops; the re-arm test keeps the full bar, which is where
+`DSPTuning.inGestureThresholdFraction` went wrong (it moved both, so the reduced
+bar also made the detector slower to start listening).
+
+(b) At the confirm deadline, a group holding three or more onsets picks the
+candidate whose LATERAL high-passed direction at its peak sample best matches the
+first strike's, discards the rest, and fires as a two-tap. It never touches a
+group of two, never rewrites a count that is bound, and only considers candidates
+a legal inter-tap interval from the first onset. It reads nothing that arrives
+after the deadline and costs no latency.
+
+Train, `data/raw`, 123 labelled gestures:
+
+| | pooled | desk | soft | lap | FP | FP typing | p95 |
+|---|---|---|---|---|---|---|---|
+| baseline | 101 (82.11 %) | 22/23 | 20/20 | 59/80 (73.75 %) | 3 | 0 | 225.2 ms |
+| (a) alone, 0.8 | 105 (85.37 %) | 22/23 | **19/20** | 64/80 (80.00 %) | 3 | 0 | 224.0 ms |
+| (a)+(b), floor 0.5 | 108 (87.80 %) | 22/23 | 20/20 | 66/80 (82.50 %) | 3 | 0 | 225.1 ms |
+
+Per session, detected / labelled, with false triggers in brackets:
+
+```
+                                          baseline      tuned
+tap_deck__desk__...__8f0079                 2/3 (0)       2/3 (0)
+tap_deck__desk__...__5f07e8               20/20 (0)     20/20 (0)
+tap_deck__soft__...__fe9b8c               20/20 (0)     20/20 (0)
+tap_deck__lap__...__13e15a                14/20 (3)     11/20 (1)
+tap_deck__lap__...__ad3fd3                16/20 (0)     19/20 (1)
+tap_deck__lap__...__3fee5b                15/20 (0)     17/20 (1)
+tap_deck__lap__...__a4a257                14/20 (0)     19/20 (0)
+```
+
+Three lap sessions gain 3, 2 and 5. The fourth, 13e15a, LOSES 3 — the session the
+operator recorded with a hand on the chassis, and the one that scores below
+chance on this statistic. The pooled false-trigger count is unchanged at 3, but
+it moved: the three that were all in 13e15a are now one each in three sessions.
+
+### The ranker itself is barely used, and is right once in three
+
+Graded against the labels, at the tuned setting, over all 123 gestures:
+
+```
+selection offered a choice        9 times
+selection acted                   3 times
+the real second tap was present   4 times
+the ranker picked it              1 time
+```
+
+So of the +7 gestures, +4 come from the reduced bar admitting the real second
+tap, and +3 from selection — of which ONE fired on the real second tap and TWO
+fired the first strike plus a ring lobe, close enough to the labelled gesture
+that the harness's +/-150 ms match window credits them. In both of those the real
+second tap sat outside `maxInterTapNs` of the first onset and could not have been
+chosen without redefining the gesture.
+
+Dropping that timing rule was measured too: pooled 110 (89.43 %), lap 68/80, and
+**4 false triggers instead of 3**. It buys two gestures by firing pairs wider
+than the configured double-tap. Not taken.
+
+The statistic replicates on this corpus, and only under one definition of "the
+peak sample". Cosine between the two strikes of a labelled gesture, median per
+session: desk +0.989, soft +0.974, lap +0.754 / +0.961 / +0.996 / +0.988. Pick
+the peak sample by TOTAL high-passed energy instead — z dominates it — and the
+same medians read -0.06 on soft and -0.39 on 13e15a. The direction is real; which
+sample you read it at decides whether you see it.
+
+### What this does not do
+
+Lap is 82.50 %, not 98 %. Desk still misses its one 426 ms gesture. Lap false
+triggers still fail their bar. The tuned fraction is a spike — 0.75 and 0.85 both
+score 107 with 4 false triggers while 0.8 scores 108 with 3 — which is exactly
+the overfit signature the earlier rounds were caught by, on n = 80 lap gestures.
+Nothing here has been graded on held-out data.
+
 ## Coverage limits
 
 One operator, one machine, one session per surface for soft, four for lap. No
