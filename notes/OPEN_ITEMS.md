@@ -81,12 +81,23 @@ says who owns it now. Delete an entry when it is done, not when it is started.
 
 ## Owned by TunkEmit
 
-- `postBalanced` is not serialised: concurrent `emit()` calls interleave into N
-  key-downs before any key-up, and `hasStuckKey` cannot see it.
-- `Thread.sleep(8 ms)` inside `postBalanced` blocks the caller, and the only
-  production caller is the 796 Hz HID sample callback.
-- Nothing checks `IsSecureEventInputEnabled()`, so a keystroke swallowed by a
-  password field is recorded as a successful emission.
+All three of these were fixed and the list was never updated. Checked against
+the source and the tests on 2026-08-14:
+
+- ~~`postBalanced` is not serialised.~~ Fixed. `postLock` admits one pair at a
+  time (`HotkeyEmitter.swift:233`), and `ActionTests` drives 50 concurrent
+  `emit()` calls and asserts no interleaving — the case aggregate counters
+  cannot see, because three downs then three ups sums to balanced.
+- ~~`Thread.sleep(8 ms)` blocks the caller.~~ Fixed. The hold runs on
+  `postQueue`, not on the sensor thread; a test asserts the sensor path returns
+  without waiting for it.
+- ~~Nothing checks `IsSecureEventInputEnabled()`.~~ Fixed. The emit path throws
+  `EmitError.secureInputActive` (`HotkeyEmitter.swift:335`) rather than counting
+  a swallowed keystroke as a success, and `ActionTests` pins the error case.
+
+That matters more than a tidy list: a tap into a password field now fails
+loudly instead of appearing to work, which is the difference between "Tunk is
+unreliable" and "macOS blocked that keystroke".
 
 ## Owned by TunkApp
 
