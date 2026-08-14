@@ -742,6 +742,35 @@ lap sessions and takes soft from 20/20 to **15/20**. Re-arming promptly lets the
 ring's own chatter become onsets, and those form groups that fire nothing. The
 same pattern that defeated every re-arm mechanism in round two.
 
+### Releasing on the undilated signal
+
+The other repair the trace suggests. The 3-sample sliding maximum exists so one
+physical tap reads as one onset — a detection concern. Applying it to the RELEASE
+test as well holds the envelope up for three samples past every ripple, during
+the exact interval the detector is asking whether the surface has gone quiet.
+Detecting on the dilated envelope and releasing on the quadrature pair beneath it
+is principled and had never been tried.
+
+Measured on training data, across the debounce it interacts with:
+
+```
+                              desk           soft            lap        typingFP
+dilated (shipped), 100 ms    95.7 %        100.0 %        73.8 %  (59/80)   0
+undilated,         100 ms    95.7 %         85.0 %        76.2 %  (61/80)   0
+undilated,         140 ms    95.7 %        100.0 %        75.0 %  (60/80)   0
+undilated,         180 ms    65.2 %         60.0 %        40.0 %            0
+undilated,         220 ms      0.0 %          0.0 %         0.0 %           0
+```
+
+The 140 ms cell is a real gain: soft restored to 20/20, desk untouched, lap
+59 -> 60, typing still zero. It is also **one cell**. At 100 ms it costs soft
+three gestures; at 180 ms everything collapses because the debounce starts
+exceeding the gesture interval. A single-cell optimum worth one gesture, in a
+project that has documented four separate times that train gains of six to eight
+do not survive held-out, is not a result. Reverted rather than graded, because
+grading it would spend the held-out set on something already known to be inside
+its own noise.
+
 *Process note, recorded because it matters:* I ran this on held-out first, since
 that is where the critic's evidence sat, and only then on train. That is the
 discipline this project enforces everywhere else, broken by me. It changed
