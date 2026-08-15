@@ -81,27 +81,68 @@ Then:
 ./analyse.sh --holdout    # the numbers that decide pass or fail
 ```
 
-## Why lap is stuck — now measured, and it is not the detector
+## Why lap is stuck — the answer is a re-arm defect
 
-Every one of the 20 held-out lap gestures lives in a single session. Split them
-by whether the LABEL puts the two taps inside the detector's 220 ms pairing
-ceiling:
+**A claim published here an hour ago was wrong and is withdrawn.** It said the
+detector already detects every gesture it is permitted to fire on, and that the
+remaining lap gap is therefore in the corpus rather than the code. Three
+skeptics were commissioned to destroy it. Two returned REFUTED and the third
+found the actual defect. What follows replaces it.
 
-| | groups | detected | onset agreement with the label |
-|---|---|---|---|
-| label span ≤ 220 ms | 15 | **15 — every one** | median ~5 ms |
-| label span > 220 ms | 5 | 4, all loosely | 41-61 ms |
+The withdrawn claim rested on splitting labelled groups at the detector's own
+220 ms pairing ceiling. Move the ceiling and the split moves with it — that is
+the circularity, and it is fatal:
 
-**The detector strictly detects 100 % of the lap gestures it is permitted to
-fire on, to about 5 ms.** The single miss and all four loose credits are exactly
-the five gestures whose labels pair onsets 223-249 ms apart, beyond the ceiling.
+| ceiling | 180 | 200 | **220** | 240 | 260 | 620 |
+|---|---|---|---|---|---|---|
+| lap "fireable" credited | 86.4 % | 96.8 % | **100 %** | 98.5 % | 98.6 % | 92.5 % |
 
-The obvious fix does not work, and this is the important negative: raising the
-ceiling to 260 ms changes nothing. Those four still disagree by 41-61 ms and the
-miss stays missed. So it was never a window problem. On a lap one strike makes
-4-7 lobes over 250-300 ms (D9), the labeller picked lobes A and D, the detector
-picked A and B, and both are looking at the same real gesture. The remaining
-miss is a second tap the front end never saw at all.
+100 % happens at exactly 220 ms and nowhere else. And with the ceiling opened to
+620 ms, so that nothing at all is excluded, lap still tops out at 92.50 % train
+and 95.00 % held-out. **Lap never reaches 98 % at any ceiling**, so the gap was
+never explained by the labels alone. Three more corrections to that entry: the
+result held only at the resonator point (on the shipped default, 13 of 63
+fireable train lap gestures are missed); "63 lap fireable" should have been 62,
+since one group spans 91.3 ms and is unfireable by `minInterTapNs` instead; and
+it ignored that lap also fails false triggers at that operating point.
+
+### What is actually wrong
+
+Held-out `959d90` group 6, the only held-out lap miss, is neither a quiet tap nor
+a labelling disagreement:
+
+- the labelled first tap peaks at 0.87× threshold, so it is never declared
+- the detector crosses instead on a 1.03× precursor 140 ms later
+- the real strike lands 105 ms after that at **1.38× threshold — the largest
+  transient in the gesture, and 1.34× the onset that blanked it**
+- it is refused purely by **release hysteresis**: the valley between them bottomed
+  at 0.00506 g against a 0.00440 g re-arm level
+
+The detector heard a dominant strike and discarded it. `explain` reports this as
+"only 1 ungated onset ... a 2-tap needs 2", which reads like deafness, and that
+mis-reading is why the entire amplitude family looked closed.
+
+It has an in-sample counterpart, exactly one: train `13e15a` group 1, a peak at
+1.52× threshold and 1.28× the onset that blanked it, 115 ms later. The harness
+already says so — `explain` calls it "above threshold but rejected by the
+detector's own logic". It sits inside a 597 ms label, so recovering it cannot be
+credited, **which is precisely why `rejected/rearm-valley-rise` measured
+"recovers ZERO gestures"**. That old negative was real and its interpretation was
+wrong.
+
+### The PRD's two bars are in tension on lap, and that part stands
+
+Latency tracks the confirm window 1:1 (p95 = window + 6.5 ms), because a group
+fires at a deadline: `Detector.swift:490`, `groupDeadlineNs = tNs +
+confirmWindowNs`. A 250 ms p95 bar therefore caps the window near 243 ms, and any
+gesture whose two taps sit further apart than that cannot be both fired on and
+inside budget. Labelled spans above 243 ms: **13 of 80 train lap, 1 of 20
+held-out lap, 1 of 23 train desk.**
+
+So 98 % detection and 250 ms p95 are jointly unsatisfiable on lap as labelled.
+That is a consequence of firing at a deadline rather than of physics — firing as
+soon as the armed tap count is reached would decouple the two, and triple-tap is
+built but unwired (D6), so nothing currently needs the wait.
 
 Widening the window is now measured shut properly, which it had not been. A
 sweep of `maxInterTapMs` alone clamps at `confirmWindowNs` and returns identical
