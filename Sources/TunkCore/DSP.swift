@@ -229,6 +229,30 @@ public struct DSPTuning: Sendable, Equatable {
     /// Envelope must fall back below this fraction of the threshold before the
     /// detector re-arms. Hysteresis, so one strike is one onset.
     public var releaseFraction: Double
+    /// Second, adaptive term on the re-arm line: the envelope may also re-arm
+    /// once it falls under this multiple of the running noise floor. The line in
+    /// force is the LARGER of the two, capped at the admission threshold.
+    /// **0 ships, which disables the term and leaves the re-arm line exactly
+    /// `releaseFraction * threshold`.**
+    ///
+    /// It exists because `releaseFraction` is a fraction of a CALIBRATED number
+    /// and therefore says nothing about the surface, while the whole reason a
+    /// re-arm line is hard to place is the surface. Measured at the resonator
+    /// operating point (`tunk-score noise --config <reso>`), the quiet-stretch
+    /// envelope on lap runs p50 0.00049-0.00054 g and p99.9 0.00397-0.00696 g,
+    /// against a fixed re-arm line of 0.4 * 0.011 = 0.0044 g — the line sits
+    /// INSIDE the lap noise distribution, between its p99 and p99.9, while on
+    /// desk and soft it sits far above the whole distribution (p99.9
+    /// 0.00193-0.00235 g). One constant cannot be in the right place on both.
+    ///
+    /// Scaling the line by the floor puts it in the same place on every surface:
+    /// on a quiet desk the floor term is far below `releaseFraction * threshold`
+    /// and nothing changes, and on a live lap it rises with the surface, so a
+    /// chassis that rocks through several lobes re-arms between them and every
+    /// lobe is counted. That is the point — a disturbance counted as four onsets
+    /// is not a double tap and fires nothing, where the same disturbance merged
+    /// into two onsets is.
+    public var releaseFloorMultiple: Double
     /// Minimum spacing between two accepted onsets, in ns. **100 ms, set from
     /// real recordings on a soft surface.**
     ///
@@ -357,6 +381,7 @@ public struct DSPTuning: Sendable, Equatable {
         noiseSnrMultiple: 4.0,
         minThresholdG: 0.02,
         releaseFraction: 0.4,
+        releaseFloorMultiple: 0.0,
         onsetDebounceNs: 100_000_000,
         peakHoldNs: 12_000_000,
         warmupSamples: 200,
@@ -375,6 +400,7 @@ public struct DSPTuning: Sendable, Equatable {
     public init(sampleRateHz: Double, highPassHz: Double, envelopePeakSamples: Int,
                 noiseRiseTauSeconds: Double, noiseFallTauSeconds: Double,
                 noiseSnrMultiple: Double, minThresholdG: Double, releaseFraction: Double,
+                releaseFloorMultiple: Double = 0.0,
                 onsetDebounceNs: Int64, peakHoldNs: Int64, warmupSamples: Int,
                 gapResetNs: Int64, preGateNs: Int64,
                 noiseFloorHoldNs: Int64 = 30_000_000,
@@ -392,6 +418,7 @@ public struct DSPTuning: Sendable, Equatable {
         self.noiseSnrMultiple = noiseSnrMultiple
         self.minThresholdG = minThresholdG
         self.releaseFraction = releaseFraction
+        self.releaseFloorMultiple = releaseFloorMultiple
         self.onsetDebounceNs = onsetDebounceNs
         self.peakHoldNs = peakHoldNs
         self.warmupSamples = warmupSamples
@@ -405,6 +432,80 @@ public struct DSPTuning: Sendable, Equatable {
         self.resonatorQ = resonatorQ
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
+    }
+}
+
+extension DSPTuning {
+    /// The front end with the narrow band in place AND the admission constants
+    /// re-measured against it, rather than inherited from the broadband chain.
+    ///
+    /// Every admission constant in this struct was fitted on the broadband
+    /// envelope. The narrow band changes that envelope's gain by ~8.6x, so all
+    /// four were re-measured at the resonator operating point (40 Hz, Q 2,
+    /// threshold 0.011 g) with `tunk-score noise` and `tunk-score sweep` over
+    /// `data/raw`. What the measurement actually said, in order:
+    ///
+    /// - **`minThresholdG` is inert, and it is inert on BOTH chains.** It never
+    ///   sets the bar in any session, at any surface: the calibrated threshold
+    ///   is above it everywhere. Swept 0.002 → 0.016 g it does nothing at all
+    ///   until it passes the calibrated 0.011 g, after which it is a threshold
+    ///   raise wearing another name — 0.012 g costs 6 detections to remove 1 of
+    ///   the 6 lap false triggers, 0.014 g costs 25 to remove 3, 0.016 g costs
+    ///   45 to remove 5. Left at 0.002 g, which is the value the resonator run
+    ///   already used; the derivation says it could be 0.0097 g (the same
+    ///   multiple of the idle-desk narrow-band hash that 0.02 g is of the
+    ///   broadband hash) with no effect on anything measured.
+    /// - **`onsetCeilingG` is inert.** No onset at the resonator point exceeds
+    ///   0.05 g, so a 2.5 g ceiling is 50x above the largest thing it could ever
+    ///   see. Swept down, it removes nothing until 0.02 g, where it takes 58
+    ///   detections with it.
+    /// - **`noiseSnrMultiple` is inert until it is fatal.** The adaptive term
+    ///   sets the bar in 0.0-1.5 % of quiet lap samples at 4.0, and is still
+    ///   inert at 8.0 (identical run). Past 9 it removes detections faster than
+    ///   false triggers: 9.5 costs 5 detections for 1 false trigger, 11.5 costs
+    ///   34 for 4.
+    /// - **`releaseFraction` and `onsetDebounceNs` move together, and they are
+    ///   the only pair that pays.** 0.48 with a 120 ms debounce holds lap
+    ///   detection at exactly the resonator baseline (73/80), holds desk (22/23)
+    ///   and soft (20/20), and removes 2 of the 6 lap false triggers.
+    ///
+    /// Read the last one honestly: the mechanism is NOT that the narrow band
+    /// moved the re-arm line. The statistic that line has to clear — the
+    /// envelope valley between two strikes, as a fraction of the threshold —
+    /// measures max 0.362 at the resonator point against 0.393 broadband, so the
+    /// 0.4 constant sits in the same place on both chains. What the higher line
+    /// buys is on the other side: a chassis rocking through four to seven lobes
+    /// re-arms between them, every lobe becomes an onset, and the group's count
+    /// leaves 2. The longer debounce is what stops a real strike's own ring-down
+    /// doing the same thing on a soft surface, which is what costs a gesture at
+    /// 0.48 with the shipped 100 ms debounce.
+    ///
+    /// The pair is a plateau, not a point: every cell of releaseFraction
+    /// 0.46/0.48/0.50 x debounce 110/115/120/125/130 ms scores identically
+    /// (desk 22/23, soft 20/20, lap 73/80, 4 lap false triggers). It is still
+    /// fitted on train, and train is in-sample.
+    ///
+    /// Two more things a reader is owed, because the headline number flatters
+    /// this more than the events do:
+    ///
+    /// - The lap detection rate is unchanged but the SET is not. 13e15a group 12
+    ///   is recovered (the false trigger at 58.860 s becomes a labelled match)
+    ///   and 13e15a group 3 is lost (labelled strikes 124 ms apart, under the
+    ///   120 ms debounce). Net zero, one gesture each way.
+    /// - Of the two false triggers removed, only ONE is removed on merit. The
+    ///   other is the end-of-capture lift at 92.231 s, and it disappears because
+    ///   the re-arm shifts its pairing 160 ms later so the confirm deadline falls
+    ///   past the last sample in the file. In a live app that lift would still
+    ///   fire. Counted honestly, this mechanism takes the lap false triggers from
+    ///   6 to 5, not to 4.
+    public static func resonatorAdmission(centreHz: Double = 40, q: Double = 2) -> DSPTuning {
+        var t = DSPTuning.default
+        t.resonatorHz = centreHz
+        t.resonatorQ = q
+        t.minThresholdG = 0.002
+        t.releaseFraction = 0.48
+        t.onsetDebounceNs = 120_000_000
+        return t
     }
 }
 

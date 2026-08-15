@@ -173,6 +173,15 @@ tunk-score \(TunkScoreVersion.string) — the referee for the Tunk detector.
       Per-trigger trace for one session: onsets, strengths, gate state, and why
       each labelled group did or did not fire.
 
+  tunk-score noise [--data <dir>] [--config <json>] [--guard-ms <n>] [--md <out>]
+                   [--i-am-a-critic]
+      Measure the noise the admission rule is fitted to, AT THE FRONT END THE
+      CONFIG NAMES. Quiet-stretch envelope, adaptive floor and threshold-in-force
+      percentiles per session, plus how often each of the three admission terms
+      actually sets the bar. Run it before trusting any admission constant with a
+      non-shipped front end: the resonator changes the envelope's gain by ~8.6x
+      and every one of those constants was fitted on the broadband envelope.
+
   tunk-score progress --from <report.json> [--out web/progress.json]
                       [--round <n>] [--label <text>] [--headline <text>]
                       [--gap <text>] [--status <text>] [--pooled] [--replace]

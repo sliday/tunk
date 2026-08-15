@@ -234,7 +234,7 @@ public final class TapDetector: TapDetecting {
                     onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
                 }
             }
-        } else if envelope <= threshold * tuning.releaseFraction,
+        } else if envelope <= releaseLevel(threshold: threshold),
                   let onset = lastOnsetNs,
                   sample.tNs - onset >= tuning.onsetDebounceNs {
             armed = true
@@ -360,6 +360,26 @@ public final class TapDetector: TapDetecting {
         let openUntil = last + effectiveConfig.maxInterTapNs
         guard let now = lastSampleNs, now <= openUntil else { return base }
         return base * tuning.inGestureThresholdFraction
+    }
+
+    /// The envelope level the detector re-arms under, in g.
+    ///
+    /// Two terms, larger wins. `releaseFraction * T` is the fixed one and is a
+    /// fraction of a CALIBRATED number, so it carries no information about the
+    /// surface. `releaseFloorMultiple * noiseFloor` is the adaptive one and
+    /// carries nothing else: it is the running noise floor, which is the only
+    /// thing in the chain that describes the surface the machine is sitting on.
+    ///
+    /// Capped at the threshold, and the cap is not cosmetic. A release line at
+    /// or above the admission line means the detector re-arms while the envelope
+    /// is still over the bar, so the very next sample declares another onset and
+    /// a live surface produces one onset per debounce period forever. Below the
+    /// cap the hysteresis band always has width.
+    @inline(__always)
+    private func releaseLevel(threshold: Double) -> Double {
+        let fixed = threshold * tuning.releaseFraction
+        guard tuning.releaseFloorMultiple > 0 else { return fixed }
+        return min(max(fixed, tuning.releaseFloorMultiple * chain.noiseFloor), threshold)
     }
 
     /// Drop everything derived from the sample stream, keeping gate and

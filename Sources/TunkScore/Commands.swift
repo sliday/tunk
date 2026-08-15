@@ -170,6 +170,47 @@ enum Commands {
         }
     }
 
+    // MARK: - noise
+
+    static func noise(_ args: inout Args) throws -> Int32 {
+        let rootPath = args.string("data") ?? "data/raw"
+        let root = Paths.resolve(rootPath)
+        let configPath = args.string("config")
+        let mdOut = args.string("md")
+        let isCritic = args.bool("i-am-a-critic")
+        let guardMs = try args.double("guard-ms") ?? 400
+        try args.checkUnknown()
+
+        var config = DetectorConfig.default
+        if let p = configPath { config = try ConfigIO.load(url: Paths.resolve(p)) }
+        try ConfigIO.validate(config)
+
+        if HoldoutGuard.pathLooksLikeHoldout(root) && !isCritic {
+            _ = try HoldoutGuard.check(root: root, sessions: [], isCritic: false)
+        }
+        let sessions = try Session.discover(root: root)
+        let banners = try HoldoutGuard.check(root: root, sessions: sessions, isCritic: isCritic)
+        for w in banners { FileHandle.standardError.write(Data((w + "\n").utf8)) }
+        guard !sessions.isEmpty else {
+            throw CLIError.failed("no sessions under \(root.path); nothing to measure")
+        }
+
+        let tuning = DetectorFactory.tuning
+        var stats: [NoiseProbe.SessionStats] = []
+        for s in sessions {
+            stats.append(try NoiseProbe.measure(session: s, config: config, tuning: tuning,
+                                                guardNs: Int64(guardMs * 1e6)))
+        }
+        let text = NoiseProbe.report(stats, config: config, tuning: tuning,
+                                     guardMs: guardMs, root: root)
+        print(text)
+        if let p = mdOut {
+            try text.write(to: Paths.resolve(p), atomically: true, encoding: .utf8)
+            print("wrote \(Paths.resolve(p).path)")
+        }
+        return 0
+    }
+
     // MARK: - sweep
 
     struct SweepRow: Codable {

@@ -25,6 +25,7 @@ func main() -> Int32 {
         case "run": return try Commands.run(&args)
         case "sweep": return try Commands.sweep(&args)
         case "explain": return try Commands.explain(&args)
+        case "noise": return try Commands.noise(&args)
         case "progress": return try Commands.progress(&args)
         case "selftest": return try SelfTest.run(&args)
         default:

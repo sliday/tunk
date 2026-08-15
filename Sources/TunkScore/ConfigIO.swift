@@ -72,6 +72,28 @@ enum ConfigIO {
                          : "resonator off")
         }
         if t.minThresholdG != d.minThresholdG { parts.append(String(format: "minThreshold %.4f g", t.minThresholdG)) }
+        // The admission constants were unreachable from a config until this
+        // round, so this line never had to mention them. It does now: a run at a
+        // different re-arm line that prints "shipped" is a run whose provenance
+        // is invisible, which is the one thing this banner exists to stop.
+        if t.releaseFraction != d.releaseFraction {
+            parts.append(String(format: "releaseFraction %.3f", t.releaseFraction))
+        }
+        if t.releaseFloorMultiple != d.releaseFloorMultiple {
+            parts.append(String(format: "releaseFloorMultiple %.2f", t.releaseFloorMultiple))
+        }
+        if t.onsetDebounceNs != d.onsetDebounceNs {
+            parts.append(String(format: "onsetDebounce %.0f ms", Double(t.onsetDebounceNs) / 1e6))
+        }
+        if t.noiseSnrMultiple != d.noiseSnrMultiple {
+            parts.append(String(format: "noiseSnrMultiple %.2f", t.noiseSnrMultiple))
+        }
+        if t.noiseRiseTauSeconds != d.noiseRiseTauSeconds || t.noiseFallTauSeconds != d.noiseFallTauSeconds {
+            parts.append(String(format: "noiseTau %.3f/%.3f s", t.noiseRiseTauSeconds, t.noiseFallTauSeconds))
+        }
+        if t.noiseFloorHoldNs != d.noiseFloorHoldNs {
+            parts.append(String(format: "noiseFloorHold %.0f ms", Double(t.noiseFloorHoldNs) / 1e6))
+        }
         return parts.isEmpty ? "shipped" : parts.joined(separator: ", ")
     }
 }
@@ -107,7 +129,17 @@ enum ConfigParam: String, CaseIterable {
     // place on the envelope than where it was chosen. A referee that cannot
     // grade the constant its own root-cause analysis names is not a referee.
     case releaseFraction
+    case releaseFloorMultiple
     case onsetDebounceNs
+    // The adaptive half of the admission rule. `noiseSnrMultiple` is the only
+    // term that reads the surface rather than the calibration, and it was
+    // unreachable from here, so no round could grade it — the resonator runs
+    // inherited a multiple of 4 fitted against a broadband envelope whose gain
+    // is 8.6x larger than the narrow-band one it now multiplies.
+    case noiseSnrMultiple
+    case noiseRiseTauSeconds
+    case noiseFallTauSeconds
+    case noiseFloorHoldNs
 
     /// Whether this parameter belongs to the front end rather than to
     /// `DetectorConfig`. The distinction is real: a `DetectorConfig` written by
@@ -117,7 +149,8 @@ enum ConfigParam: String, CaseIterable {
     var isFrontEnd: Bool {
         switch self {
         case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG,
-             .releaseFraction, .onsetDebounceNs: return true
+             .releaseFraction, .releaseFloorMultiple, .onsetDebounceNs, .noiseSnrMultiple,
+             .noiseRiseTauSeconds, .noiseFallTauSeconds, .noiseFloorHoldNs: return true
         default: return false
         }
     }
@@ -164,12 +197,17 @@ enum ConfigParam: String, CaseIterable {
         case .onsetCeilingG: c.onsetCeilingG = v > 0 ? v : nil
         case .motionGateG: c.motionGateG = v
         case .releaseFraction: DetectorFactory.tuning.releaseFraction = v
+        case .releaseFloorMultiple: DetectorFactory.tuning.releaseFloorMultiple = v
         case .onsetDebounceNs: DetectorFactory.tuning.onsetDebounceNs = Int64(v)
         case .highPassHz: DetectorFactory.tuning.highPassHz = v
         // Zero means the stage is absent, so a sweep can start at "shipped".
         case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
         case .resonatorQ: DetectorFactory.tuning.resonatorQ = v
         case .minThresholdG: DetectorFactory.tuning.minThresholdG = v
+        case .noiseSnrMultiple: DetectorFactory.tuning.noiseSnrMultiple = v
+        case .noiseRiseTauSeconds: DetectorFactory.tuning.noiseRiseTauSeconds = v
+        case .noiseFallTauSeconds: DetectorFactory.tuning.noiseFallTauSeconds = v
+        case .noiseFloorHoldNs: DetectorFactory.tuning.noiseFloorHoldNs = Int64(v)
         }
     }
 
@@ -187,11 +225,16 @@ enum ConfigParam: String, CaseIterable {
         case .onsetCeilingG: return c.onsetCeilingG ?? 0
         case .motionGateG: return c.motionGateG
         case .releaseFraction: return DetectorFactory.tuning.releaseFraction
+        case .releaseFloorMultiple: return DetectorFactory.tuning.releaseFloorMultiple
         case .onsetDebounceNs: return Double(DetectorFactory.tuning.onsetDebounceNs)
         case .highPassHz: return DetectorFactory.tuning.highPassHz
         case .resonatorHz: return DetectorFactory.tuning.resonatorHz
         case .resonatorQ: return DetectorFactory.tuning.resonatorQ
         case .minThresholdG: return DetectorFactory.tuning.minThresholdG
+        case .noiseSnrMultiple: return DetectorFactory.tuning.noiseSnrMultiple
+        case .noiseRiseTauSeconds: return DetectorFactory.tuning.noiseRiseTauSeconds
+        case .noiseFallTauSeconds: return DetectorFactory.tuning.noiseFallTauSeconds
+        case .noiseFloorHoldNs: return Double(DetectorFactory.tuning.noiseFloorHoldNs)
         }
     }
 
