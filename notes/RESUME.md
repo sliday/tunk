@@ -161,6 +161,48 @@ And the instance was never rare. At margin 1.0 the peak reference admits **88**
 supra-threshold dominant transients across `data/raw`, 58 of them in one desk
 session, against the 1 the diagnosis named.
 
+### The lap gap, finally decomposed
+
+Twenty-three rounds argued about lap without ever separating its failure modes.
+A measurement agent did it, using a Swift probe that streams samples through the
+**real** `TapDetector` and records its own envelope and active threshold per
+sample — validated by reconstructing all 166 published onset strengths
+bit-exactly, so no chain-replica or gain-mixing error is possible.
+
+For every one of the 80 labelled train lap gestures, two numbers: the peak
+envelope at the labelled second onset as a multiple of the live threshold, and
+the offset from that onset to the nearest onset the detector had already
+declared, against `onsetDebounceNs` = 100 ms.
+
+| | A: sub-threshold | B: swallowed by debounce | both | neither |
+|---|---|---|---|---|
+| all 80 gestures | 3 | 9 | 3 | 65 |
+| the 20 failures | 3 | 9 | 3 | 5 |
+
+**All 60 clean gestures are NEITHER**, minimum ratio 1.05 and minimum offset
+125 ms. The separation is total, which is what makes the split trustworthy.
+
+**Both families are large, so neither fix alone can work.** That is the result.
+Six gestures can never be admitted at 0.011 g by any onset policy — every
+`rejected/rearm-*` and `rejected/amplitude-*` round was doomed for those by
+construction. Twelve are swallowed, and in **9 of the 12 the swallowing onset is
+a mid-gesture lobe, not the labelled first tap** — so recovering them needs lobe
+versus strike discrimination, which D9 records the current front end cannot do
+(the 3-sample sliding maximum flattens the leading edge). In the other 3 the
+operator simply tapped faster than `minInterTapNs` = 100 ms, at 91-101 ms.
+
+Two details worth acting on:
+
+- `ad3fd3` g5 is a failure **by 1.5 ms**: labelled inter-tap 221.5 ms against a
+  220 ms ceiling, with both taps loud (1.91×) and both detected.
+- `13e15a` g12 was disarmed 151 ms after the previous onset, so the debounce had
+  already expired and the **release-fraction latch** held it. The re-arm blocker
+  is not only the 100 ms constant.
+
+And the corpus warning again, now from a fourth direction: `13e15a` has
+**14 of 20 labelled inter-tap intervals outside the legal [100, 220] ms band**,
+and 16 of the 20 lap failures live in that one session.
+
 ### The PRD's two bars are in tension on lap, and that part stands
 
 Latency tracks the confirm window 1:1 (p95 = window + 6.5 ms), because a group
