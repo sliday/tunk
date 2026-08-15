@@ -26,6 +26,59 @@ fire on a pair beginning 81-93 ms before the labelled first tap; demand a credit
 within 40 ms of the label and it is 15/20. The resonator also ships OFF, because
 train lap false triggers double from 3 to 6 with it on. See below.
 
+## The PRD's critics have ruled on lap reachability
+
+The PRD requires a **critic**, not the builder, to rule a target unreachable. I
+once wrote such a ruling myself (the sensor bandwidth claim) and two of three
+critics broke it. So three were commissioned with the full evidence and told to
+hunt for a mechanism first. They split:
+
+| angle | ruling |
+|---|---|
+| hunt for the missed mechanism | **REACHABLE — here is how** |
+| audit the load-bearing negatives | UNREACHABLE on this corpus |
+| is the bar measured against the right thing | UNREACHABLE on this corpus |
+
+Both "unreachable" rulings are about the **instrument**, not the physics, and they
+agree on the arithmetic. Held-out lap is 20 gestures in one session, and at n = 20:
+
+| score | rate | 95 % Clopper-Pearson lower bound |
+|---|---|---|
+| 16/20 | 80.0 % | 59.90 % |
+| 19/20 | 95.0 % | 78.39 % |
+| **20/20** | 100 % | **86.09 %** |
+| 49/50 | 98.0 % | 90.86 % |
+| 59/60 | 98.3 % | 92.34 % |
+
+**A perfect score on the held-out lap set cannot certify 98 %.** Certifying
+"≥ 98 % at 95 % confidence" needs **149 consecutive clean gestures per surface**.
+And at n = 20 the bar quantises: 19/20 = 95 % < 98 %, so "≥ 98 %" silently means
+"100 %".
+
+The PRD wrote 98 % for **its own final-acceptance instrument** — "perform 50
+deliberate double-taps" — where 98 % = 49/50 and the granularity matches the
+number. Applying a 50-tap figure to a 20-gesture sample is the harness's choice,
+not the PRD's. That live test has never been run at full size, and it needs the
+owner's hands.
+
+### A reporting error of mine, corrected
+
+I published held-out lap as "15/20 = 75 % label-aligned", applying a 40 ms
+credit-agreement test **to lap alone**. Applied evenly:
+
+| | desk | soft | lap |
+|---|---|---|---|
+| train, detected | 22/23 | 20/20 | 59/80 |
+| train, credits > 40 ms off | 0 | **5** | 10 |
+| train, strict at 40 ms | 22/23 | **15/20** | 49/80 |
+| held-out, detected | 20/20 | 20/20 | 16/20 |
+| held-out, credits > 40 ms off | 0 | **0** | 2 |
+
+Train soft is 15/20 by exactly the test I used to indict lap — the same number.
+Out of sample the distinction does hold (soft 0 over 40 ms, lap 2), so the
+held-out claim stands, but I never ran the column for the passing surfaces, and
+that let the lap figure read as uniquely damning when on train it is not.
+
 ## The recordings that are still missing — one command
 
 Nothing here is fixable in code, and all of it blocks the bar.
