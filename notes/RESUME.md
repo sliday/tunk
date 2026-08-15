@@ -171,30 +171,57 @@ session, against the 1 the diagnosis named.
 
 ### Held-out lap is 19/20 by the contract and 15/20 against the labels
 
-Four of the nineteen held-out lap credits fire on a pair that begins **81-93 ms
-before the labelled first tap**. Verified directly:
+Four of the nineteen held-out lap credits disagree with the label by more than
+40 ms. So the headline depends on how strictly a credit must land: by the harness
+contract, 19/20 = 95 %; demanding a credit within 40 ms of the label, **15/20 =
+75 %**. Both are reported, and this note had been leading with the first.
 
-```
-./bin/tunk-score explain data/holdout/tap_deck__lap__20260814-113623__959d90 --config <op> --i-am-a-critic
-  onset error  -92.6  -81.3  -90.1  -91.3   ms   <- these four
-  onset error  -15.0  -28.8   -8.8  -35.0   ms   <- typical of the other sixteen
-```
+**A correction to what I wrote here first.** I read `explain`'s "onset error" as
+the detector's FIRST onset against the labelled first tap, and published that the
+detector fires "81-93 ms before the labelled first tap". That is not what the
+field measures. `Scoring.swift:474` computes `triggerOnsetNs(best) - g.lastNs`,
+and `triggerOnsetNs` returns `tapOnsets.last` — it is the **last** onset against
+the **labelled last**. Measured properly, in 10 of the 13 train cases the
+detector's first onset sits *on* the labelled first tap, median −3.8 ms. The
+displaced onset is the second one.
 
-The split is bimodal, and the four are exactly the gestures whose labelled
-inter-tap interval (236 / 249 / 233 / 223 ms) exceeds the 220 ms join ceiling.
-They also fire early: latency 128-139 ms against 185-211 ms for the rest.
+I also wrote that this "reframes 24 rounds" because a lap gesture must contain a
+third transient the labels omit. The first half is true and the second half does
+not follow, and the control that settles it was run:
 
-So the headline number depends on how strictly a credit must land. By the
-harness contract, 19/20 = 95 %. If a credit must fall within 40 ms of the label,
-**15/20 = 75 %**. Both are reported; this note has been leading with the first.
+| | extra prominent transients per gesture | at ≥50 % amplitude |
+|---|---|---|
+| `13e15a`, off-label gestures | 4.25 | 2.67 |
+| `3fee5b`, **clean** gestures | 3.41 | 2.65 |
+| `a4a257`, clean | 2.15 | — |
+| `ad3fd3`, clean | 1.95 | — |
+| desk, all | **0.18** | **0** |
 
-**That reframes 24 rounds.** Every mechanism so far assumed a lap double-tap puts
-exactly two admissible strikes into the signal, and tried to admit the second one
-or stop it being swallowed. These credits say a lap gesture puts at least three
-transients in: something ~90 ms ahead of the labelled first tap, then the first
-tap, then the second. The detector is already firing on a pair — just not the
-operator's pair. What that early transient physically is has not been established
-and is being measured now.
+A lap double-tap really does contain 3-7 real transients where the labels name
+two — all 13 of the displaced onsets land on a broadband local maximum clearing
+the labeller's own SNR-6 bar, and 11 of 13 are strikes by the labeller's own
+criteria. But clean lap gestures contain them too. **The extra transients are not
+what makes these credits off-label**, so they explain nothing.
+
+What does explain it is the join window against this operator's lap cadence. In
+`13e15a`, **14 of 20 labelled gaps fall outside the legal [100, 220] ms window**,
+median 250 ms, against 1/20, 3/20 and 0/20 in the other three lap sessions. Ten
+of the twelve off-label credits sit on a pair that cannot be joined. The detector
+finds the first tap correctly, then has to pick a second within 220 ms, and the
+labelled second is beyond reach — so it takes a real intermediate transient
+instead.
+
+Two things were settled along the way, both with validated instruments (a
+labeller replica reproducing 103/103 frozen label pairs bit-exactly, and a
+detector probe reproducing 252/252 `explain` onset times):
+
+- **The filter is not the cause.** Impulse through HP20 → 40 Hz Q2 → quadrature →
+  3-max gives an envelope peak at **+1.26 ms** and a 20 % crossing at +0.0 ms;
+  analytic group delay is 15.3 ms. A 90 ms displacement is 30-70× that, and the
+  filter can only delay, never lead.
+- **Resonator statistics do not adjudicate on lap**, as the separability table
+  below already showed: across the 13, `rise20` percentiles span 3 %-97 % and
+  `res_prom` spans 1 %-77 %.
 
 ### The lap gap, finally decomposed
 
