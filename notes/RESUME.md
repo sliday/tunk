@@ -161,6 +161,33 @@ And the instance was never rare. At margin 1.0 the peak reference admits **88**
 supra-threshold dominant transients across `data/raw`, 58 of them in one desk
 session, against the 1 the diagnosis named.
 
+### Held-out lap is 19/20 by the contract and 15/20 against the labels
+
+Four of the nineteen held-out lap credits fire on a pair that begins **81-93 ms
+before the labelled first tap**. Verified directly:
+
+```
+./bin/tunk-score explain data/holdout/tap_deck__lap__20260814-113623__959d90 --config <op> --i-am-a-critic
+  onset error  -92.6  -81.3  -90.1  -91.3   ms   <- these four
+  onset error  -15.0  -28.8   -8.8  -35.0   ms   <- typical of the other sixteen
+```
+
+The split is bimodal, and the four are exactly the gestures whose labelled
+inter-tap interval (236 / 249 / 233 / 223 ms) exceeds the 220 ms join ceiling.
+They also fire early: latency 128-139 ms against 185-211 ms for the rest.
+
+So the headline number depends on how strictly a credit must land. By the
+harness contract, 19/20 = 95 %. If a credit must fall within 40 ms of the label,
+**15/20 = 75 %**. Both are reported; this note has been leading with the first.
+
+**That reframes 24 rounds.** Every mechanism so far assumed a lap double-tap puts
+exactly two admissible strikes into the signal, and tried to admit the second one
+or stop it being swallowed. These credits say a lap gesture puts at least three
+transients in: something ~90 ms ahead of the labelled first tap, then the first
+tap, then the second. The detector is already firing on a pair — just not the
+operator's pair. What that early transient physically is has not been established
+and is being measured now.
+
 ### The lap gap, finally decomposed
 
 Twenty-three rounds argued about lap without ever separating its failure modes.
@@ -182,14 +209,49 @@ declared, against `onsetDebounceNs` = 100 ms.
 **All 60 clean gestures are NEITHER**, minimum ratio 1.05 and minimum offset
 125 ms. The separation is total, which is what makes the split trustworthy.
 
-**Both families are large, so neither fix alone can work.** That is the result.
+**Both families are large, so neither fix alone can work.** That is the result,
+and a round aimed at both of them then closed each one separately — see
+`rejected/shape-predilation` and `rejected/rank-retrospective-pairing`.
 Six gestures can never be admitted at 0.011 g by any onset policy — every
 `rejected/rearm-*` and `rejected/amplitude-*` round was doomed for those by
 construction. Twelve are swallowed, and in **9 of the 12 the swallowing onset is
 a mid-gesture lobe, not the labelled first tap** — so recovering them needs lobe
 versus strike discrimination, which D9 records the current front end cannot do
-(the 3-sample sliding maximum flattens the leading edge). In the other 3 the
-operator simply tapped faster than `minInterTapNs` = 100 ms, at 91-101 ms.
+(the 3-sample sliding maximum flattens the leading edge) — **though D9 was wrong
+about that, see below**. In the other 3 the operator simply tapped faster than
+`minInterTapNs` = 100 ms, at 91-101 ms.
+
+D9's premise is now corrected on measurement, by a builder and a critic
+independently and to two decimals: median 20 %-to-peak rise over 160 labelled lap
+onsets is **20.02 ms on the dilated envelope and 20.02 ms on the un-dilated one**,
+0 of 160 under one sample either way. D9's "0.0 ms for almost every real tap" was
+measured before the resonator shipped, where a broadband lap transient peaks
+inside the 3.8 ms window. Shape has been measurable ever since the resonator
+landed.
+
+It still does not separate on lap, and the control is what makes that credible —
+second taps against ring lobes, measured out of sample, with the percentage of
+lobes rejected at zero loss of real strikes:
+
+| surface | best statistic | AUC | lobes rejected |
+|---|---|---|---|
+| desk | `res_prom` / `valley` / `rise50` | 0.990 | 80-82 % |
+| soft | `res_prom` / `rise50` / `valley` | **1.000** | 100 % |
+| lap | `rise20` | 0.614 | **0 %** |
+
+The instrument is demonstrably not blind. On lap the separation is
+indistinguishable from zero, and the best train lap statistic (AUC 0.711) reads
+0.536 **inverted** out of sample — it was sampling noise on 36 lobes in one
+session.
+
+Family A is closed by the same round. Rescuing the 6 sub-threshold gestures with
+a shape-assisted lower bar admits local maxima in the [0.7×, 1.0×] band at
+**3485 per 20 min on lap, 3890 soft, 6138 desk, during typing** — thousands of
+typing transients to rescue at most six gestures, against a bar of zero.
+
+And the shipped `onsetDebounceNs` = 100 ms sits on the **left edge** of its
+plateau: on held-out, 100/110/120 ms all give 59/60 with 0 FP, while 90 ms gives
+58/60 with 1 FP and 80 ms gives 57/60 with 2 FP.
 
 Two details worth acting on:
 
