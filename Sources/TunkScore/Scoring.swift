@@ -35,15 +35,21 @@ enum Scoring {
 struct ScoringPolicy: Codable, Equatable {
     /// Sorted, unique.
     let armedCounts: [Int]
+    /// The detector's pairing ceiling, carried here only so the referee can spot
+    /// a labelled gesture that sits outside it and is therefore unfireable by
+    /// construction. 0 means "not supplied", and the check is skipped.
+    var maxInterTapNs: Int64 = 0
 
-    init(armedCounts: [Int]) {
+    init(armedCounts: [Int], maxInterTapNs: Int64 = 0) {
         self.armedCounts = Array(Set(armedCounts.filter { $0 >= 1 })).sorted()
+        self.maxInterTapNs = maxInterTapNs
     }
 
     func isArmed(_ n: Int) -> Bool { armedCounts.contains(n) }
 
     static func from(config: DetectorConfig, override: [Int]?) -> ScoringPolicy {
-        ScoringPolicy(armedCounts: override ?? config.armedTapCounts.sorted())
+        ScoringPolicy(armedCounts: override ?? config.armedTapCounts.sorted(),
+                      maxInterTapNs: config.maxInterTapNs)
     }
 
     /// Parse `--armed 1,2,3`.
@@ -387,6 +393,35 @@ enum SessionScorer {
                 if n != implied {
                     issues.append("\(meta.sessionId): group \(g.id) has \(n) onset(s) but intent "
                                   + "'\(intent.rawValue)'. Scored as a \(n)-tap gesture (onset count wins).")
+                }
+            }
+
+            // A labelled gesture whose own onsets sit further apart than
+            // `maxInterTapNs` is one the detector is FORBIDDEN to fire on: the
+            // grouping rule refuses that pairing by construction, so the group
+            // is a guaranteed miss no matter how good the detector gets, and any
+            // trigger the detector does produce inside the real gesture is
+            // charged as a false trigger on top. One physical event, two
+            // penalties, neither of them earned.
+            //
+            // Measured on the lap corpus: 5 of 80 labelled groups exceed 290 ms,
+            // and every one produced a false trigger on one front end or the
+            // other, while no group under 290 ms produced one on either. Four of
+            // those five are also counted among the seven lap misses. Whether
+            // those labels are wrong is the owner's call (see notes/DECISIONS.md,
+            // D-LABELS); that they cannot be satisfied is arithmetic, and the
+            // referee should say so rather than let it read as a detector defect.
+            if isGesture, n >= 2 {
+                let span = g.rows.last!.tNs - g.rows.first!.tNs
+                let ceiling = policy.maxInterTapNs
+                if ceiling > 0, span > ceiling {
+                    issues.append(String(
+                        format: "%@: group %@ pairs onsets %.0f ms apart, beyond the %.0f ms "
+                              + "maxInterTap ceiling. No detector may fire on this pairing, so it "
+                              + "is a guaranteed miss and any trigger inside it scores as a false "
+                              + "trigger.",
+                        meta.sessionId, String(describing: g.id),
+                        Double(span) / 1e6, Double(ceiling) / 1e6))
                 }
             }
 

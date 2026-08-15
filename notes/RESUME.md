@@ -81,19 +81,60 @@ Then:
 ./analyse.sh --holdout    # the numbers that decide pass or fail
 ```
 
-## Why lap is stuck, in one paragraph
+## Why lap is stuck — now measured, and it is not the detector
 
-**Not known.** The bandwidth explanation that stood here was withdrawn: the
-spectrum measurement behind it left gravity in the DC bin, and corrected, the
-sensor is usable to about 150 Hz. Three critics were commissioned to refute the
-unreachability claim and two broke it — see the adjudication in
-`notes/BAR_ASSESSMENT.md`.
+Every one of the 20 held-out lap gestures lives in a single session. Split them
+by whether the LABEL puts the two taps inside the detector's 220 ms pairing
+ceiling:
 
-What survives is operational, not physical: on this corpus lap does not reach
-98 % inside a 250 ms budget, and four attempts produced no better than 19/20 on
-held-out lap. The best current suspect is the re-arm state machine, since two
-clean contacts sit inside the legal join window in every held-out lap miss while
-the detector reports only one onset.
+| | groups | detected | onset agreement with the label |
+|---|---|---|---|
+| label span ≤ 220 ms | 15 | **15 — every one** | median ~5 ms |
+| label span > 220 ms | 5 | 4, all loosely | 41-61 ms |
+
+**The detector strictly detects 100 % of the lap gestures it is permitted to
+fire on, to about 5 ms.** The single miss and all four loose credits are exactly
+the five gestures whose labels pair onsets 223-249 ms apart, beyond the ceiling.
+
+The obvious fix does not work, and this is the important negative: raising the
+ceiling to 260 ms changes nothing. Those four still disagree by 41-61 ms and the
+miss stays missed. So it was never a window problem. On a lap one strike makes
+4-7 lobes over 250-300 ms (D9), the labeller picked lobes A and D, the detector
+picked A and B, and both are looking at the same real gesture. The remaining
+miss is a second tap the front end never saw at all.
+
+Widening the window is now measured shut properly, which it had not been. A
+sweep of `maxInterTapMs` alone clamps at `confirmWindowNs` and returns identical
+rows — the harness says so in its own output, but a conclusion had been drawn
+from that flat tail anyway. Sweeping BOTH windows: train lap gains 2 gestures at
+240 ms then saturates; held-out gains **zero** at every value from 230 to 300 ms.
+A critic also found the plateau starts at 220, where the config already sits, and
+that 220 is 10 ms above a 5-point cliff.
+
+The deafness route is exhausted. `rejected/rearm-valley-rise` cured the deafness
+(lap deaf 12 → 2) and recovered ZERO gestures; four separate "lower the bar for
+the second tap" variants were rejected in round 1; D9 records that a lower bar
+takes soft from 100 % to 55 %, because it admits the second lobe.
+
+So the honest position: **held-out lap is 19/20, and at n = 20 the 98 % bar
+requires 20/20.** One gesture is five points. The 60-gesture lap deck in
+`record-for-the-bar.sh` is what makes the bar expressible at all.
+
+## The referee now names labels it cannot be satisfied by
+
+A labelled gesture whose own onsets sit further apart than `maxInterTapNs` is one
+no detector may fire on. It is a guaranteed miss, and any trigger the detector
+does produce inside the real gesture is charged as a false trigger on top — one
+physical event, two penalties, neither earned. Every run now says so:
+
+```
+!! tap_deck__lap__...: group 1 pairs onsets 597 ms apart, beyond the 220 ms
+   maxInterTap ceiling. No detector may fire on this pairing...
+```
+
+Counted: **17 of 80 train lap, 5 of 20 held-out lap, 1 desk, 0 soft.** This
+changes no label and no verdict. It states arithmetic that was previously
+invisible and read as a detector defect.
 
 Twenty-one mechanisms have been built and independently graded, each by a critic
 with fresh context who rebuilt from source and graded on data the builder could
