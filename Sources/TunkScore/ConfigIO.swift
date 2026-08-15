@@ -71,6 +71,9 @@ enum ConfigIO {
                          ? String(format: "resonator %.1f Hz Q %.2f", t.resonatorHz, t.resonatorQ)
                          : "resonator off")
         }
+        if t.decayPredictionMargin != d.decayPredictionMargin {
+            parts.append(String(format: "decay-prediction margin %.3gx", t.decayPredictionMargin))
+        }
         if t.minThresholdG != d.minThresholdG { parts.append(String(format: "minThreshold %.4f g", t.minThresholdG)) }
         return parts.isEmpty ? "shipped" : parts.joined(separator: ", ")
     }
@@ -97,6 +100,9 @@ enum ConfigParam: String, CaseIterable {
     case highPassHz
     case resonatorHz
     case resonatorQ
+    /// Factor a second onset must beat the resonator's own predicted ring-down
+    /// by. 0 is off, which is what ships.
+    case decayPredictionMargin
     case minThresholdG
     // The re-arm condition, in full. `Detector.swift` re-arms when the envelope
     // falls under `releaseFraction * threshold` AND `onsetDebounceNs` has
@@ -116,7 +122,7 @@ enum ConfigParam: String, CaseIterable {
     /// front end in the warnings instead.
     var isFrontEnd: Bool {
         switch self {
-        case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG,
+        case .highPassHz, .resonatorHz, .resonatorQ, .decayPredictionMargin, .minThresholdG,
              .releaseFraction, .onsetDebounceNs: return true
         default: return false
         }
@@ -169,6 +175,7 @@ enum ConfigParam: String, CaseIterable {
         // Zero means the stage is absent, so a sweep can start at "shipped".
         case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
         case .resonatorQ: DetectorFactory.tuning.resonatorQ = v
+        case .decayPredictionMargin: DetectorFactory.tuning.decayPredictionMargin = max(0, v)
         case .minThresholdG: DetectorFactory.tuning.minThresholdG = v
         }
     }
@@ -191,6 +198,7 @@ enum ConfigParam: String, CaseIterable {
         case .highPassHz: return DetectorFactory.tuning.highPassHz
         case .resonatorHz: return DetectorFactory.tuning.resonatorHz
         case .resonatorQ: return DetectorFactory.tuning.resonatorQ
+        case .decayPredictionMargin: return DetectorFactory.tuning.decayPredictionMargin
         case .minThresholdG: return DetectorFactory.tuning.minThresholdG
         }
     }

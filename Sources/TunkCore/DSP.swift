@@ -344,9 +344,37 @@ public struct DSPTuning: Sendable, Equatable {
     /// the filter's own ring becomes the thing being detected.
     public var resonatorQ: Double
 
+    /// How far a second onset must beat the resonator's own predicted ring-down
+    /// to count as a fresh contact. **0 ships, which disables the test.**
+    ///
+    /// The resonator's impulse response is analytically known: `|s|` decays as
+    /// `exp(-t * pi * f0 / q)`, time constant `q / (pi * f0)`. So from a group
+    /// member's crossing time and strength you can compute what the envelope
+    /// would read at time `t` if nothing new struck the case. An onset that only
+    /// rides that prediction is the first strike still ringing; a real second
+    /// contact must exceed it by this factor.
+    ///
+    /// Only meaningful with `resonatorHz > 0`, and the prediction is taken as
+    /// the largest contribution over the live group's members, which is the
+    /// superposition an extra strike would have to beat.
+    public var decayPredictionMargin: Double
+
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
+
+    /// Ring-down time constant of the resonator stage, in seconds, or `nil` when
+    /// the stage is absent. `Resonator` sets its pole radius to
+    /// `exp(-pi * f0 / (q * fs))` per sample and outputs `|s|`, so over `dt`
+    /// seconds the output falls by `exp(-dt * pi * f0 / q)`: the constant is
+    /// `q / (pi * f0)` and does not depend on the sample rate. 15.9 ms at
+    /// 40 Hz Q 2. Same clamps as `Resonator.init` so the number describes the
+    /// filter that was actually built.
+    public var resonatorDecayTauSeconds: Double? {
+        guard resonatorHz > 0 else { return nil }
+        let f0 = min(max(resonatorHz, 0.000_1), max(sampleRateHz, 1.0) / 2)
+        return max(resonatorQ, 0.1) / (Double.pi * f0)
+    }
 
     public static let `default` = DSPTuning(
         sampleRateHz: 796.3,
@@ -368,6 +396,7 @@ public struct DSPTuning: Sendable, Equatable {
         settleSlowHz: 0.3,
         resonatorHz: 0.0,
         resonatorQ: 2.0,
+        decayPredictionMargin: 0.0,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -383,6 +412,7 @@ public struct DSPTuning: Sendable, Equatable {
                 settleSlowHz: Double = 0.3,
                 resonatorHz: Double = 0.0,
                 resonatorQ: Double = 2.0,
+                decayPredictionMargin: Double = 0.0,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
@@ -403,6 +433,7 @@ public struct DSPTuning: Sendable, Equatable {
         self.settleSlowHz = settleSlowHz
         self.resonatorHz = resonatorHz
         self.resonatorQ = resonatorQ
+        self.decayPredictionMargin = decayPredictionMargin
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }

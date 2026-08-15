@@ -415,6 +415,7 @@ public final class TapDetector: TapDetecting {
 
         let suppressed = tNs < gateUntilNs
         var joined = false
+        var ringSuppressed = false
         var trigger: Trigger?
 
         if !suppressed {
@@ -435,14 +436,51 @@ public final class TapDetector: TapDetecting {
                 trigger = closeGroup(now: tNs)
             }
             if tNs >= refractoryUntilNs {
-                joined = join(onset: tNs, strength: strength)
+                if ridesPredictedRing(at: tNs, strength: strength) {
+                    ringSuppressed = true
+                } else {
+                    joined = join(onset: tNs, strength: strength)
+                }
             }
             lastGroupingOnsetNs = tNs
         }
 
         pending = PendingOnset(tNs: tNs, peak: strength,
-                               suppressedByGate: suppressed, joinedGroup: joined)
+                               suppressedByGate: suppressed || ringSuppressed,
+                               joinedGroup: joined)
         return trigger
+    }
+
+    /// Whether this onset is the live group still ringing rather than a fresh
+    /// contact.
+    ///
+    /// The resonator's ring-down is analytically known — `exp(-dt / tau)` with
+    /// `tau = q / (pi * f0)` — so from each live group member's crossing time and
+    /// strength we can predict what the envelope would read now if nothing new
+    /// struck the case. The prediction is the largest of those contributions,
+    /// which is the level a real second contact has to beat by
+    /// `tuning.decayPredictionMargin`.
+    ///
+    /// Deliberately conservative in the mechanism's favour at both ends: the
+    /// decay is clocked from the CROSSING rather than from the (later) peak, so
+    /// the prediction is as high as it can honestly be, and the onset is judged
+    /// on its crossing envelope rather than its tracked peak, so it is as low as
+    /// it can honestly be.
+    ///
+    /// Off unless the resonator stage is present and the margin is positive; a
+    /// rejected onset does not kill the group, it simply fails to extend it, so
+    /// a genuine second strike arriving later can still be taken.
+    private func ridesPredictedRing(at tNs: Int64, strength: Double) -> Bool {
+        guard tuning.decayPredictionMargin > 0,
+              let tau = tuning.resonatorDecayTauSeconds,
+              !group.isEmpty else { return false }
+        var predicted = 0.0
+        for member in group {
+            let dt = Double(tNs - member.tNs) / 1e9
+            guard dt > 0 else { continue }
+            predicted = max(predicted, member.strength * exp(-dt / tau))
+        }
+        return strength < tuning.decayPredictionMargin * predicted
     }
 
     /// Returns true if the onset is now a member of the live group.
