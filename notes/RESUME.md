@@ -1,22 +1,30 @@
 # Resuming
 
-Everything is committed and pushed. 311 tests pass. Working tree clean.
+Everything is committed and pushed. Working tree clean. 271 tests pass; the 52
+emit tests fail only when another app holds secure input, which blocks
+`CGEventPost` — quit whatever has a password field focused and they pass too.
 
 ## Where the bar stands
 
-Held-out, graded in critic mode, `strictDetectionRate` equal to the contract
-rate on every surface (zero loose credits — see the referee audit below):
+Held-out, graded in critic mode. Two columns per surface, because the shipped
+default and the resonator front end are different machines and only one of them
+ships:
 
-| Criterion | Bar | desk | soft | lap |
-|---|---|---|---|---|
-| Detection rate | ≥ 98 % | **100 %** (20/20) ✅ | **100 %** (20/20) ✅ | 80 % (16/20) ✗ |
-| ...of which credits landing on a different transient | — | 0 | 0 | **2 of 16** |
-| Latency p95 | ≤ 250 ms | **198.9 ms** ✅ | **207.6 ms** ✅ | **208.9 ms** ✅ |
-| False triggers | < 1 / 20 min | **0** ✅ | **0** ✅ | **0** ✅ |
-| False triggers, typing | 0 | no data | no data | no data |
+| Criterion | Bar | desk | soft | lap (shipped) | lap (resonator) |
+|---|---|---|---|---|---|
+| Detection rate | ≥ 98 % | **100 %** (20/20) ✅ | **100 %** (20/20) ✅ | 80 % (16/20) ✗ | 95 % (19/20) ✗ |
+| ...credits landing >40 ms off the label | — | 0 | 0 | 2 of 16 | **4 of 19** |
+| Latency p95 | ≤ 250 ms | **198.9 ms** ✅ | **207.6 ms** ✅ | **208.9 ms** ✅ | **211.4 ms** ✅ |
+| False triggers | < 1 / 20 min | **0** ✅ | **0** ✅ | **0** ✅ | **0** ✅ |
+| False triggers, typing | 0 | no data | no data | no data | no data |
 
 Harness verdict: **FAIL**, on lap detection. It would read INCOMPLETE even if
-lap passed, because held-out has no typing sessions.
+lap passed, because held-out has no typing and no confound sessions.
+
+Read the lap column carefully. The resonator's 19/20 includes four credits that
+fire on a pair beginning 81-93 ms before the labelled first tap; demand a credit
+within 40 ms of the label and it is 15/20. The resonator also ships OFF, because
+train lap false triggers double from 3 to 6 with it on. See below.
 
 ## The recordings that are still missing — one command
 
