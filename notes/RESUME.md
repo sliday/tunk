@@ -130,6 +130,37 @@ credited, **which is precisely why `rejected/rearm-valley-rise` measured
 "recovers ZERO gestures"**. That old negative was real and its interpretation was
 wrong.
 
+### The fix for it was built, and it is `rejected/rearm-dominant-transient`
+
+The argument was that a ring lobe is always weaker than its own strike, so a
+transient *stronger* than the one holding the arm state cannot be that strike's
+decay and must be a new contact. Built, and rejected by both critics.
+
+The builder found the flaw in the diagnosis above. That "1.34× / 1.28× stronger
+than the onset that blanked it" was measured against the blanking onset's
+**crossing sample**, not its peak. Against the peak the candidate reads **0.889×**
+— it is a lobe after all. A crossing sample records where the threshold sits, not
+how hard the chassis was hit, so the premise never licensed the recovery. Both
+references were then graded rather than argued:
+
+| held-out, peak reference | desk | soft | lap | p95 | g6 |
+|---|---|---|---|---|---|
+| 0 (shipped) | 20/20 | 20/20 | **19/20** | 211.4 ms | missed |
+| 1.0 | 16/20 | 20/20 | 15/20 | 236.4 ms | loose credit |
+| 1.3 | 20/20 | 20/20 | 19/20 | 236.4 ms | loose credit |
+| 1.4 | 20/20 | 20/20 | 19/20 | 211.4 ms | inert |
+
+Where g6 flips it is a credit on the wrong physical transient and p95 rises 25 ms
+for nothing. The crossing reference is catastrophic out of sample — desk 1/20.
+On train at the only setting that recovers the named transient, each admitted
+onset turns a 2-tap group into an un-armed 3-tap group: desk 22 → 14, soft
+20 → 18, lap 73 → 67. The safety critic then built a real false trigger out of it,
+on an idle desk session, from a single rising disturbance.
+
+And the instance was never rare. At margin 1.0 the peak reference admits **88**
+supra-threshold dominant transients across `data/raw`, 58 of them in one desk
+session, against the 1 the diagnosis named.
+
 ### The PRD's two bars are in tension on lap, and that part stands
 
 Latency tracks the confirm window 1:1 (p95 = window + 6.5 ms), because a group
