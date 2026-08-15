@@ -230,6 +230,18 @@ public final class TapDetector: TapDetecting {
                 if moving {
                     append(OnsetEvent(tNs: sample.tNs, strength: envelope, suppressedByGate: true))
                     clearGroup()
+                } else if !broadbandSupportsOnset() {
+                    // The resonator declared this onset and the broadband chain
+                    // did not corroborate it. Publish it — the tap monitor should
+                    // still show what the sensor saw — but keep it out of every
+                    // group, exactly as a gate-suppressed onset is kept out.
+                    //
+                    // Deliberately NOT `clearGroup()`. An unsupported onset is a
+                    // statement about that onset, not about the gesture around
+                    // it; killing the group would spend real detections to reject
+                    // one member, which is what the shape-gate round already
+                    // measured as a losing trade.
+                    append(OnsetEvent(tNs: sample.tNs, strength: envelope, suppressedByGate: true))
                 } else {
                     onsetTrigger = acceptOnset(at: sample.tNs, strength: envelope)
                 }
@@ -338,6 +350,26 @@ public final class TapDetector: TapDetecting {
     private func refreshDerivedConfig() {
         effectiveConfig = config.madeCoherent()
         firingCounts = Self.resolveFiringCounts(config: effectiveConfig, armed: armedTapCounts)
+    }
+
+    /// Broadband cross-check. True when the shipped broadband chain corroborates
+    /// the onset the resonator just declared, or when no check is configured.
+    ///
+    /// Both tests read `SignalChain.broadbandSupport`, which is the peak of the
+    /// broadband envelope over `tuning.crossCheckWindowNs`. The absolute test is
+    /// in broadband g and must never be handed a resonator threshold; the
+    /// relative test is a ratio and needs no scaling. With the resonator absent
+    /// the two paths are the same signal, so the ratio is 1 and only a setting
+    /// above 1 can bite — see `DSPTuning.crossCheckSupportRatio`.
+    private func broadbandSupportsOnset() -> Bool {
+        if tuning.crossCheckSupportG > 0, chain.broadbandSupport < tuning.crossCheckSupportG {
+            return false
+        }
+        if tuning.crossCheckSupportRatio > 0 {
+            let resonated = max(chain.envelope, 1e-12)
+            if chain.broadbandSupport / resonated < tuning.crossCheckSupportRatio { return false }
+        }
+        return true
     }
 
     private func currentThreshold() -> Double {

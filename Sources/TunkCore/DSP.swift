@@ -344,6 +344,42 @@ public struct DSPTuning: Sendable, Equatable {
     /// the filter's own ring becomes the thing being detected.
     public var resonatorQ: Double
 
+    /// Broadband cross-check: the least broadband envelope, in g, that admits an
+    /// onset the resonator declared. **0 ships, which means the check is absent.**
+    ///
+    /// The resonator chain declares onsets because that is what buys the lap
+    /// detection. This asks the shipped broadband chain — the same high pass,
+    /// magnitude and peak hold, tapped BEFORE the narrow band — whether it saw
+    /// anything at that instant. A knuckle strike is broadband and shows in both
+    /// paths; a narrowband 40 Hz ring, or a slow shove, shows only in the
+    /// resonator.
+    ///
+    /// **The number is in BROADBAND g and does not compare against the resonator
+    /// threshold.** The two paths differ in gain by roughly 8.6x at the shipped
+    /// operating point (broadband peak gain 1 through the high pass, resonator
+    /// peak gain `1 - r` = 0.0759 at 40 Hz Q 2), and a real lap strike measures
+    /// ~0.044 g broadband against ~0.017 g resonated. Comparing a resonator
+    /// threshold against a broadband envelope, or the reverse, is the mistake
+    /// that produced a "0 vs 28.8" reading earlier in this project.
+    public var crossCheckSupportG: Double
+    /// Broadband cross-check, relative form: the least ratio of broadband
+    /// envelope to resonator envelope that admits an onset. **0 ships, absent.**
+    ///
+    /// Dimensionless, so it needs no gain scaling. Measured across the 79 lap
+    /// triggers at the resonator operating point this ratio runs 2.26-3.47 on
+    /// true detections. With the resonator off the two paths are the same signal
+    /// and the ratio is identically 1, so any setting above 1 deafens the shipped
+    /// front end — the check is only meaningful with a narrow band in place.
+    public var crossCheckSupportRatio: Double
+    /// How far back the broadband cross-check may look for its support, in ns.
+    ///
+    /// It has to look back at all. The resonator is a 40 Hz Q 2 pole pair, whose
+    /// envelope takes ~16 ms to build, while the broadband envelope peaks within
+    /// a sample or two of the strike and the peak hold is 3 samples (~3.8 ms). A
+    /// zero-width check would compare the resonator's rising edge against a
+    /// broadband path that had already decayed and would reject real strikes.
+    public var crossCheckWindowNs: Int64
+
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
@@ -368,6 +404,9 @@ public struct DSPTuning: Sendable, Equatable {
         settleSlowHz: 0.3,
         resonatorHz: 0.0,
         resonatorQ: 2.0,
+        crossCheckSupportG: 0.0,
+        crossCheckSupportRatio: 0.0,
+        crossCheckWindowNs: 20_000_000,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -383,6 +422,9 @@ public struct DSPTuning: Sendable, Equatable {
                 settleSlowHz: Double = 0.3,
                 resonatorHz: Double = 0.0,
                 resonatorQ: Double = 2.0,
+                crossCheckSupportG: Double = 0.0,
+                crossCheckSupportRatio: Double = 0.0,
+                crossCheckWindowNs: Int64 = 20_000_000,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
@@ -403,6 +445,9 @@ public struct DSPTuning: Sendable, Equatable {
         self.settleSlowHz = settleSlowHz
         self.resonatorHz = resonatorHz
         self.resonatorQ = resonatorQ
+        self.crossCheckSupportG = crossCheckSupportG
+        self.crossCheckSupportRatio = crossCheckSupportRatio
+        self.crossCheckWindowNs = crossCheckWindowNs
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }
@@ -437,6 +482,13 @@ public struct SignalChain: Sendable, Equatable {
     private var resZ: Resonator?
     private var previousSquared: Double = 0
     private var peak: SlidingMax
+    /// Second, parallel envelope built from the SAME high-passed axes but tapped
+    /// before the narrow band, plus the short peak hold the cross-check reads.
+    /// Both are nil when the resonator is absent, because then the broadband
+    /// path IS the main path and duplicating it would only cost cycles.
+    private var broadbandPrevSquared: Double = 0
+    private var broadbandPeak: SlidingMax?
+    private var broadbandWindow: SlidingMax?
     private var floorTracker: NoiseFloorTracker
     private var settledMagnitude: OnePoleLowPass
     private var fastMagnitude: OnePoleLowPass
@@ -444,6 +496,20 @@ public struct SignalChain: Sendable, Equatable {
 
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
+
+    /// The shipped broadband envelope, in g: the same chain as `envelope` with
+    /// the narrow band left out. Equals `envelope` exactly when the resonator is
+    /// absent, so a caller need not ask which front end is in force.
+    ///
+    /// Units are NOT comparable with `envelope` when the resonator is in: the
+    /// narrow band costs roughly 8.6x of amplitude at the shipped operating
+    /// point. Any threshold read against this one is a broadband threshold.
+    public private(set) var broadbandEnvelope: Double = 0
+
+    /// Peak of `broadbandEnvelope` over the cross-check look-back window, in g.
+    /// This is what an onset's broadband support is measured against, because the
+    /// resonator's envelope peaks ~16 ms after the broadband one does.
+    public private(set) var broadbandSupport: Double = 0
 
     /// How far the chassis's bulk acceleration currently sits from rest, in g.
     ///
@@ -476,6 +542,9 @@ public struct SignalChain: Sendable, Equatable {
             let make = { Resonator(centreHz: tuning.resonatorHz, q: tuning.resonatorQ,
                                    sampleRateHz: tuning.sampleRateHz) }
             resX = make(); resY = make(); resZ = make()
+            broadbandPeak = SlidingMax(length: tuning.envelopePeakSamples)
+            let span = Double(tuning.crossCheckWindowNs) * 1e-9 * tuning.sampleRateHz
+            broadbandWindow = SlidingMax(length: max(1, Int(span.rounded())))
         }
         peak = SlidingMax(length: tuning.envelopePeakSamples)
         floorTracker = NoiseFloorTracker(riseTauSeconds: tuning.noiseRiseTauSeconds,
@@ -496,11 +565,16 @@ public struct SignalChain: Sendable, Equatable {
         resZ?.reset()
         previousSquared = 0
         peak.reset()
+        broadbandPrevSquared = 0
+        broadbandPeak?.reset()
+        broadbandWindow?.reset()
         floorTracker.reset()
         settledMagnitude.reset()
         fastMagnitude.reset()
         magnitude = 0
         envelope = 0
+        broadbandEnvelope = 0
+        broadbandSupport = 0
     }
 
     /// Advance one sample. `holdNoiseFloor` freezes the floor for one strike's
@@ -520,6 +594,14 @@ public struct SignalChain: Sendable, Equatable {
         // Optional narrow band. Off by default, and the three optionals are nil
         // together, so the shipped path costs one branch and no arithmetic.
         if resX != nil {
+            // The broadband path forks HERE, off the high-passed axes and before
+            // the narrow band, so it is the shipped chain sample for sample.
+            let bbSquared = ax * ax + ay * ay + az * az
+            let bbPair = (bbSquared + broadbandPrevSquared).squareRoot()
+            broadbandPrevSquared = bbSquared
+            broadbandEnvelope = broadbandPeak!.process(bbPair)
+            broadbandSupport = broadbandWindow!.process(broadbandEnvelope)
+
             ax = resX!.process(ax)
             ay = resY!.process(ay)
             az = resZ!.process(az)
@@ -528,6 +610,13 @@ public struct SignalChain: Sendable, Equatable {
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
         envelope = peak.process(pair)
+        if resX == nil {
+            // No narrow band: the broadband path is this path. Alias rather than
+            // recompute, so the shipped front end is untouched and a cross-check
+            // ratio reads exactly 1.
+            broadbandEnvelope = envelope
+            broadbandSupport = envelope
+        }
         if !holdNoiseFloor { floorTracker.update(envelope) }
         return envelope
     }

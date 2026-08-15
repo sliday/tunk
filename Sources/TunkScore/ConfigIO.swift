@@ -72,6 +72,15 @@ enum ConfigIO {
                          : "resonator off")
         }
         if t.minThresholdG != d.minThresholdG { parts.append(String(format: "minThreshold %.4f g", t.minThresholdG)) }
+        if t.crossCheckSupportG != d.crossCheckSupportG {
+            parts.append(String(format: "crossCheck support %.4f g broadband", t.crossCheckSupportG))
+        }
+        if t.crossCheckSupportRatio != d.crossCheckSupportRatio {
+            parts.append(String(format: "crossCheck ratio %.2f", t.crossCheckSupportRatio))
+        }
+        if t.crossCheckWindowNs != d.crossCheckWindowNs {
+            parts.append(String(format: "crossCheck window %.1f ms", Double(t.crossCheckWindowNs) / 1e6))
+        }
         return parts.isEmpty ? "shipped" : parts.joined(separator: ", ")
     }
 }
@@ -97,6 +106,12 @@ enum ConfigParam: String, CaseIterable {
     case highPassHz
     case resonatorHz
     case resonatorQ
+    // Broadband cross-check. `crossCheckSupportG` is in BROADBAND g and is not
+    // on the same scale as `defaultThreshold` once a resonator is in the chain;
+    // `crossCheckSupportRatio` is dimensionless. Zero means absent for both.
+    case crossCheckSupportG
+    case crossCheckSupportRatio
+    case crossCheckWindowNs
     case minThresholdG
     // The re-arm condition, in full. `Detector.swift` re-arms when the envelope
     // falls under `releaseFraction * threshold` AND `onsetDebounceNs` has
@@ -117,6 +132,7 @@ enum ConfigParam: String, CaseIterable {
     var isFrontEnd: Bool {
         switch self {
         case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG,
+             .crossCheckSupportG, .crossCheckSupportRatio, .crossCheckWindowNs,
              .releaseFraction, .onsetDebounceNs: return true
         default: return false
         }
@@ -169,6 +185,10 @@ enum ConfigParam: String, CaseIterable {
         // Zero means the stage is absent, so a sweep can start at "shipped".
         case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
         case .resonatorQ: DetectorFactory.tuning.resonatorQ = v
+        // Zero disables each cross-check test, so a sweep can start at "absent".
+        case .crossCheckSupportG: DetectorFactory.tuning.crossCheckSupportG = max(0, v)
+        case .crossCheckSupportRatio: DetectorFactory.tuning.crossCheckSupportRatio = max(0, v)
+        case .crossCheckWindowNs: DetectorFactory.tuning.crossCheckWindowNs = Int64(v)
         case .minThresholdG: DetectorFactory.tuning.minThresholdG = v
         }
     }
@@ -191,6 +211,9 @@ enum ConfigParam: String, CaseIterable {
         case .highPassHz: return DetectorFactory.tuning.highPassHz
         case .resonatorHz: return DetectorFactory.tuning.resonatorHz
         case .resonatorQ: return DetectorFactory.tuning.resonatorQ
+        case .crossCheckSupportG: return DetectorFactory.tuning.crossCheckSupportG
+        case .crossCheckSupportRatio: return DetectorFactory.tuning.crossCheckSupportRatio
+        case .crossCheckWindowNs: return Double(DetectorFactory.tuning.crossCheckWindowNs)
         case .minThresholdG: return DetectorFactory.tuning.minThresholdG
         }
     }
