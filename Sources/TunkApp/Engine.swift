@@ -174,12 +174,14 @@ final class Engine: ObservableObject {
     init(settings: AppSettings) {
         self.settings = settings
         let made = DetectorFactory.make(config: settings.config,
-                                        armedTapCounts: settings.config.armedTapCounts)
+                                        armedTapCounts: settings.config.armedTapCounts,
+                                        tuning: settings.tuning)
         self.detector = made
         self.readout = made as? TapDetector
         self.runner = ActionRunner(bindings: settings.bindings)
 
         settings.onConfigChange = { [weak self] config in self?.apply(config: config) }
+        settings.onTuningChange = { [weak self] tuning in self?.apply(tuning: tuning) }
         settings.onEnabledChange = { [weak self] on in self?.setEnabled(on) }
         settings.onBindingsChange = { [weak self] bindings in
             self?.runner.bindings = bindings
@@ -536,6 +538,28 @@ final class Engine: ObservableObject {
             detector.config = config
             arm(for: config)
         }
+        detectorLock.unlock()
+    }
+
+    /// Swap in a detector built on a different `DSPTuning`.
+    ///
+    /// A detector reads its tuning once, in `init`, and `TapDetector.tuning` is a
+    /// `let` — the crest buffer and the polarization tracker are allocated there
+    /// or not at all. So this rebuilds rather than writes, which also means the
+    /// new detector starts with no history: any half-formed group the old one was
+    /// holding dies here rather than being counted under new rules. That is the
+    /// same discipline `reset()` follows on a sensor reacquire.
+    ///
+    /// The config carried across is whatever is in force, which during
+    /// calibration is the probe rather than the user's — the calibration sheet
+    /// still owns `configBeforeCalibration` and still restores it on commit.
+    private func apply(tuning: DSPTuning) {
+        detectorLock.lock()
+        let live = detector.config
+        let armed = detector.effectiveArmedTapCounts
+        let made = DetectorFactory.make(config: live, armedTapCounts: armed, tuning: tuning)
+        detector = made
+        readout = made as? TapDetector
         detectorLock.unlock()
     }
 

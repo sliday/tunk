@@ -76,6 +76,7 @@ struct SettingsView: View {
                 // exists. Single sits below with its caution.
                 ForEach(ActionBindings.wiredCounts, id: \.self) { actionCard(tapCount: $0) }
                 calibrationCard
+                lapPairingCard
                 footnote
             }
             .padding(Metrics.panelPadding)
@@ -679,6 +680,78 @@ struct SettingsView: View {
                     .buttonStyle(TunkButtonStyle(prominent: settings.config.calibratedThreshold == nil))
             }
         }
+    }
+
+    // MARK: - experimental
+
+    /// The one unproven mechanism the app can switch on. It sits last, below
+    /// calibration, because nothing above it depends on it and because an owner
+    /// scrolling past should be able to ignore it.
+    ///
+    /// Every number in this card was measured. The three lines under the toggle
+    /// are the three reasons its critics stopped it from shipping on, kept in the
+    /// UI verbatim rather than summarised into a benefit: an owner who turns this
+    /// on is volunteering to be the experiment, and cannot volunteer for
+    /// something they have not been told.
+    private var lapPairingCard: some View {
+        Card(title: "Lap pairing (experimental)",
+             caption: "Changes how a second tap is recovered when the first one is still "
+                    + "ringing through a soft surface. It is the only mechanism that has "
+                    + "reached the lap detection target on recordings it was not tuned on, "
+                    + "and it is not approved for shipping on.") {
+            Toggle("Use experimental lap pairing", isOn: $settings.experimentalLapPairing)
+                .toggleStyle(.switch)
+                .font(.system(size: 12))
+                .frame(minHeight: Metrics.hitTarget)
+                .contentShape(Rectangle())
+
+            HStack(spacing: 18) {
+                Readout(label: "held-out lap, off", value: "16/20")
+                Readout(label: "held-out lap, on", value: "20/20", accent: .primary)
+                Readout(label: "held-out lap p95, on", value: "203.9 ms")
+            }
+
+            Text("Desk and soft read 20 of 20 either way, and every held-out recording reads "
+               + "zero false triggers with this on or off. Latency does not move: the lap "
+               + "figure is 208.9 ms with this off.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 6) {
+                caveat("Nobody has recorded this laptop being knocked, bumped or jostled on a "
+                     + "lap, so its false triggers there have never been counted. The guard "
+                     + "that holds them back has only ever been tested against signals "
+                     + "generated in software.")
+                caveat("It takes the second tap from a crest at half the usual bar. Two of the "
+                     + "five false triggers on the lap recordings it was tuned on arrive that "
+                     + "way, and no test of amplitude can tell them from a real gesture.")
+                caveat("It leans harder on the gate that stops your typing from firing Tunk. "
+                     + "Across 11.7 minutes of typing recordings, with that gate switched "
+                     + "off, the shipped detector fires 62 times and this fires 124. The "
+                     + "gate turns both into zero. Turning this on asks it to catch twice "
+                     + "as much.")
+            }
+        }
+        .tunkAnimation(.tunkSnappy, value: settings.experimentalLapPairing,
+                       reduceMotion: reduceMotion)
+    }
+
+    private func caveat(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Circle()
+                .fill(Color.orange)
+                .frame(width: 4, height: 4)
+                // Optical, not geometric: a 4 pt dot centred on an 11 pt line
+                // sits high, and the line it belongs to is the first one.
+                .padding(.top, 5)
+            Text(text)
+                .font(.system(size: 11))
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var footnote: some View {

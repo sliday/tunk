@@ -425,6 +425,24 @@ public struct DSPTuning: Sendable, Equatable {
         groupLogCapacity: 256
     )
 
+    /// `default` plus M26 and its anchor floor, at the exact five values that
+    /// were graded. Nothing else moves.
+    ///
+    /// This is `notes/m26/G_m26_anchor030.json` expressed in Swift, and
+    /// `DSPTuningLapPairingTests` pins it against that file's numbers so the
+    /// switch in the app and the config a critic replays cannot drift apart.
+    /// It is NOT approved to ship on; see the app's own copy for what an owner
+    /// who turns it on is accepting.
+    public static let lapPairingExperiment: DSPTuning = {
+        var t = DSPTuning.default
+        t.pairRescueEnabled = true
+        t.pairRescueCandidateFraction = 0.5
+        t.pairRescueCosMin = 0.7
+        t.pairRescueRankByRect = true
+        t.pairRescueAnchorFraction = 0.30
+        return t
+    }()
+
     public init(sampleRateHz: Double, highPassHz: Double, envelopePeakSamples: Int,
                 noiseRiseTauSeconds: Double, noiseFallTauSeconds: Double,
                 noiseSnrMultiple: Double, minThresholdG: Double, releaseFraction: Double,
