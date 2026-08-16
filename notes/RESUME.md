@@ -138,13 +138,29 @@ is currently muting ~85 % of typing time:
 **M26 multiplies the exposed typing false-trigger count by 2.2× on desk, 2.3× on
 soft and 3.75× on lap, and the anchor floor removes almost none of it** — 8 of 82
 added triggers on desk, 1 of 46 on soft, 0 of 33 on lap. The floor was built for
-lobes that are a twentieth of their anchor; typing transients are not that.
+ring lobes that are a twentieth of their anchor; typing transients are not that
+shape.
 
-With the gate on, all three configs read 0 false triggers in every typing session,
-so the shipped behaviour is unchanged. But that zero rests entirely on the gate,
-and M26 hands the gate three times as much to catch. That is a second, independent
-reason not to ship it, and unlike the lap-confound gap this one is measured on
-data the project already owns.
+**But read the multiplier against the right baseline, which I did not do at
+first.** Un-gated, pooled, against a bar of < 1 per 20 min:
+
+| | rate | over the bar by |
+|---|---|---|
+| shipped baseline | 188.48 /20 min | 188× |
+| M26 + floor | 448.92 /20 min | 449× |
+
+Neither is usable without the gate. The shipped detector already fails that
+scenario by two orders of magnitude, so M26 does **not** cross a line the baseline
+respects — it deepens dependence on a component the PRD deliberately makes
+load-bearing: "Gate detection on input activity … This is how typing false
+positives get killed. Accept the consequence that the user cannot trigger
+mid-type."
+
+Gated — the shipped behaviour — every config reads 0 false triggers in every
+typing session, and there is no difference between them. So the honest statement
+is narrower than "a second reason not to ship": M26 asks the gate to catch 2.4×
+as much, in a regime where the detector is already wholly reliant on it. Whether
+that matters is a judgement about how reliable the gate is, not a bar violation.
 
 ### The one recording that would settle it
 
