@@ -726,10 +726,13 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 6) {
-                caveat("Nobody has recorded this laptop being knocked, bumped or jostled on a "
-                     + "lap, so its false triggers there have never been counted. The guard "
-                     + "that holds them back has only ever been tested against signals "
-                     + "generated in software.")
+                caveat("MEASURED SINCE, ON REAL RECORDINGS: on a lap this fires on single "
+                     + "knocks. A lap damps the chassis so slowly that a lone contact is "
+                     + "still ringing 100 to 220 ms later at about half its own strength, "
+                     + "which is where a second tap is looked for. Of the 19 chances that "
+                     + "arose in the lap recordings, it took all 19. Gaps that size open "
+                     + "about 3.9 times a minute while tapping on a lap. Leave this off on "
+                     + "a lap unless you are collecting evidence.")
                 caveat("It takes the second tap from a crest at half the usual bar. Two of the "
                      + "five false triggers on the lap recordings it was tuned on arrive that "
                      + "way, and no test of amplitude can tell them from a real gesture.")

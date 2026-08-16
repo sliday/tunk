@@ -161,10 +161,36 @@ lap — it is what a lap is.
 Raising the floor cannot rescue it: real lap second taps have a p25 of 0.43, so
 any floor that closes the storm sits inside the genuine population.
 
-The polarization pair — coherence veto and rectilinearity ranking — is the only
-defence left, and whether it holds on real data has never been measured. Note the
-veto's direction before reading that result: it *requires* alignment, and a ring
-lobe is maximally aligned with the strike that produced it.
+The polarization pair was the only defence left. **It does not hold**, measured
+on `data/raw` with a probe validated three ways — 242/242 published onset pairs
+reproduced, the envelope matching the detector bit for bit across 2.55 M samples,
+and a Python transcription of `PairRescue.scan` reproducing all 19 real rescues
+exactly.
+
+| gate | on real lap data |
+|---|---|
+| 3, anchor floor 0.30 | does not filter: 81 of 83 strikes clear it |
+| 5, coherence veto (cos ≥ 0.7) | **admits 74.5 %** of lobes (35 of 47) |
+| 5, empirically | rejected **0 of 19** real lap singletons |
+| 6, rect ranking | ranks only — never rejects the last survivor |
+
+34 of 55 isolated lap strikes have a crest passing gates 1-4. Their `|cos|` runs
+p50 0.841 against real rescues at p50 0.859 — not separable, P(lobe > rescue)
+= 0.369. And singleton groups, the only ones M26 scans, form at **3.86 per minute**
+during real lap tapping.
+
+The veto's direction was the trap: it *requires* alignment in order to reject
+unrelated disturbances, and a ring lobe is maximally aligned with the strike that
+produced it. It was built to admit exactly the thing that hurts it.
+
+**Verdict: dangerous on lap. Leave the switch off there.** The Settings card now
+says so with these numbers instead of "never been counted".
+
+**One lead survives, ungraded.** `rectMax` ships inactive at 1.1; at **0.99** it
+would stop 24 of the 28 lone-knock firings while keeping 17 of the 19 real
+rescues. Rect does separate where cos does not — rescues p50 0.895 against lobe
+winners at 0.995. That is a mechanism-sized question and has had no builder, no
+critic and no held-out grading.
 
 ### The lobe storm is dead on synthetic fixtures; the residual is a physics limit
 
