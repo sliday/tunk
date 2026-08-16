@@ -318,6 +318,32 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The shipped calibration feature cannot fix lap, and here is why
+
+Tunk ships a "learn my tap" calibration that fits the user's own inter-tap
+interval. It has never been graded against the bar. Measured, with zero free
+parameters — the value is whatever the shipped `fitInterTap` produces from this
+operator's own lap taps:
+
+| | learns | clamped to |
+|---|---|---|
+| train lap labelled inter-tap | p50 177.7 ms, p90 260.2 ms | — |
+| `fitInterTap` aim (p90 × 1.15) | **299.2 ms** | **235 ms** (`latencySafeWindowNs`) |
+
+| window | desk | soft | lap | lap FP | lap p95 |
+|---|---|---|---|---|---|
+| 220 ms (shipped) | 20/20 | 20/20 | **16/20** | 0 | 208.9 ms |
+| 235 ms (calibrated) | 20/20 | 20/20 | **16/20** | 0 | 223.9 ms |
+
+**Held-out lap does not move.** On train it buys exactly one gesture (59 → 60) at
+unchanged false triggers. Out of sample it buys nothing and costs 15 ms.
+
+The reason is the clamp, and it is the same wall as everywhere else: the feature
+wants 299 ms, the latency budget permits 235 ms, and the held-out gestures that
+need it span **236-249 ms** — just past the clamp. The panel already tells an
+owner their fit was clamped. What it cannot tell them is that on a lap the clamp
+is exactly what makes the feature inert.
+
 ## "3 versus 5" was never a meaningful comparison
 
 The single stated objection blocking M26 was its false-trigger cost: lap 3 → 5 on
