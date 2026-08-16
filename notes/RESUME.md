@@ -345,6 +345,33 @@ The train optimum sits exactly where held-out has already lost a gesture. It buy
 a train false-trigger reduction by paying a held-out detection. Confirmed fit.
 `rejected/rect-band-strict`.
 
+Two things from the builder's own critique are worth more than the result.
+
+**The falsifier fired, and it reported it.** The brief said the trade is only
+defensible if the strict rate holds, since the discarded credits are loose. Strict
+lap moves 66 → 65 — not because a discarded credit was strict, but because the
+band **silently substitutes the crest under three *surviving* rescues** (0.7873 →
+0.9504, 0.8393 → 0.9664, 0.7949 → 0.9720) and one of those pushes a credit past
+the 80 ms line. In its words: "true about what is discarded and false about the
+consequence. By the brief's own rule that makes the argument wrong, and I am
+saying so."
+
+**The overfit is subtler than the sorted list can show.** The crest the floor
+excludes at 0.8531 *is not one of the 19*. It is the substitute that becomes the
+winner only because the floor already removed the 0.4104 reading. **The boundary
+is fitted against a value the boundary itself created.** The floor's working edge
+is 0.0005 wide; the ceiling plateau is 0.0026 wide, decided by two readings 0.0029
+apart out of nineteen.
+
+For the record, the three-way at equal false triggers — the number that made this
+worth testing, and which does not survive held-out:
+
+| config | lap contract | lap strict | lap FP |
+|---|---|---|---|
+| shipped default | 59 | 53 | 3 |
+| M26 | 76 | 66 | 5 |
+| M26 + band | 72 | 65 | **3** |
+
 ### The point that outlives this round
 
 **Held-out cannot grade false triggers at all.** Held-out lap is 1.5 minutes with
