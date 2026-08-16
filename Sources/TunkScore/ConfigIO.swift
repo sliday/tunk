@@ -72,6 +72,18 @@ enum ConfigIO {
                          : "resonator off")
         }
         if t.minThresholdG != d.minThresholdG { parts.append(String(format: "minThreshold %.4f g", t.minThresholdG)) }
+        // A run with retrospective pairing on is not a run of the shipped
+        // detector, and the report has to say so on its own without anyone
+        // remembering to mention it.
+        if t.pairRescueEnabled {
+            parts.append(String(format: "pair rescue on (candFrac %.2f, cosMin %.2f, rank %@, "
+                                       + "rectMax %.2f, anchorFrac %.2f, pol window %d, "
+                                       + "lookahead %d)",
+                                t.pairRescueCandidateFraction, t.pairRescueCosMin,
+                                t.pairRescueRankByRect ? "rect" : "amplitude",
+                                t.pairRescueRectMax, t.pairRescueAnchorFraction,
+                                t.polarizationWindowSamples, t.polarizationLookaheadSamples))
+        }
         return parts.isEmpty ? "shipped" : parts.joined(separator: ", ")
     }
 }
@@ -108,6 +120,17 @@ enum ConfigParam: String, CaseIterable {
     // grade the constant its own root-cause analysis names is not a referee.
     case releaseFraction
     case onsetDebounceNs
+    // Retrospective pairing ranked by polarization. Off unless a config names
+    // `pairRescueEnabled`, so a run that does not name it is a run of the
+    // shipped detector.
+    case pairRescueEnabled
+    case pairRescueCandidateFraction
+    case pairRescueCosMin
+    case pairRescueRankByRect
+    case pairRescueRectMax
+    case pairRescueAnchorFraction
+    case polarizationWindowSamples
+    case polarizationLookaheadSamples
 
     /// Whether this parameter belongs to the front end rather than to
     /// `DetectorConfig`. The distinction is real: a `DetectorConfig` written by
@@ -117,7 +140,10 @@ enum ConfigParam: String, CaseIterable {
     var isFrontEnd: Bool {
         switch self {
         case .highPassHz, .resonatorHz, .resonatorQ, .minThresholdG,
-             .releaseFraction, .onsetDebounceNs: return true
+             .releaseFraction, .onsetDebounceNs,
+             .pairRescueEnabled, .pairRescueCandidateFraction, .pairRescueCosMin,
+             .pairRescueRankByRect, .pairRescueRectMax, .pairRescueAnchorFraction,
+             .polarizationWindowSamples, .polarizationLookaheadSamples: return true
         default: return false
         }
     }
@@ -170,6 +196,18 @@ enum ConfigParam: String, CaseIterable {
         case .resonatorHz: DetectorFactory.tuning.resonatorHz = max(0, v)
         case .resonatorQ: DetectorFactory.tuning.resonatorQ = v
         case .minThresholdG: DetectorFactory.tuning.minThresholdG = v
+        // Booleans over a numeric channel: anything above zero is on, so a
+        // sweep can walk through the switch like any other parameter.
+        case .pairRescueEnabled: DetectorFactory.tuning.pairRescueEnabled = v > 0
+        case .pairRescueCandidateFraction: DetectorFactory.tuning.pairRescueCandidateFraction = v
+        case .pairRescueCosMin: DetectorFactory.tuning.pairRescueCosMin = v
+        case .pairRescueRankByRect: DetectorFactory.tuning.pairRescueRankByRect = v > 0
+        case .pairRescueRectMax: DetectorFactory.tuning.pairRescueRectMax = v
+        case .pairRescueAnchorFraction: DetectorFactory.tuning.pairRescueAnchorFraction = v
+        case .polarizationWindowSamples:
+            DetectorFactory.tuning.polarizationWindowSamples = Int(v.rounded())
+        case .polarizationLookaheadSamples:
+            DetectorFactory.tuning.polarizationLookaheadSamples = Int(v.rounded())
         }
     }
 
@@ -192,6 +230,16 @@ enum ConfigParam: String, CaseIterable {
         case .resonatorHz: return DetectorFactory.tuning.resonatorHz
         case .resonatorQ: return DetectorFactory.tuning.resonatorQ
         case .minThresholdG: return DetectorFactory.tuning.minThresholdG
+        case .pairRescueEnabled: return DetectorFactory.tuning.pairRescueEnabled ? 1 : 0
+        case .pairRescueCandidateFraction: return DetectorFactory.tuning.pairRescueCandidateFraction
+        case .pairRescueCosMin: return DetectorFactory.tuning.pairRescueCosMin
+        case .pairRescueRankByRect: return DetectorFactory.tuning.pairRescueRankByRect ? 1 : 0
+        case .pairRescueRectMax: return DetectorFactory.tuning.pairRescueRectMax
+        case .pairRescueAnchorFraction: return DetectorFactory.tuning.pairRescueAnchorFraction
+        case .polarizationWindowSamples:
+            return Double(DetectorFactory.tuning.polarizationWindowSamples)
+        case .polarizationLookaheadSamples:
+            return Double(DetectorFactory.tuning.polarizationLookaheadSamples)
         }
     }
 

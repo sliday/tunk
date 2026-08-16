@@ -130,6 +130,7 @@ public final class TapDetector: TapDetecting {
         self.armedTapCounts = armedTapCounts
         self.tuning = tuning
         self.chain = SignalChain(tuning: tuning)
+        self.rescue = PairRescue(lookahead: tuning.polarizationLookaheadSamples)
         self.effectiveConfig = config.madeCoherent()
         self.firingCounts = Self.resolveFiringCounts(config: self.effectiveConfig,
                                                      armed: armedTapCounts)
@@ -152,6 +153,9 @@ public final class TapDetector: TapDetecting {
     }
 
     private var chain: SignalChain
+    /// Buffered sub-threshold crests and the live group's anchor axis. Inert
+    /// unless `tuning.pairRescueEnabled`; see `DetectorPairRescue.swift`.
+    private var rescue: PairRescue
 
     private var sampleIndex: Int = 0
     private var lastSampleNs: Int64?
@@ -211,6 +215,20 @@ public final class TapDetector: TapDetecting {
 
         let threshold = currentThreshold()
         envelopeForTesting = envelope
+
+        // Buffer the crest, if there was one `polarizationLookaheadSamples` ago.
+        // Reading the threshold here means a buffered crest carries the bar that
+        // was in force at its own instant, not the one in force at the deadline.
+        if tuning.pairRescueEnabled {
+            let axis = chain.polarizationAxis
+            rescue.observe(tNs: sample.tNs, index: sampleIndex, envelope: envelope,
+                           threshold: threshold, rect: chain.rectilinearity,
+                           ux: axis.x, uy: axis.y, uz: axis.z,
+                           candidateFraction: tuning.pairRescueCandidateFraction,
+                           retentionNs: effectiveConfig.maxInterTapNs
+                                      + effectiveConfig.confirmWindowNs)
+        }
+
         var onsetTrigger: Trigger?
 
         if armed {
@@ -289,6 +307,7 @@ public final class TapDetector: TapDetecting {
 
     public func reset() {
         chain.reset()
+        rescue.reset()
         sampleIndex = 0
         lastSampleNs = nil
         armed = true
@@ -366,6 +385,9 @@ public final class TapDetector: TapDetecting {
     /// refractory (they are driven by wall-order events, not by the filters).
     private func dropSignalState() {
         chain.reset()
+        // The buffered crests describe samples on the far side of a hole the
+        // detector cannot vouch for, and the delay line straddles it.
+        rescue.reset()
         sampleIndex = 0
         armed = true
         lastOnsetNs = nil
@@ -475,6 +497,11 @@ public final class TapDetector: TapDetecting {
     private func startGroup(at tNs: Int64, strength: Double) {
         group.removeAll(keepingCapacity: true)
         groupCount = 0
+        // This onset is the anchor a retrospective pairing would measure the
+        // second tap against, so its axis is read at the same lag every crest
+        // gets. Doing it here, on the sample the onset crossed, is what keeps
+        // the two readings comparable.
+        rescue.armAnchor(atIndex: sampleIndex)
         extendGroup(to: tNs, strength: strength)
     }
 
@@ -500,6 +527,7 @@ public final class TapDetector: TapDetecting {
         groupCount = 0
         groupLastOnsetNs = nil
         groupDeadlineNs = nil
+        rescue.disarmAnchor()
     }
 
     private func checkGroupDeadline(now tNs: Int64) -> Trigger? {
@@ -519,8 +547,31 @@ public final class TapDetector: TapDetecting {
         // Normally the peak window closed long ago; it only bites if someone
         // configures a confirm window shorter than the peak hold.
         if pending?.joinedGroup == true { publishPending() }
-        let members = group
-        let count = groupCount
+        var members = group
+        var count = groupCount
+
+        // The one place retrospective pairing acts. A group with two or more
+        // onsets is left exactly as it was — that is what keeps a knock train
+        // dying as one over-long group — and a lone onset gets one chance to
+        // find its partner among the crests that never cleared the bar.
+        if tuning.pairRescueEnabled, count == 1, members.count == 1,
+           let anchor = members.first,
+           let second = rescue.scan(anchorTNs: anchor.tNs,
+                                    anchorAmplitude: anchor.strength,
+                                    minInterNs: effectiveConfig.minInterTapNs,
+                                    maxInterNs: effectiveConfig.maxInterTapNs,
+                                    refractoryUntilNs: refractoryUntilNs,
+                                    gateUntilNs: gateUntilNs,
+                                    candidateFraction: tuning.pairRescueCandidateFraction,
+                                    rectMax: tuning.pairRescueRectMax,
+                                    cosMin: tuning.pairRescueCosMin,
+                                    anchorFraction: tuning.pairRescueAnchorFraction,
+                                    rankByRect: tuning.pairRescueRankByRect) {
+            PairRescueTrace.record(anchorTNs: anchor.tNs, anchorAmplitude: anchor.strength,
+                                   crest: second)
+            members.append(GroupOnset(tNs: second.tNs, strength: second.amplitude))
+            count = 2
+        }
         clearGroup()
 
         // Score is the weakest tap in the gesture, in g. The harness can sweep a

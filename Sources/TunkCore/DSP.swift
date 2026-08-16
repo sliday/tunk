@@ -344,6 +344,51 @@ public struct DSPTuning: Sendable, Equatable {
     /// the filter's own ring becomes the thing being detected.
     public var resonatorQ: Double
 
+    /// Retrospective pairing, ranked by polarization. **Off, and it must stay
+    /// off until it has been graded on held-out data.**
+    ///
+    /// On, a group that reaches its deadline with exactly ONE onset may take a
+    /// second tap from the buffer of sub-threshold envelope crests instead of
+    /// dying unfired. See `DetectorPairRescue.swift` for the mechanism and for
+    /// what it deliberately leaves alone. Nothing else in the detector changes
+    /// when this is false: the crest buffer is not even fed.
+    public var pairRescueEnabled: Bool
+    /// Fraction of the live onset threshold an envelope crest must reach to be
+    /// buffered as a possible second tap. 1.0 buffers only crests that would
+    /// have cleared the full bar anyway.
+    ///
+    /// This is the number that halves the effective bar for the second tap, so
+    /// it is also the one that decides how much typing exposure the mechanism
+    /// adds. Read the typing rows before moving it.
+    public var pairRescueCandidateFraction: Double
+    /// Minimum `|u_candidate . u_anchor|` for a buffered crest to be taken as
+    /// the second tap. 0 disables the veto.
+    public var pairRescueCosMin: Double
+    /// Rank surviving crests by rectilinearity (lowest wins) rather than by
+    /// amplitude (loudest wins). Loudest is what
+    /// `rejected/rank-retrospective-pairing` ranked by, and it is kept
+    /// reachable so that rejection can be reproduced rather than argued about.
+    public var pairRescueRankByRect: Bool
+    /// Reject a crest whose rectilinearity exceeds this outright. Above 1 it can
+    /// never fire, which is what ships: the ranking does the work.
+    public var pairRescueRectMax: Double
+    /// Minimum ratio of a buffered crest's envelope to the ANCHOR onset's own
+    /// peak envelope. 0 disables the floor, which is what M26 shipped with.
+    ///
+    /// The candidate bar above is anchored to the live threshold and to nothing
+    /// else, so a crest can be a twentieth of the contact that produced it and
+    /// still qualify. That is exactly what a ring lobe is. The two taps of a
+    /// real gesture are comparable in strength; see `DetectorPairRescue.swift`
+    /// for the measured distributions this number sits between.
+    public var pairRescueAnchorFraction: Double
+    /// Length of the trailing covariance window, in samples (~10 ms at 8).
+    public var polarizationWindowSamples: Int
+    /// How many samples after a crest its polarization is read. A tap's axis
+    /// structure is not settled on the sample the envelope peaks; this is the
+    /// lag at which it is, and the anchor onset is read at the same lag so the
+    /// two are comparable.
+    public var polarizationLookaheadSamples: Int
+
     public var onsetLogCapacity: Int
     /// Same cap for the closed-group log behind `drainGroups()`.
     public var groupLogCapacity: Int
@@ -368,6 +413,14 @@ public struct DSPTuning: Sendable, Equatable {
         settleSlowHz: 0.3,
         resonatorHz: 0.0,
         resonatorQ: 2.0,
+        pairRescueEnabled: false,
+        pairRescueCandidateFraction: 0.5,
+        pairRescueCosMin: 0.7,
+        pairRescueRankByRect: true,
+        pairRescueRectMax: 1.1,
+        pairRescueAnchorFraction: 0.0,
+        polarizationWindowSamples: 8,
+        polarizationLookaheadSamples: 8,
         onsetLogCapacity: 512,
         groupLogCapacity: 256
     )
@@ -383,6 +436,14 @@ public struct DSPTuning: Sendable, Equatable {
                 settleSlowHz: Double = 0.3,
                 resonatorHz: Double = 0.0,
                 resonatorQ: Double = 2.0,
+                pairRescueEnabled: Bool = false,
+                pairRescueCandidateFraction: Double = 0.5,
+                pairRescueCosMin: Double = 0.7,
+                pairRescueRankByRect: Bool = true,
+                pairRescueRectMax: Double = 1.1,
+                pairRescueAnchorFraction: Double = 0.0,
+                polarizationWindowSamples: Int = 8,
+                polarizationLookaheadSamples: Int = 8,
                 onsetLogCapacity: Int, groupLogCapacity: Int = 256) {
         self.sampleRateHz = sampleRateHz
         self.highPassHz = highPassHz
@@ -403,6 +464,14 @@ public struct DSPTuning: Sendable, Equatable {
         self.settleSlowHz = settleSlowHz
         self.resonatorHz = resonatorHz
         self.resonatorQ = resonatorQ
+        self.pairRescueEnabled = pairRescueEnabled
+        self.pairRescueCandidateFraction = pairRescueCandidateFraction
+        self.pairRescueCosMin = pairRescueCosMin
+        self.pairRescueRankByRect = pairRescueRankByRect
+        self.pairRescueRectMax = pairRescueRectMax
+        self.pairRescueAnchorFraction = pairRescueAnchorFraction
+        self.polarizationWindowSamples = polarizationWindowSamples
+        self.polarizationLookaheadSamples = polarizationLookaheadSamples
         self.onsetLogCapacity = onsetLogCapacity
         self.groupLogCapacity = groupLogCapacity
     }
@@ -441,6 +510,10 @@ public struct SignalChain: Sendable, Equatable {
     private var settledMagnitude: OnePoleLowPass
     private var fastMagnitude: OnePoleLowPass
     private var magnitude: Double = 0
+    /// Axis structure of the same high-passed signal the magnitude is taken
+    /// from. Present only when the pairing stage that reads it is enabled, so
+    /// the shipped chain costs one branch and no arithmetic.
+    private var polarization: PolarizationTracker?
 
     public private(set) var envelope: Double = 0
     public var noiseFloor: Double { floorTracker.value }
@@ -485,6 +558,18 @@ public struct SignalChain: Sendable, Equatable {
                                           sampleRateHz: tuning.sampleRateHz)
         fastMagnitude = OnePoleLowPass(cutoffHz: tuning.settleFastHz,
                                        sampleRateHz: tuning.sampleRateHz)
+        if tuning.pairRescueEnabled {
+            polarization = PolarizationTracker(window: tuning.polarizationWindowSamples)
+        }
+    }
+
+    /// `1 - lambda2 / lambda1` of the trailing axis covariance, or 0 when the
+    /// tracker is absent. See `PolarizationTracker`.
+    public var rectilinearity: Double { polarization?.rectilinearity ?? 0 }
+    /// Unit principal axis of that covariance; `(0, 0, 1)` when absent.
+    public var polarizationAxis: (x: Double, y: Double, z: Double) {
+        guard let p = polarization else { return (0, 0, 1) }
+        return (p.axisX, p.axisY, p.axisZ)
     }
 
     public mutating func reset() {
@@ -499,6 +584,7 @@ public struct SignalChain: Sendable, Equatable {
         floorTracker.reset()
         settledMagnitude.reset()
         fastMagnitude.reset()
+        polarization?.reset()
         magnitude = 0
         envelope = 0
     }
@@ -524,6 +610,8 @@ public struct SignalChain: Sendable, Equatable {
             ay = resY!.process(ay)
             az = resZ!.process(az)
         }
+        // Same three numbers the magnitude is about to throw away.
+        if polarization != nil { polarization!.process(x: ax, y: ay, z: az) }
         let squared = ax * ax + ay * ay + az * az
         let pair = (squared + previousSquared).squareRoot()
         previousSquared = squared
