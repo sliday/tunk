@@ -480,6 +480,16 @@ final class Engine: ObservableObject {
     // MARK: - hot path
 
     private func feed(sample: AccelSample) {
+        // The user asking for off has to mean off IMMEDIATELY, not once a queued
+        // close finishes. `stopSensors()` returns as soon as the close is
+        // enqueued, so on a wedged sensor queue the stream keeps arriving after
+        // the switch is flipped — measured at 4069 samples during a 5 s wedge,
+        // against 1 with a healthy queue. Worse, the keystroke gate's monitors
+        // are removed first, so those samples would reach a detector with the
+        // typing defence already gone, and a trigger from one of them would run
+        // the bound action. `wantsRunning` is written on main before any of that
+        // starts, so reading it here closes the window with one branch.
+        guard wantsRunning else { return }
         detectorLock.lock()
         let trigger = detector.ingest(sample: sample)
         let onsets = detector.drainOnsets()
