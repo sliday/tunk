@@ -340,6 +340,25 @@ One gesture recovered against a bar needing 20/20. And the deciding observation:
 held-out* — held-out soft does not degrade under the coupled arm either, so the
 thing this mechanism fixes is invisible where it counts.
 
+**Two corrections to how I framed this round.** My brief called it "the central
+suspect on lap". It is not: the decoupled and coupled arms recover an *identical*
+set of six lap gestures and lose the same one, and the only difference is that the
+coupled arm destroys two soft gestures. It is a pure soft-side repair. And the one
+case I aimed it at — `13e15a` g12, held by the release latch after the debounce
+expired — is **not recovered**; `explain` still reads "only 1 ungated onset".
+
+The builder also declined to defend its own headline: the lap gain from 59 to 65
+comes from the amplitude reduction, which *is* the rejected family, and on a
+five-session lap corpus with 3 baseline false triggers going to 5 "is well inside
+noise". The deep end is worse decoupled than coupled (lap 47/80 against 60/80 at
+0.60), the same coupling running the other way — a higher release line re-arms
+sooner, so ring-down clears the reduced bar and doubles become un-armed triples.
+
+Worth keeping: the control reproduces D9 **to the number**. At 0.60 coupled, soft
+reads 11/20 = 55.0 % and lap 60/80 = 75.00 % — exactly the "soft 100 % to 55 %"
+and "lap 73.75 % to 75.00 %" D9 records. The field is now sweepable and the
+coupling is documented and unit-tested, which was not true before.
+
 **Nine amplitude-family variants have now been graded and the axis is closed.**
 Every one recovers the same one easy held-out gesture and pays in lap false
 triggers, for one reason: a bar is a scalar, and a ring-down lobe and a real
