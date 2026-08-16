@@ -20,6 +20,11 @@ if let i = arguments.firstIndex(of: "--sensor-cycles") {
     app.setActivationPolicy(.accessory)
     Diagnostics.sensorCycles(n)
 }
+if let i = arguments.firstIndex(of: "--reacquire-probe") {
+    let n = i + 1 < arguments.count ? Int(arguments[i + 1]) ?? 10 : 10
+    app.setActivationPolicy(.accessory)
+    Diagnostics.reacquireProbe(cycles: n)
+}
 if arguments.contains("--sensor-props") {
     app.setActivationPolicy(.accessory)
     Diagnostics.sensorProperties()

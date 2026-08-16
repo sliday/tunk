@@ -200,6 +200,12 @@ final class Engine: ObservableObject {
     /// A reacquire is in flight on a background queue. Guards against stacking
     /// them up if one blocks — see the watchdog.
     private var reacquiring = false
+    /// Counts lifecycle work that reached a thread other than main. Every
+    /// function that writes a `@Published` property or touches AppKit calls
+    /// `requireMain()` first, so this is a measurement of the hazard rather than
+    /// an argument about it. `tunk --reacquire-probe` prints it.
+    nonisolated(unsafe) private(set) static var offMainViolations = 0
+    private static let violationLock = NSLock()
     private var reacquireBackoff = 1
     private var wantsRunning = false
     private var catalogTicks = 0
@@ -256,18 +262,34 @@ final class Engine: ObservableObject {
 
     // MARK: - lifecycle
 
+    /// Records, rather than assumes, that a main-thread-only path is on the main
+    /// thread. Deliberately not a `precondition`: a menubar utility that traps in
+    /// a user's face is worse than the bug it is trapping on, and the count plus
+    /// the log line is what a probe or a bug report actually needs.
+    @inline(__always)
+    private func requireMain(_ what: StaticString = #function) {
+        guard !Thread.isMainThread else { return }
+        Engine.violationLock.lock()
+        Engine.offMainViolations += 1
+        Engine.violationLock.unlock()
+        NSLog("tunk: %@ ran off the main thread", String(describing: what))
+    }
+
     func setEnabled(_ on: Bool) {
+        requireMain()
         wantsRunning = on
         on ? start() : stop()
     }
 
     func refreshPermissions() {
+        requireMain()
         let now = PermissionState.current()
         if now != permissions { permissions = now }
         if wantsRunning, case .needsPermission = status, now.ready { start() }
     }
 
     private func start() {
+        requireMain()
         guard wantsRunning else { return }
         let perms = PermissionState.current()
         permissions = perms
@@ -339,12 +361,14 @@ final class Engine: ObservableObject {
     }
 
     private func stop() {
+        requireMain()
         stopSensors()
         status = .off
         sampleRateHz = 0
     }
 
     private func stopSensors() {
+        requireMain()
         accel.stop()
         input?.stop()
         input = nil
@@ -775,7 +799,22 @@ final class Engine: ObservableObject {
     /// taps rather than after.
     private static let catalogRefreshTicks = 60
 
+    /// Tear the sensor down and open it again. Factored out of the watchdog so
+    /// `tunk --reacquire-probe` drives exactly the code the watchdog drives,
+    /// rather than a copy of it that could drift.
+    private func reacquire() {
+        requireMain()
+        reacquiring = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            self.stopSensors()
+            self.start()
+            DispatchQueue.main.async { self.reacquiring = false }
+        }
+    }
+
     private func watchdog() {
+        requireMain()
         catalogTicks += 1
         if catalogTicks >= Engine.catalogRefreshTicks {
             catalogTicks = 0
@@ -850,13 +889,7 @@ final class Engine: ObservableObject {
                 // the menubar and the settings panel rather than merely failing
                 // to recover. It still may not recover; it will no longer take
                 // the UI with it.
-                reacquiring = true
-                DispatchQueue.global(qos: .utility).async { [weak self] in
-                    guard let self else { return }
-                    self.stopSensors()
-                    self.start()
-                    DispatchQueue.main.async { self.reacquiring = false }
-                }
+                reacquire()
             }
         case .needsPermission:
             if PermissionState.current().ready { start() }
@@ -864,4 +897,23 @@ final class Engine: ObservableObject {
             break
         }
     }
+}
+
+// MARK: - probe seam
+
+/// Drives the watchdog's two halves separately so `tunk --reacquire-probe` can
+/// run them against each other. Nothing in the shipped paths calls these; they
+/// exist so a reviewer can measure the threading rather than read an argument
+/// about it, and they call the real methods so the probe cannot drift from what
+/// ships.
+extension Engine {
+    func probeReacquire() { reacquire() }
+    func probeWatchdogTick() { watchdog() }
+    var probeIsBusy: Bool { reacquiring }
+    /// A plain stored property that `start()` writes and `watchdog()` writes,
+    /// exposed because Thread Sanitizer cannot see through `@Published` — the
+    /// load and the store both happen inside Combine, which is not instrumented.
+    /// The threads and the synchronisation are identical, so a report on this
+    /// one is a report on `status` and `permissions` too.
+    var probeSampleCount: UInt64 { lastSampleCount }
 }

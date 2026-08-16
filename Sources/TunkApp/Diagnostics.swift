@@ -1244,3 +1244,102 @@ extension Diagnostics {
         exit(0)
     }
 }
+
+// MARK: - watchdog reacquire threading
+
+extension Diagnostics {
+    /// `tunk --reacquire-probe [cycles]`
+    ///
+    /// The watchdog's reacquire and the watchdog itself run at the same time —
+    /// that is not a hypothesis, it is the design: the reacquire is handed to
+    /// another queue precisely because it can block forever, and the main-thread
+    /// Timer keeps firing once a second for as long as it takes. This probe runs
+    /// the same two halves against each other and counts, rather than argues.
+    ///
+    /// Two counters, both incremented by the code under test:
+    ///
+    /// - `Engine.offMainViolations` — lifecycle work that writes a `@Published`
+    ///   property reached a thread other than main.
+    /// - `InputActivityMonitor.offMainCalls` — an `NSEvent` monitor was added or
+    ///   removed from a thread other than main.
+    ///
+    /// Both must be zero. It also reports the worst main-thread stall it saw, so
+    /// a fix that closes the race by moving the work back onto main shows up
+    /// here as a freeze rather than passing quietly.
+    ///
+    /// Worth running under Thread Sanitizer as well:
+    ///
+    ///     swift build --product tunk --scratch-path .build-tsan --sanitize=thread
+    ///     TSAN_OPTIONS=halt_on_error=0 ./.build-tsan/debug/tunk --reacquire-probe 12
+    ///
+    /// TSan cannot see a `@Published` write — the load and the store both happen
+    /// inside Combine, which is not instrumented — so the loop below also reads
+    /// one ordinary stored property that the same two paths write. Same threads,
+    /// same absent synchronisation, and it is the one TSan can print.
+    static func reacquireProbe(cycles: Int) {
+        let settings = AppSettings()
+        let engine = Engine(settings: settings)
+        let perms = PermissionState.current()
+        line("permissions: accessibility=\(perms.accessibility) "
+           + "inputMonitoring=\(perms.inputMonitoring)")
+        if !perms.ready {
+            line("NOTE: not both granted. start() still publishes `permissions` and")
+            line("      `status` before it gives up, which is the write this probe is")
+            line("      about — but the sensor and the keystroke gate are never")
+            line("      reached, so the NSEvent counter cannot rise. Grant both for")
+            line("      the full picture.")
+        }
+        engine.setEnabled(true)
+        spin(for: 1.0)
+
+        var worstStallMs = 0.0
+        var ticks = 0
+        var seen = 0
+        for _ in 0..<cycles {
+            engine.probeReacquire()
+            // The menubar reads exactly these three on every glyph redraw and
+            // every menu open, and it does it on the main thread. Reading them
+            // in a tight loop for longer than a reacquire takes is what puts a
+            // main-thread reader inside the window; a sanitizer that only sees
+            // the two threads a second apart has nothing to report.
+            let hammerUntil = Date().addingTimeInterval(0.05)
+            while Date() < hammerUntil {
+                seen = seen &+ (engine.status.isArmed ? 1 : 0)
+                            &+ (engine.permissions.ready ? 1 : 0)
+                            &+ Int(engine.sampleRateHz)
+                            &+ Int(engine.probeSampleCount)
+            }
+            // Then what the real watchdog does while a reacquire is still in
+            // flight: keep ticking. Slower than this loop could go, because
+            // watchdog() counts its own ticks and a fast loop would turn its
+            // 60-tick catalog refresh into a process spawn per second.
+            let deadline = Date().addingTimeInterval(0.4)
+            var last = Date()
+            while Date() < deadline {
+                engine.probeWatchdogTick()
+                ticks += 1
+                let now = Date()
+                worstStallMs = max(worstStallMs, now.timeIntervalSince(last) * 1000)
+                last = now
+                spin(for: 0.05)
+            }
+        }
+        if seen == Int.min { line("") }   // keep the reads from being optimised out
+        spin(for: 1.0)
+        engine.setEnabled(false)
+        spin(for: 0.5)
+
+        let engineViolations = Engine.offMainViolations
+        let monitorViolations = InputActivityMonitor.offMainCalls
+        line("")
+        line("  \(cycles) reacquires, \(ticks) main-thread watchdog ticks alongside them")
+        line(String(format: "  worst main-thread stall             %.1f ms", worstStallMs))
+        line("  @Published lifecycle work off main  \(engineViolations)")
+        line("  NSEvent monitor calls off main      \(monitorViolations)")
+        line("")
+        let clean = engineViolations == 0 && monitorViolations == 0
+        line(clean ? "  CLEAN: every published write and every AppKit call stayed on main"
+                   : "  RACE: the reacquire mutated main-thread-only state off the main thread")
+        exit(clean ? 0 : 1)
+    }
+}
