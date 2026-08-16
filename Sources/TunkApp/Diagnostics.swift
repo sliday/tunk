@@ -1025,6 +1025,19 @@ extension Diagnostics {
         line("")
         line("LIVE ACCEPTANCE — phase 2 of 2: type for \(Int(typingSeconds)) s")
         line("  Real prose, normal speed and force. No deliberate taps.")
+        // Measure HID delivery lag while the operator types. This is the one
+        // number that decides whether the detector may fire on the armed count
+        // instead of waiting out its confirm window, and it has never been
+        // measurable: input.jsonl records the hardware stamp and never the
+        // arrival, so the gap between them was invisible. See
+        // `git show rejected/early-fire-on-count`.
+        var lags: [Double] = []
+        let lagLock = NSLock()
+        InputActivityMonitor.deliveryLagSink = { seconds in
+            lagLock.lock(); lags.append(seconds); lagLock.unlock()
+        }
+        defer { InputActivityMonitor.deliveryLagSink = nil }
+
         let typingRecorder = startRecording(category: TunkFormat.Category.typing, expected: 0)
         typingRecorder?.mark(kind: "prompt", text: "type continuously, no deliberate taps")
         // Sub-minute durations rendered as "0 minutes", which is what a short
@@ -1067,6 +1080,27 @@ extension Diagnostics {
         }
         line(String(format: "  false triggers      %d in %.0f s of typing   bar 0   %@",
                     falseTriggers, typingSeconds, falseTriggers == 0 ? "PASS" : "FAIL"))
+        lagLock.lock(); let lagSample = lags.sorted(); lagLock.unlock()
+        if lagSample.count >= 30 {
+            func lagPct(_ q: Double) -> Double {
+                lagSample[min(lagSample.count - 1, Int(q * Double(lagSample.count)))] * 1000
+            }
+            line(String(format: "  HID delivery lag    p50 %.2f ms  p95 %.2f ms  p99 %.2f ms  max %.2f ms  (n=%d)",
+                        lagPct(0.50), lagPct(0.95), lagPct(0.99),
+                        (lagSample.last ?? 0) * 1000, lagSample.count))
+            // The keystroke gate can only retract an onset that is still
+            // undecided when the event lands. Firing on the armed count would
+            // leave `earlySettleNs` of slack instead of a full confirm window,
+            // so the settle constant has to cover the worst delivery lag.
+            line(String(format: "                      -> earlySettleNs would need >= %.0f ms to keep the",
+                        (lagSample.last ?? 0) * 1000 + 5))
+            line("                         typing gate's reach; see rejected/early-fire-on-count.")
+        } else if !lagSample.isEmpty {
+            line(String(format: "  HID delivery lag    only %d events; too few to quote a percentile",
+                        lagSample.count))
+        } else {
+            line("  HID delivery lag    no input events reached this process (secure input?)")
+        }
         line("")
         let pass = hitRate >= 98 && falseTriggers == 0 && (latencies.isEmpty || pct(0.95) <= 250)
         line("  VERDICT: \(pass ? "PASS" : "FAIL")")

@@ -445,6 +445,21 @@ is also why 43 emit tests fail here.
 labelled lap deck as a side effect** — two of the three things the corpus is
 missing, from the test the PRD already asks you to perform.
 
+It also now measures **HID delivery lag** during the typing phase, which no
+recording could: `input.jsonl` stores the hardware stamp and never the arrival, so
+the gap between them has been invisible. That gap is the single number blocking
+the largest latency win available — `rejected/early-fire-on-count` took held-out
+p95 from 211.4 ms to **16.3 ms** with detection unchanged, and was rejected only
+because firing early cuts the keystroke gate's slack from ~290 ms to 25 ms. Its
+tag says it is "worth reviving only if HID delivery jitter is measured on this
+machine and earlySettleNs is set from it rather than from preGateNs". The run now
+prints p50/p95/p99/max and what `earlySettleNs` would have to be to keep the
+gate's reach.
+
+Latency currently passes at 208.9 ms against a 250 ms bar, so this is not about
+the bar — it is about "felt reliability matching iPhone Back Tap", which is the
+one criterion no harness can score.
+
 It honours the experimental switch, so it measures whichever detector is selected
 in Settings — verified: `Engine.init` takes `tuning: settings.tuning`, and
 `AppSettings` reads the toggle back from defaults. Run it once per surface to get

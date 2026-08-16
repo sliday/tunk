@@ -59,11 +59,32 @@ final class InputActivityMonitor {
 
     deinit { stop() }
 
+    /// Set only by the live acceptance test; nil in normal operation, so this
+    /// costs one nil check per event.
+    ///
+    /// Receives HID DELIVERY LAG in seconds: how long after the hardware stamped
+    /// an event this process was handed it. That number decides whether the
+    /// detector may fire before waiting out its confirm window. The retroactive
+    /// keystroke gate reaches back `preGateNs` (25 ms) to kill an onset whose
+    /// chassis shock beat the keystroke, and with the shipped deadline there is
+    /// about 290 ms of slack for a late event to arrive in. Firing early would
+    /// cut that slack to the settle constant, so `rejected/early-fire-on-count`
+    /// records that it is "worth reviving only if HID delivery jitter is
+    /// measured on this machine and earlySettleNs is set from it rather than
+    /// from preGateNs". Nobody could measure it, because `input.jsonl` records
+    /// only the hardware stamp and never the arrival.
+    nonisolated(unsafe) static var deliveryLagSink: ((Double) -> Void)?
+
     private func handle(_ event: NSEvent) {
         guard let kind = Self.kind(for: event.type) else { return }
         // One clock everywhere (FORMAT.md). `NSEvent.timestamp` is seconds since
         // boot on the same mach timebase, so it converts without a wall clock.
         let tNs = Int64(event.timestamp * 1_000_000_000) - epochNs()
+        if let sink = Self.deliveryLagSink {
+            // Both sides are the same mach timebase, so this is a pure delivery
+            // measurement with no wall clock and no drift.
+            sink(max(0, ProcessInfo.processInfo.systemUptime - event.timestamp))
+        }
         let code: Int32
         switch event.type {
         case .keyDown, .keyUp: code = Int32(event.keyCode)
