@@ -1,5 +1,40 @@
 # Resuming
 
+## Do this first
+
+Everything that can be measured without your hands has been. Two bars need you.
+
+```bash
+# 0. the machine must be unlocked, nothing holding secure input
+ioreg -l -w 0 | grep kCGSSessionSecureInputPID          # must print NOTHING
+
+# 1. ten minutes, on your lap. Grades detection at 49/50 and typing false
+#    triggers live, AND leaves a held-out typing session + labelled lap deck.
+./dist/build-app.sh
+./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300 \
+    --record data/holdout --surface lap --tap-category tap_deck
+
+# 2. label what it recorded, then grade
+./bin/tunk-label run data/holdout/<the two new sessions>
+./bin/tunk-score run --data data/holdout --i-am-a-critic
+```
+
+Do it twice more with `--surface desk` and `--surface soft` for the per-surface
+bar. Then, if you want the confound evidence too, `./bin/record-for-the-bar.sh`
+(39 min) — it is the only source of the lap-confound recording that prices the
+experimental mechanism.
+
+**Want to feel it rather than grade it?** Settings → Lap pairing (experimental).
+Off by default. It reaches lap 20/20 on held-out where the default reaches 16/20,
+and the card lists every risk that has not been measured.
+
+**One decision is yours and only yours:** `notes/DECISIONS.md`, D-LABELS. Four
+independent lines of evidence say the lap labels in one session are wrong. I am
+not the one who gets to rewrite the ground truth I am graded against.
+
+---
+
+
 Everything is committed and pushed. Working tree clean. 271 tests pass; the 52
 emit tests fail only when another app holds secure input, which blocks
 `CGEventPost` — quit whatever has a password field focused and they pass too.
