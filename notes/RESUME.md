@@ -183,14 +183,32 @@ The veto's direction was the trap: it *requires* alignment in order to reject
 unrelated disturbances, and a ring lobe is maximally aligned with the strike that
 produced it. It was built to admit exactly the thing that hurts it.
 
-**Verdict: dangerous on lap. Leave the switch off there.** The Settings card now
-says so with these numbers instead of "never been counted".
+**That verdict was too strong, and the next round corrected it.** The 28 "hazard"
+anchors it rested on are, 26 of them, the *second tap of a deliberate double-tap*
+— they never form the one-member group M26 scans. Only 3 ever do. Measured on the
+harness rather than inferred: **M26 costs 2 extra false triggers in 9.2 minutes of
+lap tapping** (3 → 5). The lone-knock rate is not measured at all, because the
+corpus holds exactly **two** knocks with no deliberate tap on either side.
 
-**One lead survives, ungraded.** `rectMax` ships inactive at 1.1; at **0.99** it
-would stop 24 of the 28 lone-knock firings while keeping 17 of the 19 real
-rescues. Rect does separate where cos does not — rescues p50 0.895 against lobe
-winners at 0.995. That is a mechanism-sized question and has had no builder, no
-critic and no held-out grading.
+So the honest position is narrower: the mechanism is *unpriced* on lap rather than
+demonstrably dangerous, and three separate guards have now failed to close it.
+
+**That lead was graded and rejected** — `rejected/rect-ceiling`. Rect really does
+separate lobes (p50 0.995) from real rescues (p50 0.895), and that measurement
+stands. But the 24-of-28 figure was counterfactual: only 3 of those anchors ever
+form a scannable group, at 0.99 exactly one stops firing, and the harness scores
+it as a *detection*. Lap false triggers read 5 at rectMax 1.1 and 5 at 0.99.
+
+And it points the wrong way on the only real examples. Both lap false triggers
+M26 adds are rescues at crest rect **0.975 and 0.410**; the two genuinely isolated
+knocks read **0.936 and 0.410**. All four sit *below* the ceiling that stops the
+lobes. A ring lobe of a deliberate strike is a textbook rank-one decay; the knocks
+that actually fool this detector are not. The ceiling filters the population that
+is not firing and misses the one that is — the same failure as the coherence veto,
+reached from the opposite side.
+
+One real gain, kept on record: the ceiling removes **37 %** of M26's added
+un-gated typing exposure (262 → 205 pooled). Gated, every config reads 0.
 
 ### The lobe storm is dead on synthetic fixtures; the residual is a physics limit
 
