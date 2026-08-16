@@ -51,6 +51,10 @@ struct SettingsView: View {
     static let gateCautionMs = Double(SettingsMigration.minimumSafeGateNs) / 1_000_000
 
     @State private var showAdvanced: Bool
+    /// The lap-pairing card carries three long caveats. Collapsed by default so
+    /// the panel keeps its rhythm; every word is still one click away, and
+    /// `--dump-panel` opens it so the copy is reviewable as a rendered artifact.
+    @State private var showLapPairingDetail: Bool
     /// Keyed by tap count: each row's Test button reports into its own row.
     @State private var testResults: [Int: String] = [:]
 
@@ -62,6 +66,7 @@ struct SettingsView: View {
         self.engine = engine
         self.panel = panel
         _showAdvanced = State(initialValue: showAdvanced)
+        _showLapPairingDetail = State(initialValue: showAdvanced)
     }
 
     var body: some View {
@@ -711,10 +716,33 @@ struct SettingsView: View {
                 Readout(label: "held-out lap p95, on", value: "203.9 ms")
             }
 
-            Text("Desk and soft read 20 of 20 either way, and every held-out recording reads "
-               + "zero false triggers with this on or off. Latency does not move: the lap "
-               + "figure is 208.9 ms with this off.\n\n"
-               + "Read the 20 of 20 with the asterisk the scorer prints beside it: 5 of those "
+            Text("Desk and soft read 20 of 20 either way, latency does not move, and its "
+               + "false triggers on a lap have never been measured — which is why it is off.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            DisclosureGroup(isExpanded: $showLapPairingDetail) {
+                lapPairingDetail.padding(.top, 8)
+            } label: {
+                Text("What is measured, and what is not")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(minHeight: 24)
+                    .contentShape(Rectangle())
+            }
+            .tunkAnimation(.tunkSnappy, value: showLapPairingDetail, reduceMotion: reduceMotion)
+        }
+        .tunkAnimation(.tunkSnappy, value: settings.experimentalLapPairing,
+                       reduceMotion: reduceMotion)
+    }
+
+    /// Everything the owner needs before switching it on, kept out of the panel's
+    /// default rhythm because it is three screens of caveat on an off-by-default
+    /// experiment. Nothing here is softened; it is only folded.
+    private var lapPairingDetail: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Read the 20 of 20 with the asterisk the scorer prints beside it: 5 of those "
                + "20 credits land more than 40 ms from where the label puts the gesture, "
                + "against 2 of 16 with this off. The worst is 105 ms out. Those five are the "
                + "gestures whose two taps the labels place further apart than any detector is "
@@ -751,8 +779,6 @@ struct SettingsView: View {
                      + "between twice and two and a half times as much.")
             }
         }
-        .tunkAnimation(.tunkSnappy, value: settings.experimentalLapPairing,
-                       reduceMotion: reduceMotion)
     }
 
     private func caveat(_ text: String) -> some View {
