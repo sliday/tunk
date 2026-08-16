@@ -335,11 +335,29 @@ gate off and each value:
 | 0.90 | 17 | 1 |
 
 Below 0.45 the bar refuses **nothing** — all 19 rescues survive, 2-3 simply
-holding a different crest. The one rescue that is a genuine false trigger
-(prominence 0.0085) **re-points to a crest scoring 0.83 fifteen milliseconds away**
-and survives every gate to 0.75. The first outright refusal, at 0.45, takes a
-credit. False triggers do not fall until 0.90, where lap detection has collapsed
-to 61/80. `rejected/prominence-gate`.
+holding a different crest. The first outright refusal, at 0.45, takes a *credit*.
+False triggers do not fall until 0.90, where lap detection has collapsed to 61/80.
+`rejected/prominence-gate`.
+
+Two details make it worse than "does not help":
+
+- **The substitute looks more like a tap than the crest it replaced.** The genuine
+  false trigger re-points from a crest at 195.2 ms scoring 0.0085 to one at
+  180.2 ms scoring **0.8269** — textbook prominence for a real tap. The gate does
+  not merely fail to reject it; it hands it a better-looking pairing.
+- **Moderate gates create a false trigger.** At 0.20-0.65 lap FP rises 5 → **6**,
+  breaching the guard, because re-pointing one anchor from 107.6 ms to 178.9 ms
+  turns a credit into a false trigger in `13e15a` (that session goes 17/20 → 16/20,
+  FP 3 → 4). Every non-zero value is dominated: 0.05-0.10 change nothing at all,
+  0.20-0.65 breach the FP guard while losing credits, 0.70-0.80 cost 4 to 12
+  credits at unchanged FP, and 0.90 finally reaches FP 3 at lap 61/80 — a point
+  the shipped default already occupies at 59/80.
+
+The causal definition was validated against the labeller's, which is what makes
+the comparison legitimate: of the 80 labelled lap second taps, the 63 reaching the
+crest buffer score min 0.694, p10 0.787, p50 0.902, **zero below 0.5** — the same
+shape and floor as the labeller's symmetric measure (≥ 0.519, p10 0.792, p50
+0.942).
 
 ### The structural finding
 
