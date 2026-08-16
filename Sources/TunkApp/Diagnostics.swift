@@ -712,12 +712,28 @@ extension Diagnostics {
             exit(2)
         }
 
+        // Bounded, and it gives up for good after the first stall. `say` blocks
+        // indefinitely on this machine when the audio path is wedged by a virtual
+        // driver — measured at a full 2-minute timeout, which is what forced the
+        // same bound into TunkCapture's Cue. A 50-tap acceptance run calls this
+        // 50 times and can only be performed by hand, so one stall would strand
+        // the operator mid-test. The prompt is also printed, so losing the voice
+        // costs nothing the test depends on.
+        var speechGaveUp = false
         func speak(_ s: String) {
             line(s)
+            guard !speechGaveUp else { return }
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
             p.arguments = ["-r", "220", s]
-            try? p.run(); p.waitUntilExit()
+            guard (try? p.run()) != nil else { speechGaveUp = true; return }
+            let deadline = Date().addingTimeInterval(8)
+            while p.isRunning, Date() < deadline { usleep(20_000) }
+            if p.isRunning {
+                p.terminate()
+                speechGaveUp = true
+                line("  (speech stalled; carrying on with printed prompts only)")
+            }
         }
 
         line("")

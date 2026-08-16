@@ -258,6 +258,40 @@ Out of sample the distinction does hold (soft 0 over 40 ms, lap 2), so the
 held-out claim stands, but I never ran the column for the passing surfaces, and
 that let the lap figure read as uniquely damning when on train it is not.
 
+## The cheapest real answer is 10 minutes, not 39
+
+The PRD names its own final acceptance instrument, and it is not the harness:
+
+> "Final acceptance is a live driving test on the built app, run by a fresh
+> critic: perform 50 deliberate double-taps and record hit rate and latency, then
+> type continuously for 5 minutes and record false triggers. Compare against the
+> bar. If it loses, keep going."
+
+That is already built, and it grades two of the bars the held-out corpus cannot
+touch — detection at the granularity the 98 % figure was written for (49/50), and
+typing false triggers live rather than by replay:
+
+```bash
+./dist/build-app.sh
+./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300     # about 10 minutes
+```
+
+It honours the experimental switch, so it measures whichever detector is selected
+in Settings — verified: `Engine.init` takes `tuning: settings.tuning`, and
+`AppSettings` reads the toggle back from defaults. Run it once per surface to get
+the per-surface bar. It deliberately does **not** post the bound action.
+
+One hardening this round: `speak()` called `/usr/bin/say` and waited without a
+bound. `say` returns in 1.5 s today, so this was latent rather than live — but it
+has hung to a full 2-minute timeout on this machine before, which is why
+`Cue.say` is already bounded, and a 50-tap run calls it 50 times in a test only a
+human can perform. It now gives up after 8 s, once, and carries on with printed
+prompts.
+
+Note what this does *not* settle: confound false triggers, and the lap-confound
+recording that prices the experimental mechanism. Those still need
+`record-for-the-bar.sh`.
+
 ## The recordings that are still missing — one command
 
 Nothing here is fixable in code, and all of it blocks the bar.
