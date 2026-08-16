@@ -200,9 +200,11 @@ not the one who gets to rewrite the ground truth I am graded against.
 ---
 
 
-Everything is committed and pushed. Working tree clean. 271 tests pass; the 52
-emit tests fail only when another app holds secure input, which blocks
-`CGEventPost` — quit whatever has a password field focused and they pass too.
+Everything is committed and pushed. Working tree clean. **387 tests, 0 failures.**
+52 of them skip while another process holds secure event input, because macOS
+discards synthesized keystrokes then and every test that posts one would report a
+false red. Unlock the screen and quit whatever has a password field focused and
+they run too.
 
 ## Where the bar stands
 
@@ -1027,7 +1029,7 @@ because nothing is being kept.
 **Check before you start:** the machine must be unlocked with nothing holding
 secure input. `ioreg -l -w 0 | grep kCGSSessionSecureInputPID` should print
 nothing. During this session it printed `397` (loginwindow, screen locked), which
-is also why 43 emit tests fail here.
+is also why 52 emit tests skip here.
 
 **So one 10-minute run on your lap produces a held-out typing session and a
 labelled lap deck as a side effect** — two of the three things the corpus is

@@ -134,6 +134,10 @@ final class HotkeySpecTests: XCTestCase {
 }
 
 final class HotkeyEmitterBalanceTests: XCTestCase {
+    /// Posts real CGEvents and counts what arrives, so it cannot run while
+    /// another process holds secure event input. See `SecureInput`.
+    override func setUpWithError() throws { try SecureInput.skipIfHeld() }
+
 
     private func makeEmitter(poster: RecordingPoster,
                              trusted: Bool = true,
@@ -413,6 +417,10 @@ private final class EventTapProbe {
 }
 
 final class HotkeyEmitterLiveTapTests: XCTestCase {
+    /// Posts real CGEvents and counts what arrives, so it cannot run while
+    /// another process holds secure event input. See `SecureInput`.
+    override func setUpWithError() throws { try SecureInput.skipIfHeld() }
+
 
     /// F16: absent from this machine's keyboard, and measured not to reach
     /// Carbon hot key listeners when synthesised, so running these tests cannot

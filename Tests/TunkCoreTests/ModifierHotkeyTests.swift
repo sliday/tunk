@@ -6,6 +6,10 @@ import XCTest
 /// separately, so the side has to survive recording, printing, parsing and
 /// emission — and the release half must drop the bit it raised.
 final class ModifierHotkeyTests: XCTestCase {
+    /// Posts real CGEvents and counts what arrives, so it cannot run while
+    /// another process holds secure event input. See `SecureInput`.
+    override func setUpWithError() throws { try SecureInput.skipIfHeld() }
+
 
     private let maskShift = CGEventFlags.maskShift.rawValue
     private let deviceLShift: UInt64 = 0x0000_0002

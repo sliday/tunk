@@ -344,6 +344,10 @@ private final class StatsSink: @unchecked Sendable {
 // MARK: - ActionRunner
 
 final class ActionRunnerTests: XCTestCase {
+    /// Posts real CGEvents and counts what arrives, so it cannot run while
+    /// another process holds secure event input. See `SecureInput`.
+    override func setUpWithError() throws { try SecureInput.skipIfHeld() }
+
 
     private let spec = HotkeySpec(keyCode: 41, modifiers: [.control, .option, .command])
 
