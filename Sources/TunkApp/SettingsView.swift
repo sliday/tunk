@@ -293,6 +293,19 @@ struct SettingsView: View {
             // and a readout showing the number that is not running would be
             // worse than no readout.
             let inForce = engine.effectiveConfig
+            let frontEnd = engine.liveTuning
+            if frontEnd.resonatorHz > 0 {
+                // Named because it is not the shipped chain. The harness prints
+                // the same warning on a run, and an owner who has switched a
+                // front end on should not have to infer it from a threshold.
+                Text("Front end: resonator "
+                   + String(format: "%.0f Hz Q %.1f", frontEnd.resonatorHz, frontEnd.resonatorQ)
+                   + " — not the shipped chain.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(spacing: 18) {
                 Readout(label: "effective threshold",
                         value: String(format: "%.3f", inForce.effectiveThreshold),

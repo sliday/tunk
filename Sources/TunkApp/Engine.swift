@@ -88,6 +88,16 @@ final class Engine: ObservableObject {
     /// What the detector is actually running, after incoherent combinations are
     /// clamped. The panel reads this, not `settings.config` — a number the user
     /// typed that is not the number in force has to be visible as both.
+    /// The front end the LIVE detector is running, read from the detector rather
+    /// than from settings. The panel shows this because the harness does: a run
+    /// on a non-shipped front end prints a warning line, and an owner with an
+    /// experimental switch on deserves the same. It is also the only way to see
+    /// that a switch reached the detector at all.
+    var liveTuning: DSPTuning {
+        detectorLock.lock(); defer { detectorLock.unlock() }
+        return readout?.tuning ?? settings.tuning
+    }
+
     var effectiveConfig: DetectorConfig {
         detectorLock.lock(); defer { detectorLock.unlock() }
         return readout?.effectiveConfig ?? settings.effectiveConfig.madeCoherent()

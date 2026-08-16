@@ -58,6 +58,20 @@ the Detection card's *effective threshold* readout — which comes from
 still say 0.032. A flag that silently does nothing is the failure this project
 keeps finding; reading the number off the artifact is how it gets caught.
 
+That verified the *config* path. The *tuning* path — whether `resonatorHz` and
+`resonatorQ` actually reach the detector — needed its own check, so the panel now
+names the front end in force, read from the live detector rather than from
+settings:
+
+| switch | effective threshold | front-end line |
+|---|---|---|
+| off | **0.032** | *(absent)* |
+| on | **0.011** | "Front end: resonator 40 Hz Q 2.0 — not the shipped chain." |
+
+The harness already prints a warning when a run uses a non-shipped front end. The
+app says the same thing now, which an owner running an experiment is owed anyway,
+and which is the only way to see that a switch reached the detector at all.
+
 Two corrections the same critic made to numbers in this note: baseline un-gated
 typing is **62** pooled, not 110; and it disputes the forensics reading of
 `ad3fd3` @ 12.210 s as "tapped before the cue" — reaction times in that session
