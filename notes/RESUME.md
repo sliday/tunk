@@ -117,9 +117,32 @@ stored value and publishing the derived one.
 **3.** A recording made with the resonator on claimed `detector=default` in its
 meta. Fixed; both switches are named now.
 
-**Still open, argued but not demonstrated:** the watchdog's reacquire mutates
-`@Published` state and AppKit monitors off the main thread (`Engine.swift:854`),
-against a rule the same file documents at line 228; and calibration can wedge if
+**The watchdog race was then demonstrated and fixed.** It was argued, not shown,
+so the round began by establishing whether it was real. It was, twice: a probe
+driving the real code counted **16 `@Published` writes and 16 NSEvent monitor
+calls off main**, and ThreadSanitizer reported *"Swift access race:
+`Engine.watchdog()` on main versus `Engine.start()` on GCD worker T4"*. (TSan
+cannot see a `@Published` write — both halves live inside Combine — so those
+reports are on the ordinary stored properties the same two paths race on.)
+
+The fix splits by hazard rather than by function: main keeps the permission read,
+every `status`/`permissions` write, the detector reconfigure, and the NSEvent
+monitors; a serial queue takes only the call that can hang. A generation counter
+handles reentrancy and a user toggling Enable detection mid-reacquire.
+
+Both hazards verified closed: **TSan clean across three 20-cycle runs**, and a
+probe that wedges the sensor queue for 4 s leaves the main thread ticking 7 times
+with a worst call of 21.3 ms — dominated by a `PermissionState` call the watchdog
+already made every tick.
+
+**And the critic found one more, measured:** `stopSensors()` returns as soon as
+the close is *enqueued* and `feed(sample:)` had no armed check, so on a wedged
+queue **4069 samples reached the detector after the user turned detection off** —
+with the keystroke gate's monitors already removed and the action runner still
+reachable. Turning Tunk off did not turn it off. Fixed with one guard on
+`wantsRunning`.
+
+**Still open, argued but not demonstrated:** calibration can wedge if
 `.onDisappear` does not fire for the sheet, leaving `configBeforeCalibration` set
 so every slider write is diverted into a saved copy with no way back.
 
