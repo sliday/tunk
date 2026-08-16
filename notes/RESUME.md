@@ -26,6 +26,36 @@ fire on a pair beginning 81-93 ms before the labelled first tap; demand a credit
 within 40 ms of the label and it is 15/20. The resonator also ships OFF, because
 train lap false triggers double from 3 to 6 with it on. See below.
 
+## You can now turn it on and feel it
+
+M26 is on `main`, **off by default**, and reachable from the app for the first
+time: Settings → **Lap pairing (experimental)**. Until now `DSPTuning` was read as
+`.default` everywhere in `TunkApp`, so not even the shipped resonator option could
+be switched on from the product — which left "felt reliability matching iPhone
+Back Tap", the one PRD criterion no harness can measure, unjudgeable on the only
+mechanism that reaches the lap bar.
+
+```bash
+./dist/build-app.sh && open dist/Tunk.app     # then Settings, last card
+```
+
+**The default did not move.** Proved twice by the builder (6319 train fields and
+3432 held-out fields compared, zero differences), reproduced by a verifying critic
+from source, and checked again by me after the merge: 0 differences on both
+splits. With the switch off, held-out still reads lap 16/20 and VERDICT: FAIL.
+
+With it on, held-out reads desk 20/20, soft 20/20, lap 20/20, 0 false triggers,
+lap p95 203.9 ms — and the harness verdict is **INCOMPLETE**, not PASS, because
+held-out carries no typing and no confound session.
+
+The card states what is measured and what is not: that no recording exists of this
+laptop being knocked on a lap, that the guard against those false triggers has
+only been tested against software-generated signals, that two of the five train
+lap false triggers arrive by the halved bar and no amplitude test can reach them,
+that it asks the typing gate to catch between 2.0× and 2.4× as much, and that 5 of
+the 20 held-out lap credits land more than 40 ms from the label. An owner who
+turns it on is volunteering to be the experiment, and the card says so.
+
 ## A mechanism reached the detection bar on held-out — and does not ship
 
 `promising/m26-polarization`. The first time in 26 rounds that lap has met the

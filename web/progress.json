@@ -1,7 +1,7 @@
 {
  "schema": 2,
  "title": "Tunk \u2014 gauntlet loop",
- "generated_at": "2026-08-16T01:29:03Z",
+ "generated_at": "2026-08-16T02:56:10Z",
  "stale_after_s": 900,
  "cold_after_s": 7200,
  "primary_tap_count": "2",
@@ -7124,6 +7124,186 @@
    "status": "scored",
    "headline": "An anchor-relative amplitude floor kills M26's lone-knock ring storm at every decay from 25 to 80 ms, and keeps the held-out pass exactly (desk 20/20, soft 20/20, lap 20/20, 0 FP, p95 203.9 ms). Real rescues sit at 0.382-1.328 of their anchor; the two storm families at 0.031-0.131 and 0.175-0.235. The empty band is 0.235 to 0.382.",
    "biggest_gap": "M26 asks the input gate to catch 2.4x as much: un-gated typing triggers go 63->137 desk, 35->80 soft, 12->45 lap, and the anchor floor removes almost none. Read against the right baseline though, the shipped detector is ALREADY 188x over the bar un-gated and M26 is 449x - neither is usable without the gate, which the PRD makes load-bearing by design. Gated, every config reads 0. The real blocker is unchanged: zero lap confound recordings, so lap's false-trigger bar has no denominator.",
+   "source": {
+    "tool": "tunk-score 0.1.0",
+    "detector": "TunkCore.TapDetector",
+    "split": "train",
+    "data_root": "/Users/stas/Playground/tunk/data/raw",
+    "is_stub": false,
+    "warnings": [
+     "tap_deck__desk__20260814-090700__8f0079: group 0 pairs onsets 426 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 0 pairs onsets 259 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 1 pairs onsets 597 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 5 pairs onsets 495 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 7 pairs onsets 258 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 8 pairs onsets 238 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 9 pairs onsets 258 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 10 pairs onsets 246 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 12 pairs onsets 296 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 14 pairs onsets 265 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 16 pairs onsets 306 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 17 pairs onsets 259 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 18 pairs onsets 284 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-104745__13e15a: group 19 pairs onsets 260 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-110347__ad3fd3: group 5 pairs onsets 221 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-110809__3fee5b: group 1 pairs onsets 220 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-110809__3fee5b: group 17 pairs onsets 434 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger.",
+     "tap_deck__lap__20260814-110809__3fee5b: group 18 pairs onsets 231 ms apart, beyond the 220 ms maxInterTap ceiling. No detector may fire on this pairing, so it is a guaranteed miss and any trigger inside it scores as a false trigger."
+    ]
+   },
+   "surfaces": {
+    "desk": {
+     "coverage": {
+      "sessions": 7,
+      "tap_groups": {
+       "2": 23
+      }
+     },
+     "taps": {
+      "2": {
+       "metrics": {
+        "detection_rate": {
+         "value": 95.65,
+         "n": 23
+        },
+        "false_triggers_typing": {
+         "value": 0,
+         "n": 1
+        },
+        "false_triggers_confound": {
+         "value": 0,
+         "n": 1
+        },
+        "false_triggers_per_20min": {
+         "value": 0,
+         "n": 7
+        },
+        "latency_p50_ms": {
+         "value": 188.8,
+         "n": 22
+        },
+        "latency_p95_ms": {
+         "value": 200.1,
+         "n": 22
+        },
+        "latency_max_ms": {
+         "value": 211.4,
+         "n": 22
+        },
+        "stuck_modifiers": {
+         "value": null,
+         "n": 0,
+         "note": "replay does not emit keys; graded by the emission tests"
+        }
+       }
+      }
+     }
+    },
+    "soft": {
+     "coverage": {
+      "sessions": 2,
+      "tap_groups": {
+       "2": 20
+      }
+     },
+     "taps": {
+      "2": {
+       "metrics": {
+        "detection_rate": {
+         "value": 100,
+         "n": 20
+        },
+        "false_triggers_typing": {
+         "value": 0,
+         "n": 1
+        },
+        "false_triggers_confound": {
+         "value": null,
+         "n": 0,
+         "note": "no confound sessions in this scope"
+        },
+        "false_triggers_per_20min": {
+         "value": 0,
+         "n": 2
+        },
+        "latency_p50_ms": {
+         "value": 196.4,
+         "n": 20
+        },
+        "latency_p95_ms": {
+         "value": 208.9,
+         "n": 20
+        },
+        "latency_max_ms": {
+         "value": 208.9,
+         "n": 20
+        },
+        "stuck_modifiers": {
+         "value": null,
+         "n": 0,
+         "note": "replay does not emit keys; graded by the emission tests"
+        }
+       }
+      }
+     }
+    },
+    "lap": {
+     "coverage": {
+      "sessions": 5,
+      "tap_groups": {
+       "2": 80
+      }
+     },
+     "taps": {
+      "2": {
+       "metrics": {
+        "detection_rate": {
+         "value": 73.75,
+         "n": 80
+        },
+        "false_triggers_typing": {
+         "value": 0,
+         "n": 1
+        },
+        "false_triggers_confound": {
+         "value": null,
+         "n": 0,
+         "note": "no confound sessions in this scope"
+        },
+        "false_triggers_per_20min": {
+         "value": 6.539,
+         "n": 5
+        },
+        "latency_p50_ms": {
+         "value": 211.4,
+         "n": 59
+        },
+        "latency_p95_ms": {
+         "value": 225.2,
+         "n": 59
+        },
+        "latency_max_ms": {
+         "value": 226.4,
+         "n": 59
+        },
+        "stuck_modifiers": {
+         "value": null,
+         "n": 0,
+         "note": "replay does not emit keys; graded by the emission tests"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "round": 49,
+   "label": "the lap mechanism is now something you can switch on and feel",
+   "timestamp": "2026-08-16T02:56:10Z",
+   "status": "scored",
+   "headline": "M26 lands on main behind an off-by-default switch and is reachable from the app for the first time. The default is byte-identical: 6319 train and 3432 held-out fields compared, zero differences, verified three times independently.",
+   "biggest_gap": "With the switch on, held-out reads desk 20/20, soft 20/20, lap 20/20, 0 FP, p95 203.9 ms - and the verdict is INCOMPLETE, not PASS, because held-out carries no typing and no confound session. The Settings card states every unmeasured risk, including that no recording exists of this laptop being knocked on a lap and that 5 of the 20 lap credits land more than 40 ms from the label.",
    "source": {
     "tool": "tunk-score 0.1.0",
     "detector": "TunkCore.TapDetector",
