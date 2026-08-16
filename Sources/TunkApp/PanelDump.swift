@@ -45,6 +45,27 @@ enum PanelDump {
 
         renderMigrationCard(into: url)
 
+        // One pass with the resonator switched on. This is the only place the
+        // switch's WIRING is checked end to end: the panel's "effective
+        // threshold" readout comes from `engine.effectiveConfig`, so if the
+        // derivation in `AppSettings.effectiveConfig` were not reaching the
+        // detector this render would still say 0.032. A switch that silently
+        // does nothing is the failure this project keeps finding, and reading
+        // the number off the artifact is how it gets caught.
+        settings.setActionKind(.hotkey, for: 2)
+        settings.setActionKind(.none, for: 1)
+        settings.experimentalResonator = true
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        for dark in [false, true] {
+            let file = url.appendingPathComponent("panel-resonator-\(dark ? "dark" : "light").png")
+            let view = SettingsView(settings: settings, engine: engine, panel: panel)
+            guard let data = render(view, dark: dark) else { continue }
+            try? data.write(to: file)
+            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
+        }
+        settings.experimentalResonator = false
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
         // One extra pass at the gate slider's floor, so the caution that only
         // appears at low values is inspectable rather than merely written.
         settings.setActionKind(.hotkey, for: 2)

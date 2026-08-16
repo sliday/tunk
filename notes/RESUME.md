@@ -50,6 +50,14 @@ The shipped default did not move: the held-out report is byte-identical to the
 pre-change baseline, 0 differences across every field, and three new tests
 (`ResonatorPresetTests`) exist to catch it moving by accident.
 
+**And the switch was verified to actually do something**, which is not the same
+claim. `--dump-panel` now renders a `panel-resonator-*` variant with it on, and
+the Detection card's *effective threshold* readout — which comes from
+`engine.effectiveConfig` — reads **0.011** instead of 0.032. If the derivation in
+`AppSettings.effectiveConfig` were not reaching the detector, that render would
+still say 0.032. A flag that silently does nothing is the failure this project
+keeps finding; reading the number off the artifact is how it gets caught.
+
 Two corrections the same critic made to numbers in this note: baseline un-gated
 typing is **62** pooled, not 110; and it disputes the forensics reading of
 `ad3fd3` @ 12.210 s as "tapped before the cue" — reaction times in that session
