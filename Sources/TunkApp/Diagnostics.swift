@@ -920,17 +920,6 @@ extension Diagnostics {
             }
         }
 
-        if let recording {
-            line("")
-            line("RECORDING to \(recording.root.path)")
-            line("  category \(recording.tapCategory.rawValue) for the taps, typing for phase 2,")
-            line("  surface \(recording.surface.rawValue)"
-               + (recording.surfaceWasDefaulted ? " (DEFAULTED — pass --surface to state it)" : ""))
-            line("  WEAR HEADPHONES: the cue beep shakes the chassis through the speakers.")
-            line("  labels.jsonl is written EMPTY. Ground truth comes from tunk-label")
-            line("  reading the beep marks, never from what fired here.")
-        }
-
         // A recording anchors its ground truth to the beep marks, so a beep
         // nobody can hear is worse than no recording at all: the labeller would
         // place every onset against a cue that never sounded. This is the 16 s
@@ -963,6 +952,17 @@ extension Diagnostics {
             line("   run would write labels against cues nobody heard. Refusing to")
             line("   record. Fix audio output, or drop --record to run without one.")
             exit(2)
+        }
+
+        if let recording {
+            line("")
+            line("RECORDING to \(recording.root.path)")
+            line("  category \(recording.tapCategory.rawValue) for the taps, typing for phase 2,")
+            line("  surface \(recording.surface.rawValue)"
+               + (recording.surfaceWasDefaulted ? " (DEFAULTED — pass --surface to state it)" : ""))
+            line("  WEAR HEADPHONES: the cue beep shakes the chassis through the speakers.")
+            line("  labels.jsonl is written EMPTY. Ground truth comes from tunk-label")
+            line("  reading the beep marks, never from what fired here.")
         }
 
         line("")
