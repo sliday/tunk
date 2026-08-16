@@ -433,6 +433,27 @@ public struct DSPTuning: Sendable, Equatable {
     /// switch in the app and the config a critic replays cannot drift apart.
     /// It is NOT approved to ship on; see the app's own copy for what an owner
     /// who turns it on is accepting.
+    /// The front end a fresh-context critic ruled should ship on, kept as a
+    /// preset rather than as the default because that ruling is not this
+    /// project's to act on alone — see notes/RESUME.md.
+    ///
+    /// Held-out: desk 20/20, soft 20/20, lap 16/20 -> 19/20, 0 false triggers,
+    /// lap p95 208.9 -> 211.4 ms. Desk and soft are unchanged and train soft's
+    /// strict rate improves. The counterargument, which is why it is a preset:
+    /// cleaned of the pairing-ceiling artifact the previous front end's lap
+    /// false-trigger rate is 0.00 per 20 min and this one's is 4.35.
+    ///
+    /// The thresholds that go with it are NOT here: they live on DetectorConfig,
+    /// and `AppSettings.effectiveConfig` derives them so switching this on never
+    /// overwrites a sensitivity the owner set by hand.
+    public static let resonatorFrontEnd: DSPTuning = {
+        var t = DSPTuning.default
+        t.resonatorHz = 40
+        t.resonatorQ = 2
+        t.minThresholdG = 0.002
+        return t
+    }()
+
     public static let lapPairingExperiment: DSPTuning = {
         var t = DSPTuning.default
         t.pairRescueEnabled = true

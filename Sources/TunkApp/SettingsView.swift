@@ -699,11 +699,32 @@ struct SettingsView: View {
     /// on is volunteering to be the experiment, and cannot volunteer for
     /// something they have not been told.
     private var lapPairingCard: some View {
-        Card(title: "Lap pairing (experimental)",
-             caption: "Changes how a second tap is recovered when the first one is still "
-                    + "ringing through a soft surface. It is the only mechanism that has "
-                    + "reached the lap detection target on recordings it was not tuned on, "
-                    + "and it is not approved for shipping on.") {
+        Card(title: "Lap detection (experimental)",
+             caption: "Two independent switches, both off, both aimed at the one surface "
+                    + "that misses taps. They were graded separately and can be used "
+                    + "separately. Neither reaches the detection target, and each states "
+                    + "what it costs.") {
+            Toggle("Use the resonator front end", isOn: $settings.experimentalResonator)
+                .toggleStyle(.switch)
+                .font(.system(size: 12))
+                .frame(minHeight: Metrics.hitTarget)
+                .contentShape(Rectangle())
+
+            Text("A separate, independently graded change: a 40 Hz filter before the "
+               + "detector. A critic ruled it should ship on — held-out lap goes 16 of 20 "
+               + "to 19 of 20 with desk and soft unchanged and latency up 1.2 ms. It is a "
+               + "switch and not the default because turning it on trades a false-trigger "
+               + "figure that currently passes on the recordings (0.00 per 20 min) for one "
+               + "that does not (4.35), and 19 of 20 is still short of the target. It does "
+               + "not touch your sensitivity: the threshold it needs is applied while it is "
+               + "on and your own setting comes back when it is off.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider().opacity(0.5)
+
             Toggle("Use experimental lap pairing", isOn: $settings.experimentalLapPairing)
                 .toggleStyle(.switch)
                 .font(.system(size: 12))
@@ -711,9 +732,9 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
 
             HStack(spacing: 18) {
-                Readout(label: "held-out lap, off", value: "16/20")
-                Readout(label: "held-out lap, on", value: "20/20", accent: .primary)
-                Readout(label: "held-out lap p95, on", value: "203.9 ms")
+                Readout(label: "lap, pairing off", value: "16/20")
+                Readout(label: "lap, pairing on", value: "20/20", accent: .primary)
+                Readout(label: "lap p95, pairing on", value: "203.9 ms")
             }
 
             Text("Desk and soft read 20 of 20 either way, latency does not move, and its "

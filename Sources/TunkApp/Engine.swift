@@ -90,7 +90,7 @@ final class Engine: ObservableObject {
     /// typed that is not the number in force has to be visible as both.
     var effectiveConfig: DetectorConfig {
         detectorLock.lock(); defer { detectorLock.unlock() }
-        return readout?.effectiveConfig ?? settings.config.madeCoherent()
+        return readout?.effectiveConfig ?? settings.effectiveConfig.madeCoherent()
     }
 
     /// What the clamp changed and why, in words the panel can print verbatim.
@@ -196,7 +196,7 @@ final class Engine: ObservableObject {
 
     init(settings: AppSettings) {
         self.settings = settings
-        let made = DetectorFactory.make(config: settings.config,
+        let made = DetectorFactory.make(config: settings.effectiveConfig,
                                         armedTapCounts: settings.config.armedTapCounts,
                                         tuning: settings.tuning)
         self.detector = made
@@ -298,7 +298,7 @@ final class Engine: ObservableObject {
         // (0.06 g) fills zero. The panel's only guard is "the sensor is not
         // running", and after start() it is running — so the dots simply stop
         // filling while the user keeps tapping.
-        let live = configBeforeCalibration == nil ? settings.config : detector.config
+        let live = configBeforeCalibration == nil ? settings.effectiveConfig : detector.config
         detector.config = live
         arm(for: live)
         detector.reset()

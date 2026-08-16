@@ -40,9 +40,15 @@ EOF
 ./bin/tunk-score run --data data/holdout --config /tmp/reso.json --i-am-a-critic
 ```
 
-It is not reachable from the app, because switching it on also moves the detector
-thresholds and would overwrite a sensitivity you may have set by hand. Wiring that
-safely is a small piece of work, and it is yours to ask for.
+**It is now reachable from the app**, off by default: Settings → *Lap detection
+(experimental)* → "Use the resonator front end". The threshold it needs is derived
+on the way out rather than stored, so switching it on never overwrites a
+sensitivity you set by hand and switching it off restores yours exactly. The two
+switches in that card are independent and compose.
+
+The shipped default did not move: the held-out report is byte-identical to the
+pre-change baseline, 0 differences across every field, and three new tests
+(`ResonatorPresetTests`) exist to catch it moving by accident.
 
 Two corrections the same critic made to numbers in this note: baseline un-gated
 typing is **62** pooled, not 110; and it disputes the forensics reading of

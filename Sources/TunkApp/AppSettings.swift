@@ -24,6 +24,7 @@ final class AppSettings: ObservableObject {
         static func shortcutDraftListed(_ count: Int) -> String { "shortcutDraftListed.\(count)" }
         static let enabled = "enabled"
         static let lapPairing = "experimentalLapPairing"
+        static let resonator = "experimentalResonator"
     }
 
     /// A named suite, not the bundle's own domain, so the bare SwiftPM binary
@@ -158,8 +159,48 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// The resonator front end a critic ruled should ship on. It is offered as a
+    /// switch rather than taken as the default, because that is a change to what
+    /// fires a keystroke on this machine and it is the owner's to make. Ships OFF,
+    /// so absent means the previous detector, unchanged.
+    @Published var experimentalResonator: Bool {
+        didSet {
+            guard experimentalResonator != oldValue else { return }
+            defaults.set(experimentalResonator, forKey: Key.resonator)
+            onTuningChange?(tuning)
+            onConfigChange?(effectiveConfig)
+        }
+    }
+
     /// The tuning the detector should be running right now.
-    var tuning: DSPTuning { experimentalLapPairing ? .lapPairingExperiment : .default }
+    ///
+    /// The two switches compose: the resonator is a front end, lap pairing is a
+    /// grouping rule, and they were graded independently.
+    var tuning: DSPTuning {
+        var t = experimentalLapPairing ? DSPTuning.lapPairingExperiment : .default
+        if experimentalResonator {
+            let r = DSPTuning.resonatorFrontEnd
+            t.resonatorHz = r.resonatorHz
+            t.resonatorQ = r.resonatorQ
+            t.minThresholdG = r.minThresholdG
+        }
+        return t
+    }
+
+    /// The config the detector should be running right now.
+    ///
+    /// DERIVED, never stored. The resonator narrows the band by a large factor,
+    /// so it needs its own admission threshold — but writing that into `config`
+    /// would overwrite a sensitivity the owner set by hand, and switching back
+    /// would not restore it. So the threshold is applied on the way out and the
+    /// stored value is left alone.
+    var effectiveConfig: DetectorConfig {
+        guard experimentalResonator else { return config }
+        var c = config
+        c.defaultThreshold = 0.011
+        if c.calibratedThreshold != nil { c.calibratedThreshold = 0.011 }
+        return c
+    }
 
     @Published private(set) var launchAtLoginError: String?
 
@@ -200,6 +241,7 @@ final class AppSettings: ObservableObject {
         // Absent means off. A fresh install, and any install that predates the
         // switch, runs the shipped detector.
         experimentalLapPairing = d.object(forKey: Key.lapPairing) as? Bool ?? false
+        experimentalResonator = d.object(forKey: Key.resonator) as? Bool ?? false
 
         // Seed each row's drafts from what was loaded, falling back to what was
         // stored, so the first switch between kinds offers the user's own value.
