@@ -197,9 +197,35 @@ final class Engine: ObservableObject {
     /// Consecutive healthy watchdog ticks. Gates the backoff reset; see the
     /// watchdog switch.
     private var healthyTicks = 0
-    /// A reacquire is in flight on a background queue. Guards against stacking
-    /// them up if one blocks — see the watchdog.
-    private var reacquiring = false
+    /// Every call into `AccelSource` runs here: off the main thread, and one at
+    /// a time.
+    ///
+    /// Off main because `IOHIDEventSystemClientScheduleWithDispatchQueue` was
+    /// measured hanging indefinitely on repeated stop/start — intermittently, at
+    /// cycle 8 or 10 of a tight loop, with every earlier cycle taking 0.00 s. It
+    /// reproduces with and without the client release, so it is not that. See
+    /// notes/OPEN_ITEMS. The watchdog that reacquires is a main-thread Timer, so
+    /// a wedged sensor would otherwise freeze the menubar and the settings panel
+    /// rather than merely failing to recover.
+    ///
+    /// Serial because `AccelSource` keeps `client`, `service`, `running` and
+    /// `onSample` unguarded: a stop overlapping a start would double-release the
+    /// client. A serial queue also keeps the reacquire's stop-then-start in that
+    /// order without the main thread waiting for either.
+    private let sensorQueue = DispatchQueue(label: "dev.tunk.engine.sensor", qos: .utility)
+
+    /// Bumped on the main thread for every arm or disarm. A sensor call that
+    /// comes back after a newer request has been made has its result dropped
+    /// rather than publishing a status for a session that no longer exists —
+    /// which is what a user toggling Enable detection mid-reacquire produces.
+    private var sensorGeneration: UInt64 = 0
+
+    /// A sensor call is on `sensorQueue` and has not come back. It may never
+    /// come back; the watchdog uses this to avoid stacking up more of them.
+    private var sensorBusy = false
+    /// Watchdog ticks spent waiting for one. Turns a wedge into something the
+    /// menubar can say rather than a status that quietly stays stale.
+    private var sensorBusyTicks = 0
     /// Counts lifecycle work that reached a thread other than main. Every
     /// function that writes a `@Published` property or touches AppKit calls
     /// `requireMain()` first, so this is a measurement of the hazard rather than
@@ -256,7 +282,13 @@ final class Engine: ObservableObject {
     deinit {
         tick?.invalidate()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
-        accel.stop()
+        // The source outlives this object by as long as the close takes. Going
+        // through the same queue is what keeps it from overlapping a call that
+        // is still in flight there — `AccelSource` would double-release its
+        // client — and keeps the close off whichever thread dropped the last
+        // reference.
+        let source = accel
+        sensorQueue.async { source.stop() }
         input?.stop()
     }
 
@@ -339,25 +371,66 @@ final class Engine: ObservableObject {
         // Created here rather than in init: the sensor epoch is not settled
         // until start(), and a collector holding a ring from a previous epoch
         // would write snippets whose timestamps mean nothing.
-        if passive == nil { passive = PassiveCollection.makeIfRequested() }
+        //
+        // Under the lock, because `feed(sample:)` reads it on the sensor thread
+        // and a reacquire reaches this line while the old stream is still
+        // delivering — `stopSensors()` only queues the close. Thread Sanitizer
+        // caught this one: `feed(sample:)` reading it on a GCD worker against
+        // this write on main.
+        let collector = PassiveCollection.makeIfRequested()
+        detectorLock.lock()
+        if passive == nil { passive = collector }
+        detectorLock.unlock()
 
+        // The keystroke gate is a pair of `NSEvent` monitors, which are AppKit
+        // objects: they are installed and removed here, on the main thread, and
+        // nowhere else. Assigning over `input` stops the old monitor through its
+        // deinit, which matters because start() is reachable on an already-armed
+        // engine from didWake and from the watchdog.
         let monitor = InputActivityMonitor(epochNs: { [weak self] in self?.epochNs ?? 0 }) {
             [weak self] event in self?.feed(input: event)
         }
         monitor.start()
         input = monitor
 
-        do {
-            try accel.start(epochMachNs: epochNs) { [weak self] sample in
-                self?.feed(sample: sample)
+        // Opening the sensor is the part that can hang, so it is the only part
+        // that leaves this thread. Nothing it touches is `@Published` and
+        // nothing it touches is AppKit; the result comes back to main to be
+        // published. See `sensorQueue`.
+        let onSample: (AccelSample) -> Void = { [weak self] sample in self?.feed(sample: sample) }
+        let generation = beginSensorOp()
+        let source = accel
+        let epoch = epochNs
+        let box = WeakEngineRef(self)
+        sensorQueue.async {
+            var failure: String?
+            do { try source.start(epochMachNs: epoch, onSample: onSample) }
+            catch { failure = String(describing: error) }
+            let count = source.snapshotStats().sampleCount
+            DispatchQueue.main.async {
+                box.engine?.finishSensorStart(generation, failure: failure, sampleCount: count)
             }
-            lastSampleCount = accel.snapshotStats().sampleCount
-            starvedTicks = 0
-            reacquireBackoff = 1
-            status = .running
-        } catch {
-            status = .sensorLost(String(describing: error))
         }
+    }
+
+    /// Publishes what the sensor open did. Main thread, like every other write
+    /// of `status` in this file.
+    private func finishSensorStart(_ generation: UInt64, failure: String?, sampleCount: UInt64) {
+        requireMain()
+        // A newer arm or disarm has already been asked for — most likely the
+        // user toggling Enable detection while this was in flight. Publishing
+        // now would announce a session that has been superseded.
+        guard generation == sensorGeneration else { return }
+        endSensorOp()
+        guard wantsRunning else { return }
+        if let failure {
+            status = .sensorLost(failure)
+            return
+        }
+        lastSampleCount = sampleCount
+        starvedTicks = 0
+        reacquireBackoff = 1
+        status = .running
     }
 
     private func stop() {
@@ -367,11 +440,41 @@ final class Engine: ObservableObject {
         sampleRateHz = 0
     }
 
+    /// Closes the keystroke gate here and the sensor on `sensorQueue`.
+    ///
+    /// Returns as soon as the close is queued. That is the point: closing the
+    /// sensor is half of the stop/start pair measured to hang, and the caller is
+    /// usually the main-thread watchdog. A later start queues behind this one,
+    /// so the pair still happens in order.
     private func stopSensors() {
         requireMain()
-        accel.stop()
         input?.stop()
         input = nil
+        let generation = beginSensorOp()
+        let source = accel
+        let box = WeakEngineRef(self)
+        sensorQueue.async {
+            source.stop()
+            DispatchQueue.main.async {
+                guard let engine = box.engine, engine.sensorGeneration == generation else { return }
+                engine.endSensorOp()
+            }
+        }
+    }
+
+    /// Marks a sensor call as in flight and returns its generation. Main only.
+    private func beginSensorOp() -> UInt64 {
+        requireMain()
+        sensorGeneration &+= 1
+        sensorBusy = true
+        sensorBusyTicks = 0
+        return sensorGeneration
+    }
+
+    private func endSensorOp() {
+        requireMain()
+        sensorBusy = false
+        sensorBusyTicks = 0
     }
 
     // MARK: - hot path
@@ -802,15 +905,15 @@ final class Engine: ObservableObject {
     /// Tear the sensor down and open it again. Factored out of the watchdog so
     /// `tunk --reacquire-probe` drives exactly the code the watchdog drives,
     /// rather than a copy of it that could drift.
+    ///
+    /// Both halves return as soon as the IOHID work is queued, so this costs the
+    /// watchdog tick that calls it a few microseconds rather than however long a
+    /// wedged sensor feels like taking. The stop and the start land on the same
+    /// serial queue in that order.
     private func reacquire() {
         requireMain()
-        reacquiring = true
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self else { return }
-            self.stopSensors()
-            self.start()
-            DispatchQueue.main.async { self.reacquiring = false }
-        }
+        stopSensors()
+        start()
     }
 
     private func watchdog() {
@@ -835,6 +938,19 @@ final class Engine: ObservableObject {
 
         if permissions != PermissionState.current() { permissions = .current() }
         guard wantsRunning else { return }
+
+        // A sensor call that has not come back. It is on its own queue and the
+        // UI is alive, which is the whole point — but a menubar reading
+        // "Detection off" while the app is in fact trying and failing to arm is
+        // a lie, so after three ticks say what is happening. The `.sensorLost`
+        // branch below then waits rather than stacking a second call behind a
+        // stuck one.
+        if sensorBusy {
+            sensorBusyTicks += 1
+            if sensorBusyTicks >= 3, case .off = status {
+                status = .sensorLost("accelerometer has not answered in \(sensorBusyTicks) s")
+            }
+        }
 
         // A stream that is running but far off its nominal rate is worse than a
         // dead one, because everything downstream keeps reporting success. The
@@ -867,8 +983,8 @@ final class Engine: ObservableObject {
             // for a while, not merely because we reached .running.
             healthyTicks += 1
             if healthyTicks >= 5 { reacquireBackoff = 1 }
-        case .sensorLost where reacquiring:
-            break        // one is already running, and it may never return
+        case .sensorLost where sensorBusy:
+            break        // one is already queued, and it may never come back
         case .sensorLost:
             // Bounded backoff: 1, 2, 4 … 32 s. Never a spin.
             healthyTicks = 0
@@ -876,23 +992,17 @@ final class Engine: ObservableObject {
             if starvedTicks >= reacquireBackoff {
                 starvedTicks = 0
                 reacquireBackoff = min(reacquireBackoff * 2, 32)
-                // Off the main thread, because reacquiring can block forever.
-                //
-                // `IOHIDEventSystemClientScheduleWithDispatchQueue` was measured
-                // hanging indefinitely on repeated stop/start — intermittently,
-                // at cycle 8 or 10 of a tight loop, with every earlier cycle
-                // taking 0.00 s. It reproduces with and without the client
-                // release, so it is not that. See notes/OPEN_ITEMS.
-                //
-                // The watchdog is a main-thread Timer and this is exactly the
-                // stop-then-start it hangs on, so a wedged sensor could freeze
-                // the menubar and the settings panel rather than merely failing
-                // to recover. It still may not recover; it will no longer take
-                // the UI with it.
+                // Cheap from here: `reacquire()` queues the IOHID work on
+                // `sensorQueue` and returns. It still may not recover the
+                // sensor; it will not take this Timer, the menubar or the
+                // settings panel with it, and it publishes nothing from that
+                // queue.
                 reacquire()
             }
         case .needsPermission:
-            if PermissionState.current().ready { start() }
+            // Not while a sensor call is outstanding: a start would only queue
+            // behind it, and this branch fires every second.
+            if !sensorBusy, PermissionState.current().ready { start() }
         case .off:
             break
         }
@@ -909,11 +1019,18 @@ final class Engine: ObservableObject {
 extension Engine {
     func probeReacquire() { reacquire() }
     func probeWatchdogTick() { watchdog() }
-    var probeIsBusy: Bool { reacquiring }
+    var probeIsBusy: Bool { sensorBusy }
     /// A plain stored property that `start()` writes and `watchdog()` writes,
     /// exposed because Thread Sanitizer cannot see through `@Published` — the
     /// load and the store both happen inside Combine, which is not instrumented.
     /// The threads and the synchronisation are identical, so a report on this
     /// one is a report on `status` and `permissions` too.
     var probeSampleCount: UInt64 { lastSampleCount }
+    /// Blocks `sensorQueue` for `seconds`, which is what a wedged
+    /// `IOHIDEventSystemClientScheduleWithDispatchQueue` does to it. Every stop
+    /// and start the app then asks for queues behind this. The probe holds it
+    /// there and watches whether the main thread notices.
+    func probeWedgeSensorQueue(seconds: Double) {
+        sensorQueue.async { Thread.sleep(forTimeInterval: seconds) }
+    }
 }

@@ -1292,11 +1292,25 @@ extension Diagnostics {
         engine.setEnabled(true)
         spin(for: 1.0)
 
+        /// How long the main thread spent inside the engine. This is the number
+        /// a freeze shows up in: a fix that closes the race by putting the
+        /// stop/start back on main would put the whole sensor call in here.
+        var worstMainCallMs = 0.0
+        var worstReacquireMs = 0.0
+        var worstTickMs = 0.0
+        func timed(_ body: () -> Void) -> Double {
+            let t0 = Date()
+            body()
+            let ms = -t0.timeIntervalSinceNow * 1000
+            worstMainCallMs = max(worstMainCallMs, ms)
+            return ms
+        }
+
         var worstStallMs = 0.0
         var ticks = 0
         var seen = 0
         for _ in 0..<cycles {
-            engine.probeReacquire()
+            worstReacquireMs = max(worstReacquireMs, timed { engine.probeReacquire() })
             // The menubar reads exactly these three on every glyph redraw and
             // every menu open, and it does it on the main thread. Reading them
             // in a tight loop for longer than a reacquire takes is what puts a
@@ -1316,7 +1330,7 @@ extension Diagnostics {
             let deadline = Date().addingTimeInterval(0.4)
             var last = Date()
             while Date() < deadline {
-                engine.probeWatchdogTick()
+                worstTickMs = max(worstTickMs, timed { engine.probeWatchdogTick() })
                 ticks += 1
                 let now = Date()
                 worstStallMs = max(worstStallMs, now.timeIntervalSince(last) * 1000)
@@ -1326,20 +1340,68 @@ extension Diagnostics {
         }
         if seen == Int.min { line("") }   // keep the reads from being optimised out
         spin(for: 1.0)
+
+        // Second half: what a wedged sensor does to the UI. The hang this whole
+        // arrangement exists for is an IOHID call that never returns, so this
+        // holds the queue those calls run on and asks for a reacquire anyway.
+        // Everything the app then wants from the sensor is stuck behind it. The
+        // question is whether the main thread is stuck with it.
+        let wedgeSeconds = 4.0
+        engine.probeWedgeSensorQueue(seconds: wedgeSeconds)
+        worstReacquireMs = max(worstReacquireMs, timed { engine.probeReacquire() })
+        var wedgeTicks = 0
+        let wedgeUntil = Date().addingTimeInterval(wedgeSeconds - 0.5)
+        while Date() < wedgeUntil {
+            worstTickMs = max(worstTickMs, timed { engine.probeWatchdogTick() })
+            wedgeTicks += 1
+            spin(for: 0.5)
+        }
+        let statusUnderWedge = String(describing: engine.status)
+        spin(for: 1.5)                       // let the wedge clear
+        let statusAfterWedge = String(describing: engine.status)
+
+        // Third: a user toggling Enable detection while the sensor is stuck.
+        // Every toggle queues another close or open behind the wedge, and each
+        // one supersedes the last. What must not happen is a stale open coming
+        // back afterwards and publishing `.running` over a user who asked for
+        // off — which is what the generation counter is for.
+        engine.probeWedgeSensorQueue(seconds: 2.0)
+        timed { engine.probeReacquire() }
+        for _ in 0..<6 {
+            engine.setEnabled(false)
+            engine.setEnabled(true)
+        }
         engine.setEnabled(false)
+        spin(for: 4.0)
+        let statusAfterToggling = String(describing: engine.status)
         spin(for: 0.5)
 
         let engineViolations = Engine.offMainViolations
         let monitorViolations = InputActivityMonitor.offMainCalls
         line("")
         line("  \(cycles) reacquires, \(ticks) main-thread watchdog ticks alongside them")
-        line(String(format: "  worst main-thread stall             %.1f ms", worstStallMs))
-        line("  @Published lifecycle work off main  \(engineViolations)")
-        line("  NSEvent monitor calls off main      \(monitorViolations)")
+        line(String(format: "  worst gap between main-thread ticks  %.1f ms", worstStallMs))
+        line(String(format: "  worst reacquire() on the main thread %.1f ms", worstReacquireMs))
+        line(String(format: "  worst watchdog() on the main thread  %.1f ms", worstTickMs))
+        line("  @Published lifecycle work off main   \(engineViolations)")
+        line("  NSEvent monitor calls off main       \(monitorViolations)")
+        line("")
+        line(String(format: "  sensor queue wedged for %.0f s:", wedgeSeconds))
+        line("    main-thread watchdog ticks during it \(wedgeTicks)")
+        line("    status while wedged                  \(statusUnderWedge)")
+        line("    status once it cleared               \(statusAfterWedge)")
+        line("  13 Enable-detection toggles against a wedged sensor:")
+        line("    status once it cleared               \(statusAfterToggling)")
         line("")
         let clean = engineViolations == 0 && monitorViolations == 0
+        let responsive = wedgeTicks > 0 && worstMainCallMs < 100
+        let settled = statusAfterToggling == "off"
         line(clean ? "  CLEAN: every published write and every AppKit call stayed on main"
                    : "  RACE: the reacquire mutated main-thread-only state off the main thread")
-        exit(clean ? 0 : 1)
+        line(responsive ? "  ALIVE: the main thread never waited on the sensor"
+                        : "  FROZEN: the main thread blocked on sensor work")
+        line(settled ? "  SETTLED: the last toggle won, not the slowest sensor call"
+                     : "  STALE: a superseded sensor call published over the user's last choice")
+        exit(clean && responsive && settled ? 0 : 1)
     }
 }
