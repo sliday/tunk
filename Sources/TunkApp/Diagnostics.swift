@@ -931,6 +931,20 @@ extension Diagnostics {
             line("  reading the beep marks, never from what fired here.")
         }
 
+        // A recording anchors its ground truth to the beep marks, so a beep
+        // nobody can hear is worse than no recording at all: the labeller would
+        // place every onset against a cue that never sounded. This is the 16 s
+        // audio-stall failure wearing a different hat, and the property that
+        // detects it already existed and was never read.
+        if recording != nil, cue?.isAvailable != true {
+            line("")
+            line("!! NO USABLE AUDIO OUTPUT, so the beep cue cannot sound.")
+            line("   Ground truth in a recording is anchored to those beeps, so this")
+            line("   run would write labels against cues nobody heard. Refusing to")
+            line("   record. Fix audio output, or drop --record to run without one.")
+            exit(2)
+        }
+
         line("")
         line("LIVE ACCEPTANCE — phase 1 of 2: \(taps) deliberate double-taps")
         line("  Wait for each prompt, then double-tap the chassis. Hands off between.")
@@ -954,7 +968,14 @@ extension Diagnostics {
             tapRecorder?.mark(kind: "prompt",
                               text: "double-tap: \(recording?.tapCategory.title ?? "chassis")",
                               group: i - 1)
-            speak("tap")
+            // Beep-only when recording. Measured: `say -r 220 tap` runs 1.24 s
+            // wall of which 0.336 s is audible, so the voice leads the beep by
+            // about 0.35 s and an operator answering it lands that much earlier
+            // than in every other session in the corpus — which is anchored on
+            // the beep alone (TunkCapture runTapPhase speaks once per phase).
+            // tunk-label's window is [beep, beep + 2600 ms] and anything before
+            // the beep is invisible to it.
+            if recording == nil { speak("tap") }
             // Tone first, mark second. The mark has to sit at the moment the
             // operator could hear the cue, not the moment we asked for it: with
             // a stalled audio path `play()` took ~16 s, and stamping first put
