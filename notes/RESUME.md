@@ -318,6 +318,36 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The gesture does not inflate its own bar — measured, not assumed
+
+The noise tracker's four parameters had never been exposed to config, so they had
+never been swept. The hypothesis was specific: a lap ring-down runs 231 ms, the
+floor is frozen only 30 ms after an onset, so the first tap's own ring should push
+the bar up exactly while the second tap arrives.
+
+**Measured first, and it died there.** Probe validated by reproducing all 242
+published onset pairs from `explain`, 0 mismatches. Median across lap gestures,
+from each gesture's own first onset:
+
+| | floor | 4 × floor | effective threshold |
+|---|---|---|---|
+| 0 ms | 0.00164 | 0.00655 | **0.03200** |
+| 220 ms | 0.00369 | 0.01478 | **0.03200** |
+
+The floor climbs. It cannot reach the bar: `currentThreshold()` is a `max()` and
+the configured 0.032 g dominates 4 × floor by more than double everywhere it
+matters. Rise through the 100-220 ms window is **median +0.00 % on all three
+surfaces**, with 3 of 79 lap gestures over 1 % and all three in `13e15a`.
+
+**Where it applies at all, the hypothesis is backwards.** In those three,
+freezing the floor *removed* onsets rather than adding them — the re-arm
+condition is `envelope <= threshold × releaseFraction`, so a higher bar means a
+higher release level means the detector re-arms *sooner*. The adaptive floor's
+only measurable effect near a gesture is on hysteresis, not admission.
+
+`rejected/noise-floor-hold`. The four parameters are now sweepable, which they
+were not before.
+
 ## The amplitude axis is closed, with the last variant graded
 
 A critic had handed over a "strict improvement" that nobody built:
