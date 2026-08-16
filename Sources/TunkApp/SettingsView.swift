@@ -713,7 +713,13 @@ struct SettingsView: View {
 
             Text("Desk and soft read 20 of 20 either way, and every held-out recording reads "
                + "zero false triggers with this on or off. Latency does not move: the lap "
-               + "figure is 208.9 ms with this off.")
+               + "figure is 208.9 ms with this off.\n\n"
+               + "Read the 20 of 20 with the asterisk the scorer prints beside it: 5 of those "
+               + "20 credits land more than 40 ms from where the label puts the gesture, "
+               + "against 2 of 16 with this off. The worst is 105 ms out. Those five are the "
+               + "gestures whose two taps the labels place further apart than any detector is "
+               + "allowed to pair, so it fires on a real pair inside the gesture rather than "
+               + "the labelled one.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -728,10 +734,13 @@ struct SettingsView: View {
                      + "five false triggers on the lap recordings it was tuned on arrive that "
                      + "way, and no test of amplitude can tell them from a real gesture.")
                 caveat("It leans harder on the gate that stops your typing from firing Tunk. "
-                     + "Across 11.7 minutes of typing recordings, with that gate switched "
-                     + "off, the shipped detector fires 62 times and this fires 124. The "
-                     + "gate turns both into zero. Turning this on asks it to catch twice "
-                     + "as much.")
+                     + "Across 11.7 minutes of typing recordings, with the gate's 180 ms "
+                     + "window set to zero — its other 25 ms of suppression cannot be "
+                     + "switched off and was still running — the shipped detector fires 62 "
+                     + "times and this fires 124. Stripping the keystroke record entirely, "
+                     + "which is the fuller test, the same pair reads 2.4x rather than 2.0x. "
+                     + "The gate turns both into zero. Turning this on asks it to catch "
+                     + "between twice and two and a half times as much.")
             }
         }
         .tunkAnimation(.tunkSnappy, value: settings.experimentalLapPairing,
