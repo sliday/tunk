@@ -292,6 +292,31 @@ tapped, so ground truth comes from `bin/tunk-label run <dir>` reading the `beep`
 marks, exactly as it does for every other session. `--record` takes an explicit
 path and has no default, so nothing lands in `data/` unless you name it.
 
+It now also **leaves evidence a critic can re-grade**, which it did not before:
+
+```bash
+./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300 \
+    --record data/holdout --surface lap --tap-category tap_deck
+./bin/tunk-label run data/holdout/<the new session>
+./bin/tunk-score run --data data/holdout --i-am-a-critic
+```
+
+Two FORMAT.md sessions per run — a tap deck with `expected_triggers` set to the
+tap count, and a typing session with 0. The PRD makes final acceptance a test
+"run by a fresh critic", and until now its whole output was a printed number that
+no critic could check. **It writes marks, never labels**: `AcceptanceRecorder` has
+no `TapLabel` API, `labels.jsonl` is created empty and never reopened, and ground
+truth comes from `tunk-label` reading the beep marks independently, exactly as for
+every other session in the corpus. Without `--record` nothing is written and the
+output is byte-identical.
+
+It refuses to record if there is no usable audio output, because a beep nobody
+hears would anchor every label to a cue that never sounded.
+
+**So one 10-minute run on your lap produces a held-out typing session and a
+labelled lap deck as a side effect** — two of the three things the corpus is
+missing, from the test the PRD already asks you to perform.
+
 It honours the experimental switch, so it measures whichever detector is selected
 in Settings — verified: `Engine.init` takes `tuning: settings.tuning`, and
 `AppSettings` reads the toggle back from defaults. Run it once per surface to get
