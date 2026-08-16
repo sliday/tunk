@@ -318,6 +318,34 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The amplitude axis is closed, with the last variant graded
+
+A critic had handed over a "strict improvement" that nobody built:
+`currentThreshold()` lowers the bar for the second onset while a gesture is in
+flight, and the *same value* feeds the re-arm test — so the release line falls
+with it, making admission easier and re-arming harder at once.
+
+**The coupling was real and the decoupling fixes it.** Matched-pair miss-set diff
+at fraction 0.92: the coupled arm reproduces D9's failure exactly, losing
+`soft-fe9b8c` g3 and g19 — `rejected/amplitude-proportional-bar`'s signature. The
+decoupled arm holds soft at 20/20 across the whole band.
+
+**The critic's claim was still wrong.** At its named 0.85, soft is 19/20 and lap
+false triggers go 3 → 4; both guards fail. The best train point (0.91) reaches lap
+65/80, +6 over baseline, with desk and soft intact — but lap FP 3 → 5.
+
+Held-out, graded fresh: desk 20/20, soft 20/20, **lap 17/20**, 0 FP, p95 208.9 ms.
+One gesture recovered against a bar needing 20/20. And the deciding observation:
+*the decoupling differs from the rejected variant on train and not at all on
+held-out* — held-out soft does not degrade under the coupled arm either, so the
+thing this mechanism fixes is invisible where it counts.
+
+**Nine amplitude-family variants have now been graded and the axis is closed.**
+Every one recovers the same one easy held-out gesture and pays in lap false
+triggers, for one reason: a bar is a scalar, and a ring-down lobe and a real
+second strike have the same amplitude. No threshold on that axis separates them.
+`rejected/in-gesture-release-decoupled`.
+
 ## The motion gate composes with M26, in a narrow window
 
 `rejected/fp-motion-gate` was measured against the resonator and never against
