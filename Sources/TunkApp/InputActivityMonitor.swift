@@ -37,7 +37,22 @@ final class InputActivityMonitor {
 
     var isRunning: Bool { globalMonitor != nil }
 
+    /// Counts monitor installs and removals that arrived on some thread other
+    /// than main. `NSEvent` monitors are AppKit objects and belong to the main
+    /// thread; doing this from a background queue is a bug whether or not it
+    /// appears to work. Costs one bool test per install, nothing per event.
+    /// `tunk --reacquire-probe` prints it.
+    nonisolated(unsafe) private(set) static var offMainCalls = 0
+    private static let offMainLock = NSLock()
+    private static func noteThread() {
+        guard !Thread.isMainThread else { return }
+        offMainLock.lock()
+        offMainCalls += 1
+        offMainLock.unlock()
+    }
+
     func start() {
+        Self.noteThread()
         guard globalMonitor == nil else { return }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: Self.mask) { [weak self] event in
             self?.handle(event)
@@ -51,6 +66,7 @@ final class InputActivityMonitor {
     }
 
     func stop() {
+        if globalMonitor != nil || localMonitor != nil { Self.noteThread() }
         if let g = globalMonitor { NSEvent.removeMonitor(g) }
         if let l = localMonitor { NSEvent.removeMonitor(l) }
         globalMonitor = nil
