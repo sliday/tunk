@@ -318,6 +318,36 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The latency-budget escape hatch is unreachable, and not worth reaching
+
+`TapCalibration.fitInterTap` takes `allowExceedingLatencyBudget`, with
+`maxWindowNs` 400 ms and a test covering it — the product can already let an
+owner say "I would rather wait than be missed", which is a defensible reading of
+felt reliability for someone who taps slowly.
+
+**Nothing in `TunkApp` ever passes it.** `grep -rn allowExceedingLatencyBudget
+Sources/TunkApp/` returns nothing, so the capability exists in the core and is
+unreachable from the product.
+
+Measured before deciding whether to expose it — held-out, shipped chain:
+
+| window | desk | soft | lap | lap p95 |
+|---|---|---|---|---|
+| 235 ms (calibration's clamp) | 20/20 | 20/20 | 16/20 | 223.9 ms ✅ |
+| 260 ms | 20/20 | 20/20 | **17/20** | 271.4 ms ✗ |
+| 280 ms | 20/20 | 20/20 | 17/20 | 291.4 ms ✗ |
+| 300 ms | 20/20 | 20/20 | 17/20 | 311.4 ms ✗ |
+| 340 ms | 20/20 | 20/20 | 17/20 | 351.5 ms ✗ |
+
+**One gesture, then saturation.** Widening past 260 ms buys nothing at all out to
+340 ms, and 260 ms already costs 62 ms of latency and fails the PRD bar. So the
+escape hatch would hand a lap owner 17/20 instead of 16/20 in exchange for a
+detector that misses its latency target — and it still would not approach 98 %.
+
+Leave it unexposed. This is the fifth route into the same wall: the gestures that
+need a wider window are not there in useful numbers, and the ones that are need
+236-249 ms, which the budget will not pay for.
+
 ## The shipped calibration feature cannot fix lap, and here is why
 
 Tunk ships a "learn my tap" calibration that fits the user's own inter-tap
