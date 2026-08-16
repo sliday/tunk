@@ -276,6 +276,22 @@ typing false triggers live rather than by replay:
 ./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300     # about 10 minutes
 ```
 
+Run it with `--record` and it leaves a recording instead of a claim. Without the
+flag it writes nothing and behaves exactly as before.
+
+```bash
+./dist/Tunk.app/Contents/MacOS/Tunk --acceptance 50 300 \
+    --record .tunk-acceptance --surface desk [--tap-category tap_deck]
+```
+
+Two sessions per run, because the phases are different categories: the taps go to
+`tap_<surface>` with `expected_triggers = 50`, the typing to `typing` with zero.
+Both carry the detector that produced them in `meta.json`. `labels.jsonl` is
+written EMPTY on purpose — the test knows when it PROMPTED, not when anybody
+tapped, so ground truth comes from `bin/tunk-label run <dir>` reading the `beep`
+marks, exactly as it does for every other session. `--record` takes an explicit
+path and has no default, so nothing lands in `data/` unless you name it.
+
 It honours the experimental switch, so it measures whichever detector is selected
 in Settings — verified: `Engine.init` takes `tuning: settings.tuning`, and
 `AppSettings` reads the toggle back from defaults. Run it once per surface to get

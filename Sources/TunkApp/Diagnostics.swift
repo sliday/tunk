@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import TunkCore
 import TunkEmit
+import TunkFormat
 import TunkIMU
 
 /// Two things a reviewer should be able to check against the built app rather
@@ -668,6 +669,54 @@ extension Diagnostics {
 
 // MARK: - live acceptance
 
+/// Seals the session in flight when the run is cut short.
+///
+/// A 50-tap acceptance run is fifteen minutes of somebody's hands, and it gets
+/// abandoned: Ctrl-C, a closed terminal, `| head`. Without this the accelerometer
+/// stream is on disk but `meta.json` never lands, and a directory with no
+/// `meta.json` is not a session — every tool refuses to open it, and the whole
+/// take is lost. `TunkCapture.Runtime` handles it the same way, and for the same
+/// reason.
+///
+/// Handled on a dispatch source rather than in a C signal handler, so it can do
+/// real work: writing a file from a signal handler is not allowed, and this has
+/// to write three.
+private enum AcceptanceAbort {
+    nonisolated(unsafe) private static var recorder: AcceptanceRecorder?
+    nonisolated(unsafe) private static var sources: [DispatchSourceSignal] = []
+    private static let lock = NSLock()
+
+    static func adopt(_ r: AcceptanceRecorder?) {
+        lock.lock(); recorder = r; lock.unlock()
+    }
+
+    static func install() {
+        guard sources.isEmpty else { return }
+        let q = DispatchQueue(label: "dev.tunk.acceptance.signal")
+        for (sig, name) in [(SIGINT, "SIGINT"), (SIGTERM, "SIGTERM"), (SIGPIPE, "SIGPIPE")] {
+            signal(sig, SIG_IGN)
+            let s = DispatchSource.makeSignalSource(signal: sig, queue: q)
+            s.setEventHandler { seal(name: name) }
+            s.resume()
+            sources.append(s)
+        }
+    }
+
+    private static func seal(name: String) {
+        lock.lock()
+        let r = recorder
+        recorder = nil
+        lock.unlock()
+        if let r {
+            r.mark(kind: "operator_mark", text: "run cut short by \(name)")
+            let s = r.finish(reason: "aborted:\(name)")
+            FileHandle.standardError.write(Data(
+                "\n\(name): sealed \(s.sampleCount) samples into \(s.dir.path)\n".utf8))
+        }
+        exit(130)
+    }
+}
+
 extension Diagnostics {
     /// The PRD's final acceptance test, run on the built app rather than on a
     /// replay: "perform 50 deliberate double-taps and record hit rate and
@@ -695,8 +744,74 @@ extension Diagnostics {
         return minutes == 1 ? "1 minute" : "\(minutes) minutes"
     }
 
-    static func acceptance(taps: Int, typingSeconds: Double) {
-        let engine = Engine(settings: AppSettings())
+    /// What `--record` asked for. Nil means the run prints its numbers and
+    /// writes nothing, which is what `--acceptance` did before this existed.
+    struct AcceptanceRecording {
+        /// Always named on the command line. There is deliberately no default:
+        /// `data/` is the frozen corpus, and a default path is how a run ends up
+        /// inside it by accident.
+        var root: URL
+        var surface: Surface
+        var tapCategory: TunkFormat.Category
+        /// True when `--surface` was not given. Recorded rather than hidden: a
+        /// surface nobody stated is a surface nobody can trust, and every metric
+        /// in FORMAT.md is reported per surface.
+        var surfaceWasDefaulted: Bool
+    }
+
+    /// `split` has to agree with the directory a session sits in, or
+    /// `tunk-capture verify` fails it and a test session can leak into tuning.
+    /// Only `holdout` means test; anything else is training material.
+    static func split(for root: URL) -> Split {
+        root.standardizedFileURL.lastPathComponent == "holdout" ? .test : .train
+    }
+
+    /// The detector that produced the run, in the field a reader sees first.
+    /// Without it two recordings made minutes apart by different detectors are
+    /// indistinguishable, and the experimental switch is one checkbox away.
+    static func acceptanceToolVersion(settings: AppSettings) -> String {
+        "tunk acceptance 0.1.0 (detector="
+            + (settings.experimentalLapPairing ? "lap_pairing_experiment" : "default") + ")"
+    }
+
+    /// Everything a critic needs to replay this session under the same detector
+    /// it was recorded with, written into `meta.json` and the head of `notes.md`.
+    static func recordingNotes(recording: AcceptanceRecording, settings: AppSettings,
+                               engine: Engine, taps: Int, typingSeconds: Double) -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        let config = (try? enc.encode(engine.effectiveConfig))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "unavailable"
+        var lines = [
+            "LIVE ACCEPTANCE run of the built app: "
+                + "`Tunk --acceptance \(taps) \(Int(typingSeconds)) --record <dir>`.",
+            "",
+            "detector tuning: "
+                + (settings.experimentalLapPairing
+                    ? "DSPTuning.lapPairingExperiment (the experimental lap pairing switch is ON)"
+                    : "DSPTuning.default"),
+            "effective DetectorConfig: \(config)",
+            "",
+            "MARKS, NOT LABELS. `beep` marks say when the cue was audible, which is "
+                + "when the operator was ASKED to tap. Nothing here records when anybody "
+                + "actually tapped, and labels.jsonl is empty until tunk-label fills it in "
+                + "from those marks. `live_trigger` marks are what the live detector fired: "
+                + "evidence to compare a replay against, never ground truth.",
+        ]
+        if recording.surfaceWasDefaulted {
+            lines.append("")
+            lines.append("SURFACE WAS NOT STATED and defaults to "
+                       + "\(recording.surface.rawValue). Every metric in FORMAT.md is "
+                       + "reported per surface, so correct this before using the session "
+                       + "for anything surface-specific.")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func acceptance(taps: Int, typingSeconds: Double,
+                           recording: AcceptanceRecording? = nil) {
+        let settings = AppSettings()
+        let engine = Engine(settings: settings)
         var fired: [(atNs: Int64, lastOnsetNs: Int64)] = []
         let lock = NSLock()
 
@@ -736,20 +851,130 @@ extension Diagnostics {
             }
         }
 
+        // Recording, if asked for. Two sessions, because the two phases are
+        // different categories: prompted taps with `expected_triggers = taps`,
+        // then typing with `expected_triggers = 0`.
+        let cue = recording == nil ? nil : AcceptanceCue()
+        var written: [AcceptanceRecorder.Summary] = []
+        func startRecording(category: TunkFormat.Category, expected: Int) -> AcceptanceRecorder? {
+            guard let recording else { return nil }
+            do {
+                let r = try AcceptanceRecorder(
+                    options: .init(root: recording.root,
+                                   category: category,
+                                   surface: recording.surface,
+                                   split: Self.split(for: recording.root),
+                                   expectedTriggers: expected,
+                                   notes: Self.recordingNotes(recording: recording,
+                                                              settings: settings,
+                                                              engine: engine,
+                                                              taps: taps,
+                                                              typingSeconds: typingSeconds),
+                                   toolVersion: Self.acceptanceToolVersion(settings: settings)),
+                    callerEpochMachNs: engine.epochMachNs,
+                    startNs: engine.nowNs(),
+                    clock: { engine.nowNs() })
+                engine.setRecorder(r)
+                AcceptanceAbort.install()
+                AcceptanceAbort.adopt(r)
+                // "The monitor is installed" is not the same as "the monitor can
+                // see anything". While another process holds secure event input
+                // — every password field, some terminals, the lock screen — the
+                // window server delivers no keystrokes to anyone, so
+                // `input.jsonl` comes out empty and the gate cannot be replayed.
+                // Saying `degraded` here is what makes `tunk-capture verify`
+                // reject the session for the right reason instead of the
+                // operator wondering why it is empty.
+                let blind = SystemSecureInput().isSecureInputActive
+                r.mark(kind: "input_tap",
+                       text: (engine.inputTapActive && !blind) ? "active" : "degraded")
+                if blind {
+                    r.mark(kind: "operator_mark",
+                           text: "secure event input was held by another process for this "
+                               + "session: no keyboard events reach any monitor, so the gate "
+                               + "cannot be replayed from this recording")
+                    line("  !! SECURE INPUT IS ON. Keystrokes are invisible to every monitor,")
+                    line("     so input.jsonl will be empty and verify will reject this")
+                    line("     session. Close whatever holds it and re-record.")
+                }
+                r.mark(kind: "phase", text: "start:\(category.rawValue)")
+                line("  recording -> \(r.dir.path)")
+                return r
+            } catch {
+                line("  could not start recording in \(recording.root.path): \(error)")
+                exit(2)
+            }
+        }
+        func stopRecording(_ r: AcceptanceRecorder?, reason: String) {
+            guard let r else { return }
+            r.mark(kind: "phase", text: "stop")
+            engine.setRecorder(nil)
+            AcceptanceAbort.adopt(nil)
+            let s = r.finish(reason: reason)
+            written.append(s)
+            line(String(format: "  wrote %d samples, %d input events, %d marks -> %@",
+                        s.sampleCount, s.inputCount, s.markCount, s.dir.lastPathComponent))
+            if s.inputCount == 0 {
+                line("  NOTE: no keyboard or trackpad events landed in that session, so")
+                line("        `tunk-capture verify` will fail it: the gate cannot be replayed.")
+            }
+        }
+
+        if let recording {
+            line("")
+            line("RECORDING to \(recording.root.path)")
+            line("  category \(recording.tapCategory.rawValue) for the taps, typing for phase 2,")
+            line("  surface \(recording.surface.rawValue)"
+               + (recording.surfaceWasDefaulted ? " (DEFAULTED — pass --surface to state it)" : ""))
+            line("  WEAR HEADPHONES: the cue beep shakes the chassis through the speakers.")
+            line("  labels.jsonl is written EMPTY. Ground truth comes from tunk-label")
+            line("  reading the beep marks, never from what fired here.")
+        }
+
         line("")
         line("LIVE ACCEPTANCE — phase 1 of 2: \(taps) deliberate double-taps")
         line("  Wait for each prompt, then double-tap the chassis. Hands off between.")
+        let tapRecorder = startRecording(category: recording?.tapCategory ?? .tapDeck,
+                                         expected: taps)
+        if let recording {
+            // The recording declares a category, so the operator has to be told
+            // which surface it claims. A file that says tap_deck while the
+            // operator tapped the palm rest is worse than no file.
+            line("  Recorded as \(recording.tapCategory.rawValue): perform "
+               + "\(recording.tapCategory.title), after each beep.")
+            tapRecorder?.mark(kind: "prompt", text: "after each beep, "
+                            + "\(recording.tapCategory.title): two firm taps, then hands off")
+        }
         speak("Phase one. \(taps) double taps.")
 
         var hits = 0
         for i in 1...taps {
             lock.lock(); let before = fired.count; lock.unlock()
             line("  tap \(i)/\(taps)")
+            tapRecorder?.mark(kind: "prompt",
+                              text: "double-tap: \(recording?.tapCategory.title ?? "chassis")",
+                              group: i - 1)
             speak("tap")
+            // Tone first, mark second. The mark has to sit at the moment the
+            // operator could hear the cue, not the moment we asked for it: with
+            // a stalled audio path `play()` took ~16 s, and stamping first put
+            // every beep mark 16 s before the sound, which puts every gesture
+            // outside the labeller's window and turns the session into labels
+            // for silence. Same ordering as TunkCapture's tap phase.
+            if let cue, let tapRecorder {
+                let delay = cue.beep()
+                tapRecorder.mark(kind: "beep", group: i - 1)
+                if cue.unreliable {
+                    line(String(format: "  !! the beep took %.1f s to start — audio is not "
+                              + "keeping up, and these prompts are not trustworthy. "
+                              + "Stop, fix audio, and re-record.", delay))
+                }
+            }
             Thread.sleep(forTimeInterval: 2.6)
             lock.lock(); let after = fired.count; lock.unlock()
             if after > before { hits += 1 }
         }
+        stopRecording(tapRecorder, reason: "phase 1 complete")
 
         lock.lock()
         let phase1 = fired
@@ -759,6 +984,8 @@ extension Diagnostics {
         line("")
         line("LIVE ACCEPTANCE — phase 2 of 2: type for \(Int(typingSeconds)) s")
         line("  Real prose, normal speed and force. No deliberate taps.")
+        let typingRecorder = startRecording(category: TunkFormat.Category.typing, expected: 0)
+        typingRecorder?.mark(kind: "prompt", text: "type continuously, no deliberate taps")
         // Sub-minute durations rendered as "0 minutes", which is what a short
         // rehearsal run of this test says out loud before asking you to type.
         speak("Phase two. Type normally for \(Self.spokenDuration(typingSeconds)).")
@@ -773,6 +1000,7 @@ extension Diagnostics {
             line("  \(left) s left, false triggers so far: \(n)")
         }
         speak("Done.")
+        stopRecording(typingRecorder, reason: "phase 2 complete")
 
         lock.lock(); let falseTriggers = fired.count; lock.unlock()
         engine.setEnabled(false)
@@ -806,6 +1034,28 @@ extension Diagnostics {
         line("  action is deliberately NOT posted — firing a hotkey 50 times into")
         line("  whatever has focus would be its own disaster, and emission is")
         line("  covered by --live-emit-probe.")
+        if !written.isEmpty {
+            line("")
+            line("  Numbers above are this run's own count. The recording below is what")
+            line("  makes them checkable — re-grade it rather than taking them on trust:")
+            line("")
+            for s in written { line("    \(s.dir.path)") }
+            line("")
+            for s in written {
+                line("    bin/tunk-capture verify \(s.dir.path)")
+            }
+            for s in written where s.dir.lastPathComponent.hasPrefix("tap_") {
+                line("    bin/tunk-label check \(s.dir.path)")
+                line("    bin/tunk-label run   \(s.dir.path)")
+            }
+            line("    bin/tunk-score run --data \(written[0].dir.deletingLastPathComponent().path)")
+            line("")
+            line("  labels.jsonl in both is EMPTY, on purpose. This test knows when it")
+            line("  PROMPTED, not when anybody tapped; labels derived from its own")
+            line("  triggers would grade the detector against itself.")
+        }
+        // Nothing extra is printed without `--record`. A run with no new flag
+        // has to produce the same output it always did, down to the last line.
         exit(pass ? 0 : 1)
     }
 }

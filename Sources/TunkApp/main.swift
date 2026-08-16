@@ -51,8 +51,55 @@ if let index = arguments.firstIndex(of: "--acceptance") {
     // The PRD's final sign-off, run on the built app against the real sensor.
     let taps = index + 1 < arguments.count ? Int(arguments[index + 1]) ?? 50 : 50
     let typing = index + 2 < arguments.count ? Double(arguments[index + 2]) ?? 300 : 300
+
+    /// Value after `flag`, or nil. A missing value, or another flag where the
+    /// value should be, is an error rather than a silent default — this decides
+    /// where files get written and which surface they claim.
+    func value(after flag: String) -> String? {
+        guard let i = arguments.firstIndex(of: flag) else { return nil }
+        guard i + 1 < arguments.count, !arguments[i + 1].hasPrefix("-") else {
+            FileHandle.standardError.write(Data("\(flag) needs a value\n".utf8))
+            exit(2)
+        }
+        return arguments[i + 1]
+    }
+
+    // No --record, no writing. There is deliberately no default path: data/ is
+    // the frozen corpus, and a default is how a run lands inside it by accident.
+    var recording: Diagnostics.AcceptanceRecording?
+    if let path = value(after: "--record") {
+        var surface = Surface.desk
+        let stated = value(after: "--surface")
+        if let stated {
+            guard let s = Surface(rawValue: stated) else {
+                FileHandle.standardError.write(Data(
+                    "--surface must be one of \(Surface.allCases.map(\.rawValue).joined(separator: ", "))\n".utf8))
+                exit(2)
+            }
+            surface = s
+        }
+        var category = Category.tapDeck
+        if let stated = value(after: "--tap-category") {
+            guard let c = Category(rawValue: stated), c.isTapCategory else {
+                FileHandle.standardError.write(Data(
+                    "--tap-category must be tap_palmrest, tap_deck or tap_bottom\n".utf8))
+                exit(2)
+            }
+            category = c
+        }
+        recording = Diagnostics.AcceptanceRecording(
+            root: URL(fileURLWithPath: path, isDirectory: true),
+            surface: surface,
+            tapCategory: category,
+            surfaceWasDefaulted: stated == nil)
+    } else if arguments.contains("--surface") || arguments.contains("--tap-category") {
+        FileHandle.standardError.write(Data(
+            "--surface and --tap-category only mean something with --record\n".utf8))
+        exit(2)
+    }
+
     app.setActivationPolicy(.accessory)
-    Diagnostics.acceptance(taps: taps, typingSeconds: typing)
+    Diagnostics.acceptance(taps: taps, typingSeconds: typing, recording: recording)
 }
 if arguments.contains("--haptic-probe") {
     app.setActivationPolicy(.accessory)

@@ -115,6 +115,15 @@ final class Engine: ObservableObject {
     /// survives a reacquire.
     private let epochNs: Int64 = MachClock.nowNanos()
     func nowNs() -> Int64 { MachClock.nowNanos() - epochNs }
+    /// Absolute mach nanoseconds at which `nowNs()` reads zero. A recorder needs
+    /// it to write `epoch_mach_ns`, which is what ties a session's timestamps to
+    /// this machine's clock.
+    var epochMachNs: Int64 { epochNs }
+
+    /// Whether the input monitor is live. A session recorded without it cannot
+    /// replay the suppression gate, so a recorder has to state which it got
+    /// rather than assume.
+    var inputTapActive: Bool { input?.isRunning ?? false }
 
     // Monitor ring: 4.27 s at 120 Hz, which is one bucket per drawn frame at
     // the fastest display this runs on. Finer buckets would cost redraw time
@@ -134,6 +143,20 @@ final class Engine: ObservableObject {
     /// `Diagnostics.acceptance`; nil in normal operation, so it costs a nil
     /// check per trigger and nothing per sample.
     var onTriggerForTesting: ((Trigger) -> Void)?
+
+    /// Writes the live stream to a FORMAT.md session directory. Nil in normal
+    /// operation, and set only by `Diagnostics.acceptance --record`, so it costs
+    /// one nil check per sample and nothing otherwise.
+    ///
+    /// Read under `detectorLock` on the sensor thread, so it is set under the
+    /// same lock rather than assigned across threads.
+    private var recorder: AcceptanceRecorder?
+    func setRecorder(_ r: AcceptanceRecorder?) {
+        detectorLock.lock()
+        recorder = r
+        detectorLock.unlock()
+    }
+
     private var triggerLog: [Int64] = []
     private var gateLog: [Int64] = []
 
@@ -343,9 +366,17 @@ final class Engine: ObservableObject {
                                       suppressed: onset.suppressedByGate)
             }
         }
+        // The live acceptance recorder, off unless `--record` asked for it. Fed
+        // the raw stream, so the file it writes is what the sensor delivered
+        // rather than what the detector made of it.
+        recorder?.ingest(sample: sample)
         if let trigger {
             record(trigger: trigger)
             onTriggerForTesting?(trigger)
+            // A mark, never a label. See `AcceptanceRecorder`.
+            recorder?.noteLiveTrigger(atNs: trigger.tNs,
+                                      lastOnsetNs: trigger.tapOnsets.last ?? trigger.tNs,
+                                      tapCount: trigger.tapCount)
         }
         // Groups that closed without firing. Draining is not optional here: the
         // log is bounded, and an undrained one would just discard the oldest.
@@ -407,8 +438,12 @@ final class Engine: ObservableObject {
         // Input goes into the snippet too. Without it the harness cannot
         // reproduce the suppression gate when replaying one, and a snippet that
         // cannot be replayed faithfully is worth very little.
-        passive?.ingest(input: InputRecord(tNs: e.tNs, kind: e.kind,
-                                           code: e.code >= 0 ? e.code : nil))
+        let asRecord = InputRecord(tNs: e.tNs, kind: e.kind,
+                                   code: e.code >= 0 ? e.code : nil)
+        passive?.ingest(input: asRecord)
+        // Same reason, and it is what makes a typing recording replayable at
+        // all: the gate is the only thing that stops typing firing Tunk.
+        recorder?.ingest(input: asRecord)
         detectorLock.unlock()
     }
 
