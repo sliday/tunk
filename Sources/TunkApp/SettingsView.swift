@@ -726,17 +726,21 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 6) {
-                caveat("On the lap recordings it adds two false triggers in nine minutes, "
-                     + "against three for the shipped detector. The concern is what has not "
-                     + "been recorded: a lap damps so slowly that a lone knock is still "
-                     + "ringing 100 to 220 ms later at about half its strength, which is "
-                     + "exactly where this looks for a second tap. Whether that fires in "
-                     + "practice is unmeasured — the recordings hold only two knocks with "
-                     + "no deliberate tap either side. Three separate guards have been "
-                     + "built to close it and all three failed.")
-                caveat("It takes the second tap from a crest at half the usual bar. Two of the "
-                     + "five false triggers on the lap recordings it was tuned on arrive that "
-                     + "way, and no test of amplitude can tell them from a real gesture.")
+                caveat("Its false triggers on the lap recordings are not measured, and the "
+                     + "numbers that look like a measurement are not one. The two it adds "
+                     + "were traced back to the raw signal and are both real taps you made: "
+                     + "one struck 172 ms before the cue beep, one where the label pairs the "
+                     + "first and third strikes across 434 ms and skips the one between. The "
+                     + "shipped detector's three sit on labels of the same kind. Neither "
+                     + "count means what it appears to.")
+                caveat("What is genuinely untested is a lone knock. A lap damps so slowly "
+                     + "that a single contact is still ringing 100 to 220 ms later at about "
+                     + "half its strength, which is exactly where this looks for a second "
+                     + "tap — and it takes that second tap at half the usual bar. Nobody has "
+                     + "recorded this laptop being knocked on a lap without a deliberate tap, "
+                     + "so the rate is unknown. Five guards have been built to close it and "
+                     + "all five failed, because rejecting one crest just promotes the next "
+                     + "one 15 ms away.")
                 caveat("It leans harder on the gate that stops your typing from firing Tunk. "
                      + "Across 11.7 minutes of typing recordings, with the gate's 180 ms "
                      + "window set to zero — its other 25 ms of suppression cannot be "
