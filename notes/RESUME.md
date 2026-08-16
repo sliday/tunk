@@ -345,8 +345,36 @@ condition is `envelope <= threshold × releaseFraction`, so a higher bar means a
 higher release level means the detector re-arms *sooner*. The adaptive floor's
 only measurable effect near a gesture is on hysteresis, not admission.
 
+The sweep confirms it through the graded scorer rather than the probe alone:
+across `noiseFloorHoldMs` 30→430, `noiseRiseTauSeconds` 1.8→8 and
+`noiseSnrMultiple` 1→3, lap detection stays at **59/80 exactly** and pooled at
+101/123 — the shipped value, every row.
+
 `rejected/noise-floor-hold`. The four parameters are now sweepable, which they
 were not before.
+
+### What it did establish: family A, named and sized
+
+The same probe measured every lap gesture whose labelled second tap peaks under
+the bar. **On train that is 13 gestures, 12 of them among the 21 missed** — not
+the 6 quoted earlier from the held-out failures. The builder flags the difference
+itself: its window is peak envelope within ±40 ms of the label, looser than
+whatever produced the 6. The definitions differ; the conclusion does not.
+
+Their ratio to the 0.032 g bar, every one failing a threshold that rose
+**0.00000 g** between the first onset and the second tap:
+
+| ratio | gestures |
+|---|---|
+| 0.682 | `3fee5b` g18 |
+| 0.845 | `3fee5b` g14, g15 |
+| 0.866-0.935 | `ad3fd3` g1, `a4a257` g6, g2, g3, g14 |
+| 0.958-0.982 | `ad3fd3` g9, `a4a257` g4, `13e15a` g19, `3fee5b` g17, `ad3fd3` g8 |
+
+**Eight of the thirteen are within 8.5 % of the bar.** That is tantalising and it
+is exactly the trap: closing 8.5 % of amplitude is what nine rejected variants
+tried, and a lobe sits in the same band. Desk 0/23 and soft 0/20 have no
+sub-threshold second taps at all — this is a lap phenomenon entirely.
 
 ## The amplitude axis is closed, with the last variant graded
 
