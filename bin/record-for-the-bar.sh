@@ -13,7 +13,7 @@
 # Headphones on. The tool speaks and beeps, and through speakers both of those
 # shake the chassis into the data.
 #
-# Around 28 minutes of recording plus repositioning. Ctrl-C flushes the current
+# Around 39 minutes of recording plus repositioning. Ctrl-C flushes the current
 # session, writes it valid, and STOPS THE SCRIPT: capture exits 130 and `set -e`
 # halts here. It used to exit 0, so one Ctrl-C let the shell run every remaining
 # phase and record an empty room as the next surface.
@@ -42,9 +42,11 @@ if [ "${1:-}" = "--dry-run" ]; then
     for s in desk soft lap; do
         echo "  $s: typing 300 s, then confound_music and confound_handling at 90 s each"
     done
+    echo "  lap: 200 s each of confound_handling, confound_mug, confound_lid"
+    echo "       (SINGLE contacts only — the corpus has no lap confound data at all)"
     echo "  lap: an extra 60-gesture tap deck"
     echo
-    echo "  Total: about 28 minutes of recording."
+    echo "  Total: about 39 minutes of recording."
     exit 0
 fi
 
@@ -67,6 +69,19 @@ for surface in desk soft lap; do
              --confound-sec 90 --out "$OUT" --split "$SPLIT" \
              --notes "held-out confounds; handling prices the lap false triggers"
 done
+
+# The corpus holds ZERO lap confound data: not one second of a laptop on a lap
+# being knocked, bumped or shifted while nobody is deliberately tapping it. Two
+# independent critics converged on that gap when grading the polarization
+# mechanism (git show promising/m26-polarization), because it is exactly the
+# population that mechanism acts on. Without it, a lap detection score has no
+# false-trigger denominator at all.
+#
+# Single contacts only. Every deliberate double-tap you make here poisons it.
+pause "=== lap confounds : SINGLE contacts only, no double taps at all ==="
+$CAPTURE guide --surface lap --only confound_handling,confound_mug,confound_lid \
+         --confound-sec 200 --out "$OUT" --split "$SPLIT" \
+         --notes "isolated lap contacts, must-not-fire; prices the pair-rescue false triggers"
 
 # The phase before this one had the operator lifting the machine, sliding it
 # about, and unplugging cables. Where it ended up is anyone's guess, and this

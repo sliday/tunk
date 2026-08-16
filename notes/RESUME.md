@@ -26,6 +26,60 @@ fire on a pair beginning 81-93 ms before the labelled first tap; demand a credit
 within 40 ms of the label and it is 15/20. The resonator also ships OFF, because
 train lap false triggers double from 3 to 6 with it on. See below.
 
+## A mechanism reached the detection bar on held-out — and does not ship
+
+`promising/m26-polarization`. The first time in 26 rounds that lap has met the
+PRD's detection bar out of sample, verified by a critic who rebuilt from source:
+
+| | desk | soft | lap | FP | lap p95 |
+|---|---|---|---|---|---|
+| shipped baseline | 20/20 | 20/20 | 16/20 | 0 | 205.1 ms |
+| **M26** | 20/20 | 20/20 | **20/20** | **0** | **203.9 ms** |
+
+**What 25 rounds missed: the sensor has three axes and every stage collapsed
+them to a vector magnitude immediately.** A ring lobe is one chassis mode
+decaying, so its 3-axis covariance is nearly rank one; a fresh contact excites
+several modes at once. Over the 10 ms after a crest, `rect = 1 - λ₂/λ₁` reads
+p50 **0.9955 for lap lobes** and **0.9310 for lap strikes**, separating them at
+AUC **0.978 / 0.967 / 0.917** on the three clean train lap sessions — against
+**0.614** for the entire envelope-shape family. On `13e15a`, whose labels are
+already known defective, it scores 0.552.
+
+The mechanism buffers every crest reaching half the live threshold, and at the
+group deadline — the one that already exists, so latency is untouched — rescues a
+one-member group by taking the least single-mode crest in the join band, subject
+to a coherence veto against the anchor's axis.
+
+### Why it does not ship
+
+Two critics stopped it, on grounds the corpus cannot answer:
+
+- **Lone-knock ring storm.** Give a knock a lap-like ring-down and every isolated
+  knock becomes a double-tap: decay 25 ms fires 0, **28 ms fires 25, 30 ms fires
+  49, 35-80 ms fires 50 of 50** lone knocks in 60 s, at every amplitude and every
+  spacing out to 3 s. The shipped detector fires 0. The coherence veto cannot
+  help — a lobe is perfectly aligned with the knock that made it.
+- **Worse, and needing no ring at all.** A hard contact at 3× the bar followed
+  110-200 ms later by a *separate* weak contact at 0.6× fires M26 on 30 of 30
+  events. That is the halved candidate bar, not the lobe geometry.
+- The guard that stops the storm breaks the held-out pass.
+- Applied evenly, the strict-at-40 ms column reads desk 20/20, soft 20/20, lap
+  **15/20** against a baseline of 14/20. By contract M26 buys four gestures; by
+  strict credit agreement it buys **one**.
+
+### The one recording that would settle it
+
+Both critics converged on this independently: **the corpus holds zero lap
+confound data.** Not one second of a laptop on a lap being knocked, bumped or
+shifted while nobody is deliberately tapping it — which is exactly the population
+M26 acts on. Until it exists, held-out lap 20/20 is a detection result with no
+false-trigger denominator.
+
+`record-for-the-bar.sh` now captures it: 200 s each of `confound_handling`,
+`confound_mug` and `confound_lid` on the lap, single contacts only. That took the
+script from 28 to 39 minutes and it is the difference between a mechanism that
+looks like it passes and one that is known to.
+
 ## The PRD's critics have ruled on lap reachability
 
 The PRD requires a **critic**, not the builder, to rule a target unreachable. I
