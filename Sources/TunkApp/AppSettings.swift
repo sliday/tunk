@@ -46,8 +46,16 @@ final class AppSettings: ObservableObject {
     @Published var config: DetectorConfig {
         didSet {
             guard config != oldValue else { return }
+            // PERSIST the stored value, PUBLISH the derived one. Posting `config`
+            // here stripped the resonator's threshold on every ordinary write -
+            // one slider drag, `endCalibration`, or a reset - while leaving its
+            // front end running. Measured: 0.011 in force, then 0.032 after a
+            // single slider write, with `experimentalResonator` still true. That
+            // is 2.9x the bar a narrow-band chain needs, so detection collapses,
+            // and it healed on relaunch because `init` and `start()` both read
+            // `effectiveConfig` - the classic irreproducible report.
             persist(config, key: Key.config)
-            onConfigChange?(config)
+            onConfigChange?(effectiveConfig)
         }
     }
 

@@ -770,8 +770,14 @@ extension Diagnostics {
     /// Without it two recordings made minutes apart by different detectors are
     /// indistinguishable, and the experimental switch is one checkbox away.
     static func acceptanceToolVersion(settings: AppSettings) -> String {
-        "tunk acceptance 0.1.0 (detector="
-            + (settings.experimentalLapPairing ? "lap_pairing_experiment" : "default") + ")"
+        // Both switches, or a session records that it was made by the default
+        // detector while running a different front end - a self-contradicting
+        // artifact in a corpus whose whole value is that it is trustworthy.
+        var parts: [String] = []
+        if settings.experimentalResonator { parts.append("resonator") }
+        if settings.experimentalLapPairing { parts.append("lap_pairing_experiment") }
+        return "tunk acceptance 0.1.0 (detector="
+            + (parts.isEmpty ? "default" : parts.joined(separator: "+")) + ")"
     }
 
     /// Everything a critic needs to replay this session under the same detector
@@ -821,7 +827,14 @@ extension Diagnostics {
             lock.unlock()
         }
         engine.setEnabled(true)
-        Thread.sleep(forTimeInterval: 1.5)
+        // `spin`, not `Thread.sleep`. NSEvent global monitors deliver only through
+        // the main run loop, and InputActivityMonitor is what feeds the keystroke
+        // gate. Sleeping here measured a detector with NO GATE AT ALL - phase 2's
+        // whole purpose is typing false triggers, and un-gated this corpus fires
+        // at 188 per 20 min against a shipped 0. It also left input.jsonl empty,
+        // so every recorded typing session was rejected by `verify`, and starved
+        // the watchdog for the length of the run.
+        spin(for: 1.5)
         guard case .running = engine.status else {
             line("not armed: \(engine.status). Grant Input Monitoring to this binary.")
             exit(2)
@@ -843,7 +856,7 @@ extension Diagnostics {
             p.arguments = ["-r", "220", s]
             guard (try? p.run()) != nil else { speechGaveUp = true; return }
             let deadline = Date().addingTimeInterval(8)
-            while p.isRunning, Date() < deadline { usleep(20_000) }
+            while p.isRunning, Date() < deadline { spin(for: 0.02) }
             if p.isRunning {
                 p.terminate()
                 speechGaveUp = true
@@ -1011,7 +1024,7 @@ extension Diagnostics {
                               + "Stop, fix audio, and re-record.", delay))
                 }
             }
-            Thread.sleep(forTimeInterval: 2.6)
+            spin(for: 2.6)
             lock.lock(); let after = fired.count; lock.unlock()
             if after > before { hits += 1 }
         }
@@ -1048,7 +1061,7 @@ extension Diagnostics {
             // Sleep only as long as remains, or a short run counts down past
             // zero and prints "-7 s left".
             let remaining = typingSeconds - Date().timeIntervalSince(start)
-            Thread.sleep(forTimeInterval: min(10, max(0.1, remaining)))
+            spin(for: min(10, max(0.1, remaining)))
             lock.lock(); let n = fired.count; lock.unlock()
             let left = max(0, Int(typingSeconds - Date().timeIntervalSince(start)))
             line("  \(left) s left, false triggers so far: \(n)")

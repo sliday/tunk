@@ -84,6 +84,50 @@ typing is **62** pooled, not 110; and it disputes the forensics reading of
 run 593-1760 ms and are never negative, so it is a tap-amplitude impact in eight
 seconds of dead air, **unexplained** rather than pre-cue.
 
+## The app subsystem was audited, and the acceptance test was broken
+
+`TunkApp` had never had a dedicated critic, and most of it was written fast in
+this session. One was commissioned. It found two demonstrated defects.
+
+**1. `--acceptance` never ran an event loop, so the keystroke gate was dead for
+the whole test.** It drove itself with `Thread.sleep`, and `NSEvent` global
+monitors deliver only through the main run loop. Demonstrated: sleeping, the
+monitor saw **0 of 5** events; under `NSApp.run()` it saw all of them.
+
+So phase 2 — whose entire purpose is typing false triggers, the PRD's make-or-break
+metric — was measuring a detector **with no gate at all**, the regime this corpus
+prices at 188 per 20 min against a shipped 0. It also left `input.jsonl` empty, so
+every `--record` typing session would have been rejected by `verify`; starved the
+watchdog for fifteen minutes; and made the `input_tap: active` mark false.
+
+Fixed: every wait in that path now calls `spin(for:)`, a helper that already
+existed in the same file with a comment saying exactly why — *"`Thread.sleep`
+would measure an app that is not doing its job."* The acceptance test simply never
+used it.
+
+**2. Any ordinary config write silently stripped the resonator's threshold while
+leaving its front end running** — a defect I introduced this session.
+`AppSettings.config.didSet` posted the raw config rather than the derived one.
+Demonstrated: 0.011 in force, then **0.032 after a single slider drag**, with the
+resonator still on. That is 2.9× the bar a narrow-band chain needs, so detection
+collapses — and it healed on relaunch, because `init` and `start()` both read
+`effectiveConfig`. The classic irreproducible bug report. Fixed by persisting the
+stored value and publishing the derived one.
+
+**3.** A recording made with the resonator on claimed `detector=default` in its
+meta. Fixed; both switches are named now.
+
+**Still open, argued but not demonstrated:** the watchdog's reacquire mutates
+`@Published` state and AppKit monitors off the main thread (`Engine.swift:854`),
+against a rule the same file documents at line 228; and calibration can wedge if
+`.onDisappear` does not fire for the sheet, leaving `configBeforeCalibration` set
+so every slider write is diverted into a saved copy with no way back.
+
+The critic's verdict: it would ship the app to a non-technical owner with the
+switches off — the shipped path is sound — **but not the acceptance test**, which
+was grading the product's make-or-break metric against a configuration the product
+never runs.
+
 ## Do this first
 
 Everything that can be measured without your hands has been. Two bars need you.
