@@ -132,7 +132,41 @@ Two critics stopped it, on grounds the corpus cannot answer:
   **15/20** against a baseline of 14/20. By contract M26 buys four gestures; by
   strict credit agreement it buys **one**.
 
-### The lobe storm is dead; the residual is a physics limit
+### CORRECTION: the synthetic fixtures under-stated real lap by 14x
+
+**The section below is wrong where it claims margin, and is kept for the record.**
+Everything in it was measured on synthetic fixtures — one damped sinusoid on three
+axes — and its own builder warned that "a real lobe at 100 ms may be a larger
+fraction of its parent than 0.131".
+
+Measured since, on `data/raw`, driving the real detector and validated by
+reproducing all 242 published onset pairs exactly. The ratio of the envelope
+100-220 ms after a real **isolated** strike to that strike's own peak — the exact
+quantity the 0.30 floor tests:
+
+| surface | n | p50 | at or above 0.30 |
+|---|---|---|---|
+| desk | 24 | 0.153 | 0 of 24 |
+| soft | 20 | 0.363 | 13 of 20 |
+| **lap** | 83 | **0.488** | **81 of 83** |
+
+Synthetic storm lobes sat at 0.031-0.131. **Real lap sits 14× higher.** Restricted
+to crests that also clear the candidate bar: lap p50 0.437, 49 of 83 above the
+floor.
+
+Ring-down time constants, same method: **desk 28 ms, soft 105 ms, lap 231 ms**,
+against a storm knee at 25-28 ms. The storm regime is not merely reachable on a
+lap — it is what a lap is.
+
+Raising the floor cannot rescue it: real lap second taps have a p25 of 0.43, so
+any floor that closes the storm sits inside the genuine population.
+
+The polarization pair — coherence veto and rectilinearity ranking — is the only
+defence left, and whether it holds on real data has never been measured. Note the
+veto's direction before reading that result: it *requires* alignment, and a ring
+lobe is maximally aligned with the strike that produced it.
+
+### The lobe storm is dead on synthetic fixtures; the residual is a physics limit
 
 `promising/m26-anchor-floor`. Both storm cases shared a signature the design
 could not see: the rescued crest is a tiny fraction of the anchor, because the
