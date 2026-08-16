@@ -318,6 +318,42 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## A band I proposed myself, and it was a fit
+
+Off the back of the note above I proposed a band that would trade the three loose
+credits for both false triggers. **The arithmetic I proposed it with was wrong.**
+
+A band does not delete a rescue — it filters *candidates*, and the ranker then
+promotes the next crest from the buffer, so the rescue survives with a different
+crest. `pairRescueRectMin` 0.50 with the ceiling open leaves **all 19 rescues
+intact** and lap FP at 5. Both my reasoning and `rejected/rect-band`'s worked from
+the winning crest's rect alone, which does not hold once a replacement exists.
+
+There is a real window underneath: floor 0.8535-0.8685 with ceiling 0.9740 gives
+train lap 72 contract / 65 strict at FP 3, against the shipped 59 at FP 3 — 13
+more detections at equal false triggers, in a window **0.015 wide**. A critic
+swept both axes on held-out:
+
+| floor | held-out lap | train lap FP |
+|---|---|---|
+| 0.00 – 0.810 | **20/20** | 4-5 |
+| **0.8535 – 0.8685** | 19/20 | **3** ← train optimum |
+| 0.88 – 0.90 | 18/20 | — |
+| 0.9749+ | 16/20 | — |
+
+The train optimum sits exactly where held-out has already lost a gesture. It buys
+a train false-trigger reduction by paying a held-out detection. Confirmed fit.
+`rejected/rect-band-strict`.
+
+### The point that outlives this round
+
+**Held-out cannot grade false triggers at all.** Held-out lap is 1.5 minutes with
+zero typing and zero confound sessions. Train lap runs 3 false triggers in 9.2
+minutes — 6.5 per 20 min — so over 1.5 minutes the expected count is about 0.5.
+"0 held-out lap false triggers" is consistent with *exactly the train rate*. It is
+not evidence of zero; it is evidence of insufficient exposure, and every
+false-trigger claim made against that split in this project inherits the limit.
+
 ## The rect axis is closed in both directions
 
 `rejected/rect-ceiling` closed the ceiling. M26's two train lap false triggers sit
