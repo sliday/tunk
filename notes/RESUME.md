@@ -318,6 +318,28 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The one untried combination is dominated
+
+M26 and the resonator each reach lap out of sample by different routes and had
+never been run together. Now they have been, on train:
+
+| config | desk | soft | lap | lap FP |
+|---|---|---|---|---|
+| shipped default | 22/23 | 20/20 | 59/80 | 3 |
+| resonator only | 22/23 | 20/20 | 73/80 | 6 |
+| **M26 only** | 22/23 | 20/20 | **76/80** | **5** |
+| M26 + resonator | 22/23 | 20/20 | 76/80 | 6 |
+
+Zero detection gain over M26 alone, one more false trigger. Strictly dominated,
+so no held-out grade was spent on it — that split is the only unbiased evidence
+here and it is not spent on options that already lose in sample.
+
+In hindsight the shape is obvious: both mechanisms recover the *same* lap
+gestures by different routes, so the gains do not add while the false-trigger
+costs do. The resonator lowers the admission threshold; M26 halves it again for
+the second tap. Stacking them widens one door twice.
+`rejected/m26-plus-resonator`.
+
 ## The PRD's critics have ruled on lap reachability
 
 The PRD requires a **critic**, not the builder, to rule a target unreachable. I
