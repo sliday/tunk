@@ -318,6 +318,36 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## Prominence: closed as a gate, decisive as a quality measure
+
+The labeller refuses a bare local maximum as a tap (`prominenceFraction` 0.35 in
+`Onsets.swift`); M26's crest buffer has no such test, and on a 231 ms lap
+ring-down the pairing band is full of maxima riding a decay. Measured with a probe
+that re-derives **246 of 246** published `tap_onset` labels bit-exactly.
+
+**It does not separate.** At the labeller's own 0.35 the gate drops both false
+triggers *and 7 of 17 credits*. Every threshold from 0.05 to 0.35 gives the
+identical cut, because both false triggers sit inside the low cluster (0.000 and
+0.029) beside 7 credits at ≤ 0.019. It could not work anyway: 6 of the 9
+low-prominence crests have a taller neighbour 11-17 ms away and still inside the
+band, so filtering one promotes a louder one at the same instant — the
+substitution trap again.
+
+**The byproduct is the real result.** Every one of the 80 labelled lap second taps
+scores prominence ≥ **0.519** (p10 0.792, median 0.942). **Zero below 0.5.**
+Against that, **9 of M26's 19 rescue crests score ≤ 0.029** — more than half its
+rescues pair a crest the labeller would never accept as a tap.
+
+And the signal that does exist is **tight-versus-loose**, not credit-versus-false:
+8 of 9 tight credits score ≥ 0.45; the low cluster holds 5 loose credits, both
+false triggers, and 3 tight ones. M26's genuine detections pair real-tap-like
+crests; its questionable ones pair decay bumps. `rejected/crest-prominence`.
+
+(The apparent prior did not apply: `rejected/rank-retrospective-pairing` swept
+`crestProminenceFraction`, a causal backward-only *segmenter* that decides where
+one crest ends and the next begins. The labeller's is a symmetric *rejection* test
+against every taller peak in the window. Different quantity.)
+
 ## A band I proposed myself, and it was a fit
 
 Off the back of the note above I proposed a band that would trade the three loose
