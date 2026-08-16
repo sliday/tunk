@@ -1,4 +1,5 @@
 import Foundation
+import TunkCore
 
 // tunk-score: the referee. It replays recorded sessions through the detector and
 // grades them against the pass line in FORMAT.md. See CLI.swift for the usage text.
@@ -9,6 +10,14 @@ let boolFlags: Set<String> = [
 ]
 
 func main() -> Int32 {
+    // One stderr line per retrospective-pairing rescue, so the crest-to-anchor
+    // ratio behind `pairRescueAnchorFraction` can be read off a real run instead
+    // of argued about. Off unless asked for, and it never touches the report.
+    if ProcessInfo.processInfo.environment["TUNK_RESCUE_TRACE"] != nil {
+        PairRescueTrace.sink = { record in
+            FileHandle.standardError.write(Data((record.line + "\n").utf8))
+        }
+    }
     var argv = Array(CommandLine.arguments.dropFirst())
     guard let command = argv.first, !command.hasPrefix("--") else {
         if argv.contains("--version") { print("tunk-score \(TunkScoreVersion.string)"); return 0 }

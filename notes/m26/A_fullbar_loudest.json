@@ -1,0 +1,6 @@
+{
+  "pairRescueEnabled": 1,
+  "pairRescueCandidateFraction": 1.0,
+  "pairRescueCosMin": 0.0,
+  "pairRescueRankByRect": 0
+}

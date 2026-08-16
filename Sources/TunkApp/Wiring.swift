@@ -12,8 +12,13 @@ enum DetectorFactory {
     ///   derive its firing counts from `config.tapCountToFire`, which is the
     ///   *lowest* armed count. With single and double both bound that would
     ///   arm single only and double taps would never fire.
-    static func make(config: DetectorConfig, armedTapCounts: Set<Int>) -> TapDetecting {
-        TapDetector(config: config, armedTapCounts: armedTapCounts)
+    /// - Parameter tuning: the DSP constants. Passed rather than defaulted here
+    ///   because `TapDetector.tuning` is a `let` — switching experimental lap
+    ///   pairing on or off means building a new detector, and this is the one
+    ///   place that builds one.
+    static func make(config: DetectorConfig, armedTapCounts: Set<Int>,
+                     tuning: DSPTuning = .default) -> TapDetecting {
+        TapDetector(config: config, tuning: tuning, armedTapCounts: armedTapCounts)
     }
 }
 

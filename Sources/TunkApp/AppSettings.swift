@@ -23,6 +23,7 @@ final class AppSettings: ObservableObject {
         static func shortcutDraft(_ count: Int) -> String { "shortcutDraft.\(count)" }
         static func shortcutDraftListed(_ count: Int) -> String { "shortcutDraftListed.\(count)" }
         static let enabled = "enabled"
+        static let lapPairing = "experimentalLapPairing"
     }
 
     /// A named suite, not the bundle's own domain, so the bare SwiftPM binary
@@ -36,6 +37,10 @@ final class AppSettings: ObservableObject {
     var onConfigChange: ((DetectorConfig) -> Void)?
     var onEnabledChange: ((Bool) -> Void)?
     var onBindingsChange: ((ActionBindings) -> Void)?
+    /// Called when `tuning` changes. Separate from `onConfigChange` because a
+    /// `DSPTuning` is fixed for a detector's lifetime — the engine answers this
+    /// one by building a new detector, not by writing into the live one.
+    var onTuningChange: ((DSPTuning) -> Void)?
 
     @Published var config: DetectorConfig {
         didSet {
@@ -139,6 +144,23 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// Experimental lap pairing (M26 plus its anchor floor). Ships off, and the
+    /// only thing that turns it on is the owner reading the panel and deciding
+    /// to be the experiment. Persisted like every other setting.
+    ///
+    /// It is a `DSPTuning`, not a `DetectorConfig`: nothing about it is
+    /// per-gesture, and the detector reads its tuning once at construction.
+    @Published var experimentalLapPairing: Bool {
+        didSet {
+            guard experimentalLapPairing != oldValue else { return }
+            defaults.set(experimentalLapPairing, forKey: Key.lapPairing)
+            onTuningChange?(tuning)
+        }
+    }
+
+    /// The tuning the detector should be running right now.
+    var tuning: DSPTuning { experimentalLapPairing ? .lapPairingExperiment : .default }
+
     @Published private(set) var launchAtLoginError: String?
 
     /// What the migration changed on this launch, for the panel to show. Empty
@@ -175,6 +197,9 @@ final class AppSettings: ObservableObject {
                                              legacyHotkeyText: d.string(forKey: Key.legacyHotkey))
         bindings = loaded
         enabled = d.object(forKey: Key.enabled) as? Bool ?? true
+        // Absent means off. A fresh install, and any install that predates the
+        // switch, runs the shipped detector.
+        experimentalLapPairing = d.object(forKey: Key.lapPairing) as? Bool ?? false
 
         // Seed each row's drafts from what was loaded, falling back to what was
         // stored, so the first switch between kinds offers the user's own value.
