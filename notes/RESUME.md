@@ -318,6 +318,44 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## Why every gate on M26 fails, established by running one
+
+The prominence round concluded "closed" from a sorted list and said so plainly:
+*"I did not run a gate. The sorted list is therefore only suggestive."* The round
+before it had proved that sorted-list reasoning about this mechanism is
+unreliable. So it was built and run, diffing the rescue trace per rescue between
+gate off and each value:
+
+| gate | refused | re-pointed |
+|---|---|---|
+| 0.05 – 0.35 | **0** | 2-3 |
+| 0.45 – 0.65 | 1 | 3 |
+| 0.70 – 0.75 | 4 | 3 |
+| 0.80 | 12 | 2 |
+| 0.90 | 17 | 1 |
+
+Below 0.45 the bar refuses **nothing** — all 19 rescues survive, 2-3 simply
+holding a different crest. The one rescue that is a genuine false trigger
+(prominence 0.0085) **re-points to a crest scoring 0.83 fifteen milliseconds away**
+and survives every gate to 0.75. The first outright refusal, at 0.45, takes a
+credit. False triggers do not fall until 0.90, where lap detection has collapsed
+to 61/80. `rejected/prominence-gate`.
+
+### The structural finding
+
+Now measured twice independently — rect in `rejected/rect-band-strict`, prominence
+here:
+
+**The crest buffer is dense enough that any per-crest statistic re-points rather
+than refuses.** There is almost always another candidate within ~15 ms that passes
+whatever bar was just imposed. So M26's rescue is close to *unconditional*: given
+a singleton group, it will find something to pair.
+
+That single property explains the whole mechanism. It is why M26 reaches lap 20/20
+out of sample. It is why it adds false triggers. And it is why no gate on a
+per-crest quantity has helped, or can — **anything that fixes M26 has to refuse the
+rescue, not the crest.**
+
 ## Prominence: closed as a gate, decisive as a quality measure
 
 The labeller refuses a bare local maximum as a tap (`prominenceFraction` 0.35 in
