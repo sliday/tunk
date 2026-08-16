@@ -75,19 +75,37 @@ candidate bar was anchored to the live threshold and nothing else. A 0.5 g knock
 decaying with τ = 35 ms is at 5.7 % of its own peak by 100 ms — still 0.89× the
 threshold, while being a twentieth of the contact that made it.
 
-Measured before building, the two populations do not overlap by a factor of
-three:
+Measured before building, the populations do not overlap:
 
 | | n | min | p50 | max |
 |---|---|---|---|---|
 | real rescues (train) | 19 | **0.382** | 0.590 | 1.328 |
-| storm lobes | 324 | 0.031 | 0.056 | **0.131** |
+| storm case 1, ring lobes | 324 | 0.031 | 0.056 | 0.131 |
+| storm case 2, weak second contact | 150 | 0.175 | 0.202 | **0.235** |
 
-A floor at 0.30 sits in the empty gap. The lone-knock storm goes to **zero at
-every decay from 25 to 80 ms**, every amplitude, every spacing — and the held-out
-pass is preserved exactly, because the guard is a **no-op on every byte of real
-data the project owns**: train and held-out are identical at floor 0 and 0.30, in
-every surface and every column.
+The empty band is **0.235 to 0.382** — a margin of 0.147, not the "factor of
+three" an earlier version of this note claimed by quoting case 1's maximum and
+ignoring case 2's. The floor ships at 0.30, and the plateau's measured edges are
+0.24 (below it case 2 returns) and 0.38 (above it real rescues start dying).
+
+The lone-knock storm goes to **zero at every decay from 25 to 80 ms**, every
+amplitude, every spacing — and the held-out pass is preserved exactly, because
+the guard is a **no-op on every byte of real data the project owns**: train and
+held-out are identical at floor 0 and 0.30, in every surface and every column.
+
+Three caveats the builder raised against its own result, all of which stand:
+
+- **The storm fixtures are synthetic**, one damped sinusoid scaled onto three
+  axes. That is the *best* case for an amplitude test. A real chassis ring-down
+  is not a clean exponential, and a real lobe at 100 ms may be a larger fraction
+  of its parent than 0.131.
+- **The train side is 19 rescues from 4 sessions**, and the two highest ratios
+  (1.10, 1.33) come from `13e15a`, whose labels the project already calls
+  defective. Drop it and the sample is 16. A 0.147 margin on 19 points is not a
+  lot of statistics.
+- **The floor cannot touch M26's own false triggers.** Two of the five train lap
+  false triggers *are* rescues, at ratios 0.510 and 0.609 — the middle of the
+  real-gesture population. No amplitude test reaches them.
 
 **The residual is not a tuning failure.** A safety critic swept the axis the
 builder had fixed and found that two *comparable* contacts 150 ms apart fire

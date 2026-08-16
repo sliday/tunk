@@ -7122,7 +7122,7 @@
    "label": "the lobe storm dies; the residual turns out to be a physics limit",
    "timestamp": "2026-08-16T01:29:03Z",
    "status": "scored",
-   "headline": "An anchor-relative amplitude floor kills M26's lone-knock ring storm at every decay from 25 to 80 ms, and keeps the held-out pass exactly (desk 20/20, soft 20/20, lap 20/20, 0 FP, p95 203.9 ms). Real rescues sit at 0.382-1.328 of their anchor; storm lobes at 0.031-0.131. A factor of three, with nothing in between.",
+   "headline": "An anchor-relative amplitude floor kills M26's lone-knock ring storm at every decay from 25 to 80 ms, and keeps the held-out pass exactly (desk 20/20, soft 20/20, lap 20/20, 0 FP, p95 203.9 ms). Real rescues sit at 0.382-1.328 of their anchor; the two storm families at 0.031-0.131 and 0.175-0.235. The empty band is 0.235 to 0.382.",
    "biggest_gap": "The guard is a no-op on every byte of real data the project owns, so all evidence it works is synthetic - and a critic showed two COMPARABLE contacts 150 ms apart still fire, at ratios inside the real-gesture band. No amplitude statistic can exclude that, because two comparable contacts 100-220 ms apart is what a double-tap is. Three rounds running have now ended at the same missing 10 minutes: the corpus holds zero lap confound recordings.",
    "source": {
     "tool": "tunk-score 0.1.0",
