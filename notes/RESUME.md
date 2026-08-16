@@ -318,6 +318,45 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## "3 versus 5" was never a meaningful comparison
+
+The single stated objection blocking M26 was its false-trigger cost: lap 3 → 5 on
+train. Five gate rounds tried to remove those two. An agent then asked what they
+physically are, re-deriving from the raw signal rather than inheriting the earlier
+forensics.
+
+**Both of M26's added false triggers are real operator gestures.**
+
+- `ad3fd3`, onsets 11.8154 / 12.0106 s. Two strikes **165.2 ms apart** at 30.3×
+  and 24.1× the session median, in a session with *zero* transients above 8× from
+  0.5 to 11.8 s. The first peak lands **171.7 ms before the first beep** — the
+  operator tapped early, tapped again after the cue, and only the second pair was
+  labelled. The nearest label is 1760 ms away, the slowest reaction of the 20
+  (next slowest 1057 ms). On span, amplitude and valley depth the pair sits inside
+  the body of that session's 20 labelled groups.
+- `3fee5b`, onsets 78.6661 / 78.8513 s. Three strikes; label group 17 pairs the
+  first and third at a span of **434.1 ms** — the largest in the session, next
+  231.4 — skipping the 27.5× strike between them. 434 ms is past `maxInterTapNs`,
+  so the label is unfireable, and group 17 is **also M26's only miss in that
+  session**. One gesture charged twice.
+
+**The control is the important half.** The shipped default's 3 lap false triggers
+are all in `13e15a`, landing on labelled groups spanning 596.6 / 296.4 / 306.5 ms
+— all past the 220 ms ceiling, all *also* scored as misses. The baseline's three
+are double-charged in exactly the same way. Only one of them (16.26 s) is clearly
+a mislabel; for the other two the agent reports **cannot tell**, because the
+detector's pair spans 112-124 ms with a shallower valley than any labelled group
+in a clean session.
+
+**So the comparison is uninformative in both directions.** This does *not* show
+M26 is clean — it shows the train corpus cannot tell, and held-out carries 1.5
+minutes of lap with an expected false-trigger count near 0.5. M26's false-trigger
+risk is **unpriced**, which is what it always was; what has changed is that the
+specific number used to argue against it does not survive contact with the signal.
+
+This is also a fifth independent line of evidence on D-LABELS, reached from a
+direction none of the first four took.
+
 ## Why every gate on M26 fails, established by running one
 
 The prominence round concluded "closed" from a sorted list and said so plainly:
