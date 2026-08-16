@@ -318,6 +318,31 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The motion gate composes with M26, in a narrow window
+
+`rejected/fp-motion-gate` was measured against the resonator and never against
+M26. M26's cost is exactly 2 added lap false triggers, so it was worth asking.
+Train, M26 on, sweeping `motionGateG`:
+
+| gate | desk | soft | lap | lap FP |
+|---|---|---|---|---|
+| off | 22/23 | 20/20 | 76/80 | 5 |
+| ≤ 0.028 | 22/23 | **17-19/20** | 76/80 | 4 |
+| **0.030 – 0.035** | 22/23 | 20/20 | 76/80 | **4** |
+| ≥ 0.040 | 22/23 | 20/20 | 76/80 | 5 |
+
+It removes one lap false trigger at zero detection cost. **It is not proposed.**
+The window is about 0.009 wide, bounded below by soft gestures breaking and above
+by the gain vanishing, and the whole result is one event measured in sample —
+the exact shape critics rejected as noise in round 1 (`+1 gesture, p = 1.0`). No
+held-out grade was spent: held-out already reads 0 false triggers with M26, so
+there is nothing there for it to improve, and the split is not spent to confirm
+a single in-sample event.
+
+Worth knowing if M26 is ever revived after the lap-confound recording exists:
+`motionGateG` 0.032 is the centre of that window, and the gate composes rather
+than conflicting.
+
 ## The one untried combination is dominated
 
 M26 and the resonator each reach lap out of sample by different routes and had
