@@ -294,13 +294,15 @@ struct SettingsView: View {
             // worse than no readout.
             let inForce = engine.effectiveConfig
             let frontEnd = engine.liveTuning
-            if frontEnd.resonatorHz > 0 {
-                // Named because it is not the shipped chain. The harness prints
-                // the same warning on a run, and an owner who has switched a
-                // front end on should not have to infer it from a threshold.
-                Text("Front end: resonator "
-                   + String(format: "%.0f Hz Q %.1f", frontEnd.resonatorHz, frontEnd.resonatorQ)
-                   + " — not the shipped chain.")
+            // Anything running that is not the shipped detector gets named here,
+            // read from the LIVE detector rather than from the switches. The
+            // harness prints the same warning on a run; the app said nothing, so
+            // a switched-on experiment looked exactly like the default. It is
+            // also the only way to see that a switch reached the detector at all.
+            if !Self.nonDefaultParts(frontEnd).isEmpty {
+                Text("Running an experiment: "
+                   + Self.nonDefaultParts(frontEnd).joined(separator: ", ")
+                   + ". Not the shipped detector.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -813,6 +815,22 @@ struct SettingsView: View {
                      + "between twice and two and a half times as much.")
             }
         }
+    }
+
+    /// Everything about the live tuning that differs from the shipped one, in
+    /// plain words. Empty when the detector is the shipped one, which is the
+    /// case this must get right: a false alarm here would train an owner to
+    /// ignore the line.
+    static func nonDefaultParts(_ t: DSPTuning) -> [String] {
+        let d = DSPTuning.default
+        var parts: [String] = []
+        if t.resonatorHz != d.resonatorHz || t.resonatorQ != d.resonatorQ {
+            parts.append(String(format: "resonator %.0f Hz Q %.1f", t.resonatorHz, t.resonatorQ))
+        }
+        if t.pairRescueEnabled != d.pairRescueEnabled {
+            parts.append("lap pairing")
+        }
+        return parts
     }
 
     private func caveat(_ text: String) -> some View {

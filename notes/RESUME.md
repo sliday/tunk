@@ -72,6 +72,12 @@ The harness already prints a warning when a run uses a non-shipped front end. Th
 app says the same thing now, which an owner running an experiment is owed anyway,
 and which is the only way to see that a switch reached the detector at all.
 
+It covers **both** switches: the banner reads "Running an experiment: resonator
+40 Hz Q 2.0. Not the shipped detector.", and names lap pairing alongside it when
+that is on too. `ExperimentBannerTests` pins the truth table, including the case
+that matters most — the shipped default must trigger **no** banner, because a
+false alarm would teach an owner to ignore the line and then it protects nobody.
+
 Two corrections the same critic made to numbers in this note: baseline un-gated
 typing is **62** pooled, not 110; and it disputes the forensics reading of
 `ad3fd3` @ 12.210 s as "tapped before the cue" — reaction times in that session
