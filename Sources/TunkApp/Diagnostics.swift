@@ -936,6 +936,26 @@ extension Diagnostics {
         // place every onset against a cue that never sounded. This is the 16 s
         // audio-stall failure wearing a different hat, and the property that
         // detects it already existed and was never read.
+        // Same reasoning as the audio guard below, one step earlier. With secure
+        // input held by another process the window server delivers no keyboard
+        // events to any monitor, so input.jsonl comes out empty and
+        // `tunk-capture verify` rejects the typing session as unusable for
+        // false-positive scoring. A full run is 50 taps and five minutes of
+        // typing performed by hand; discovering that afterwards wastes all of
+        // it. Warn-and-continue is right without --record, because then nothing
+        // is being kept.
+        if recording != nil, SystemSecureInput().isSecureInputActive {
+            line("")
+            line("!! SECURE INPUT IS ON, so no keyboard event reaches any monitor.")
+            line("   input.jsonl would come out empty and verify would reject the")
+            line("   typing session as unusable for false-positive scoring — after")
+            line("   you had already typed for the full phase. Refusing to record.")
+            line("   Unlock the screen and quit whatever holds it (a focused password")
+            line("   field is the usual cause), then re-run. Drop --record to run")
+            line("   the test without keeping a recording.")
+            exit(2)
+        }
+
         if recording != nil, cue?.isAvailable != true {
             line("")
             line("!! NO USABLE AUDIO OUTPUT, so the beep cue cannot sound.")

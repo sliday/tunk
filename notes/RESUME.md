@@ -310,8 +310,23 @@ truth comes from `tunk-label` reading the beep marks independently, exactly as f
 every other session in the corpus. Without `--record` nothing is written and the
 output is byte-identical.
 
-It refuses to record if there is no usable audio output, because a beep nobody
-hears would anchor every label to a cue that never sounded.
+It refuses to record in two cases, both of which would otherwise waste the whole
+run and only reveal it afterwards:
+
+- **no usable audio output** — a beep nobody hears would anchor every label to a
+  cue that never sounded;
+- **secure event input held by another process** — the window server then
+  delivers no keystrokes to any monitor, so `input.jsonl` comes out empty and
+  `verify` rejects the typing session as unusable for false-positive scoring,
+  after you have already typed for the full five minutes.
+
+Both were verified by running them. Without `--record` neither guard applies,
+because nothing is being kept.
+
+**Check before you start:** the machine must be unlocked with nothing holding
+secure input. `ioreg -l -w 0 | grep kCGSSessionSecureInputPID` should print
+nothing. During this session it printed `397` (loginwindow, screen locked), which
+is also why 43 emit tests fail here.
 
 **So one 10-minute run on your lap produces a held-out typing session and a
 labelled lap deck as a side effect** — two of the three things the corpus is
