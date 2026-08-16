@@ -70,13 +70,38 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         panel.monitor.stop()
+        endAnyCalibration()
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
         panel.monitor.stop()
+        // Not `endAnyCalibration()`. Miniaturising is not abandoning: the sheet
+        // is still there when the window comes back, and the timer restarts in
+        // `windowDidDeminiaturize`. Only closing gives up the calibration.
     }
 
     func windowDidDeminiaturize(_ notification: Notification) {
         panel.monitor.start(engine: engine)
+    }
+
+    /// Give the config back if the window is closed while the calibration sheet
+    /// is up.
+    ///
+    /// `CalibrationView` tears down in `.onDisappear`, and this file's own rule
+    /// at the top of SettingsView says why that is not enough: `onDisappear`
+    /// never fires for a hosted view whose window is merely ordered out, and
+    /// "anything that must stop when the panel closes has to be stopped by the
+    /// thing that closed it".
+    ///
+    /// The consequence was not a leaked timer but a wedged app. `beginCalibration`
+    /// hands the live config to `configBeforeCalibration`, and while that is set
+    /// `Engine.apply(config:)` diverts EVERY write into the saved copy instead of
+    /// the detector. Close the window mid-calibration and no slider does anything
+    /// afterwards, with nothing on screen to explain it and no way back short of
+    /// quitting.
+    private func endAnyCalibration() {
+        guard panel.showCalibration else { return }
+        panel.showCalibration = false
+        engine.endCalibration(commit: nil)
     }
 }

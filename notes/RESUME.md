@@ -142,9 +142,23 @@ with the keystroke gate's monitors already removed and the action runner still
 reachable. Turning Tunk off did not turn it off. Fixed with one guard on
 `wantsRunning`.
 
-**Still open, argued but not demonstrated:** calibration can wedge if
-`.onDisappear` does not fire for the sheet, leaving `configBeforeCalibration` set
-so every slider write is diverted into a saved copy with no way back.
+**The last app finding is fixed too.** `CalibrationView` tore down in
+`.onDisappear`, and the top of `SettingsView.swift` already records why that is
+not enough — `onDisappear` never fires for a hosted view whose window is merely
+ordered out, so *"anything that must stop when the panel closes has to be stopped
+by the thing that closed it"*. `windowWillClose` stopped the monitor and nothing
+else.
+
+The consequence was not a leaked timer but a wedged app: `beginCalibration` hands
+the live config to `configBeforeCalibration`, and while that is set
+`Engine.apply(config:)` diverts **every** write into the saved copy instead of the
+detector. Close the window mid-calibration and no slider does anything afterwards,
+with nothing on screen to explain it and no way back short of quitting.
+
+`windowWillClose` now ends any calibration in flight. Miniaturising deliberately
+does not — the sheet is still there when the window returns, and the timer
+restarts. `endCalibration` guards on `configBeforeCalibration`, so the two
+teardown paths cannot double-fire.
 
 The critic's verdict: it would ship the app to a non-technical owner with the
 switches off — the shipped path is sound — **but not the acceptance test**, which
