@@ -318,6 +318,33 @@ false-trigger denominator.
 script from 28 to 39 minutes and it is the difference between a mechanism that
 looks like it passes and one that is known to.
 
+## The rect axis is closed in both directions
+
+`rejected/rect-ceiling` closed the ceiling. M26's two train lap false triggers sit
+at crest rect **0.9749 and 0.4104** — top and bottom of the range — with its 17
+credits centred at 0.895, so a *band* was the obvious untried shape. If one
+existed, M26's train lap false triggers would drop 5 → 3, equal to the shipped
+default.
+
+Measured from the rescue trace, 19/19 joined to the report JSON and cross-checked
+against `explain`. **The credits straddle both false triggers:**
+
+| | rect | |
+|---|---|---|
+| low blocker | **0.1369** | credited (`3fee5b` 71.084 s) |
+| | 0.4104 | **false trigger** |
+| 15 credits | 0.787 – 0.972 | credited |
+| | 0.9749 | **false trigger** |
+| high blockers | **0.9976, 0.9981** | credited |
+
+Any floor above 0.4104 kills the 0.1369 credit; any ceiling below 0.9749 kills
+both top credits. Not a fitting problem — an interleaving one, with no line to
+draw.
+
+Worth recording for whoever revisits it: all three blocking credits are **loose**,
+89-135 ms from their labels. Under a stricter crediting rule they would move and a
+band might open. Under the harness's own rule it does not. `rejected/rect-band`.
+
 ## The gesture does not inflate its own bar — measured, not assumed
 
 The noise tracker's four parameters had never been exposed to config, so they had
