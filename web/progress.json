@@ -7123,7 +7123,7 @@
    "timestamp": "2026-08-16T01:29:03Z",
    "status": "scored",
    "headline": "An anchor-relative amplitude floor kills M26's lone-knock ring storm at every decay from 25 to 80 ms, and keeps the held-out pass exactly (desk 20/20, soft 20/20, lap 20/20, 0 FP, p95 203.9 ms). Real rescues sit at 0.382-1.328 of their anchor; the two storm families at 0.031-0.131 and 0.175-0.235. The empty band is 0.235 to 0.382.",
-   "biggest_gap": "The guard is a no-op on every byte of real data the project owns, so all evidence it works is synthetic - and a critic showed two COMPARABLE contacts 150 ms apart still fire, at ratios inside the real-gesture band. No amplitude statistic can exclude that, because two comparable contacts 100-220 ms apart is what a double-tap is. Three rounds running have now ended at the same missing 10 minutes: the corpus holds zero lap confound recordings.",
+   "biggest_gap": "M26 multiplies the detector's EXPOSED typing false triggers by 2.2x on desk, 2.3x on soft and 3.75x on lap (63->137, 35->80, 12->45 with the input gate stripped), and the anchor floor removes almost none of it. Gated, all configs read 0 - but that zero rests entirely on a gate now handed three times as much to catch, and the PRD calls typing the primary failure mode. Separately, the corpus still holds zero lap confound recordings, so lap's false-trigger bar has no denominator either.",
    "source": {
     "tool": "tunk-score 0.1.0",
     "detector": "TunkCore.TapDetector",

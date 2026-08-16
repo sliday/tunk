@@ -115,6 +115,37 @@ apart is what a deliberate double-tap *is*. What M26 changes is the width of tha
 window: it needs the second contact only above half the bar rather than the full
 bar.
 
+### M26 triples the typing exposure, and the floor does not fix it
+
+The PRD calls this the make-or-break metric: "False triggers during typing are
+the primary failure mode. A build that hits every other target but misfires while
+typing has failed."
+
+Measured by stripping `input.jsonl` so the detector is exposed — the honest test
+of what is left if the gate ever drops an event or arrives late, since the gate
+is currently muting ~85 % of typing time:
+
+| config | desk | soft | lap |
+|---|---|---|---|
+| shipped baseline | 63 | 35 | 12 |
+| M26 | 145 | 81 | 45 |
+| M26 + anchor floor 0.30 | **137** | **80** | **45** |
+
+```
+./.build-tf/release/tunk-score run --data <ungated mirror> --config notes/m26/{baseline,F_m26,G_m26_anchor030}.json
+```
+
+**M26 multiplies the exposed typing false-trigger count by 2.2× on desk, 2.3× on
+soft and 3.75× on lap, and the anchor floor removes almost none of it** — 8 of 82
+added triggers on desk, 1 of 46 on soft, 0 of 33 on lap. The floor was built for
+lobes that are a twentieth of their anchor; typing transients are not that.
+
+With the gate on, all three configs read 0 false triggers in every typing session,
+so the shipped behaviour is unchanged. But that zero rests entirely on the gate,
+and M26 hands the gate three times as much to catch. That is a second, independent
+reason not to ship it, and unlike the lap-confound gap this one is measured on
+data the project already owns.
+
 ### The one recording that would settle it
 
 Both critics converged on this independently: **the corpus holds zero lap
