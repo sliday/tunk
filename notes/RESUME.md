@@ -67,6 +67,36 @@ Two critics stopped it, on grounds the corpus cannot answer:
   **15/20** against a baseline of 14/20. By contract M26 buys four gestures; by
   strict credit agreement it buys **one**.
 
+### The lobe storm is dead; the residual is a physics limit
+
+`promising/m26-anchor-floor`. Both storm cases shared a signature the design
+could not see: the rescued crest is a tiny fraction of the anchor, because the
+candidate bar was anchored to the live threshold and nothing else. A 0.5 g knock
+decaying with τ = 35 ms is at 5.7 % of its own peak by 100 ms — still 0.89× the
+threshold, while being a twentieth of the contact that made it.
+
+Measured before building, the two populations do not overlap by a factor of
+three:
+
+| | n | min | p50 | max |
+|---|---|---|---|---|
+| real rescues (train) | 19 | **0.382** | 0.590 | 1.328 |
+| storm lobes | 324 | 0.031 | 0.056 | **0.131** |
+
+A floor at 0.30 sits in the empty gap. The lone-knock storm goes to **zero at
+every decay from 25 to 80 ms**, every amplitude, every spacing — and the held-out
+pass is preserved exactly, because the guard is a **no-op on every byte of real
+data the project owns**: train and held-out are identical at floor 0 and 0.30, in
+every surface and every column.
+
+**The residual is not a tuning failure.** A safety critic swept the axis the
+builder had fixed and found that two *comparable* contacts 150 ms apart fire
+regardless, at ratios 0.42-0.56 — inside the real-gesture band. No amplitude
+statistic can exclude that class, because two comparable contacts 100-220 ms
+apart is what a deliberate double-tap *is*. What M26 changes is the width of that
+window: it needs the second contact only above half the bar rather than the full
+bar.
+
 ### The one recording that would settle it
 
 Both critics converged on this independently: **the corpus holds zero lap
