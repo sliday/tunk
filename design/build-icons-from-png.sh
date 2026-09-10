@@ -27,7 +27,7 @@ from PIL import Image
 
 src, dst, body, canvas = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
 im = Image.open(src).convert("RGBA")
-alpha = im.getchannel("A").point(lambda a: a if a >= 128 else 0)
+alpha = im.getchannel("A").point(lambda a: 0 if a < 128 else (255 if a >= 240 else a))
 im.putalpha(alpha)
 bbox = alpha.point(lambda a: 255 if a else 0).getbbox()
 if not bbox:
