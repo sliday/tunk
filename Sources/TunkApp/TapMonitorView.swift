@@ -149,8 +149,6 @@ struct TapMonitorView: View {
                     idleOverlay
                 }
             }
-            MonitorNumbers(model: store.numbers)
-                .opacity(armed ? 1 : 0.4)
             legend
         }
     }
@@ -162,7 +160,7 @@ struct TapMonitorView: View {
             VStack(spacing: 3) {
                 Text("Detection is off")
                     .font(.system(size: 12, weight: .medium))
-                Text("Turn it on above to watch onsets land.")
+                Text("Turn it on above to watch taps land.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -172,10 +170,10 @@ struct TapMonitorView: View {
 
     private var legend: some View {
         HStack(spacing: 12) {
-            swatch(Color.accentColor, "onset", dashed: false)
-            swatch(Color.secondary.opacity(0.6), "suppressed", dashed: false)
-            swatch(Color.orange.opacity(0.4), "gate window", dashed: false)
-            swatch(Color.accentColor.opacity(0.6), "threshold", dashed: true)
+            swatch(Color.accentColor, "tap", dashed: false)
+            swatch(Color.secondary.opacity(0.6), "ignored while typing", dashed: false)
+            swatch(Color.orange.opacity(0.4), "typing pause", dashed: false)
+            swatch(Color.accentColor.opacity(0.6), "trigger level", dashed: true)
             Spacer()
             Text("3.5 s · √g")
                 .font(.system(size: 10))
@@ -197,8 +195,10 @@ struct TapMonitorView: View {
     }
 }
 
-/// Everything here is in g, the unit the detector thresholds in.
-private struct MonitorNumbers: View {
+/// Everything here is in g, the unit the detector thresholds in. Drawn under
+/// Advanced, not next to the trace: these are the detector's own words, and
+/// the General page is held to plain ones.
+struct MonitorNumbersView: View {
     @ObservedObject var model: NumbersModel
 
     var body: some View {
@@ -221,7 +221,7 @@ private struct GatePill: View {
             Circle()
                 .fill(model.gateActive ? Color.orange : Color.green)
                 .frame(width: 6, height: 6)
-            Text(model.gateActive ? "SUPPRESSING" : "GATE OPEN")
+            Text(model.gateActive ? "PAUSED FOR TYPING" : "LISTENING")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(model.gateActive ? Color.orange : Color.secondary)
         }
@@ -242,7 +242,7 @@ private struct TraceView: View {
         Canvas(rendersAsynchronously: false) { context, size in
             draw(context: &context, size: size)
         }
-        .frame(height: 118)
+        .frame(height: 92)
         .background(
             RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous)
                 .fill(Color.primary.opacity(0.055))

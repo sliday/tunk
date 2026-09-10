@@ -38,21 +38,26 @@ extension View {
 /// A section. Depth comes from three stacked low-alpha shadows; there is not a
 /// single hairline divider in this panel.
 struct Card<Content: View>: View {
-    var title: String
+    /// Nil when the card's first control is its own title (the enable switch).
+    var title: String?
     var caption: String?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.primary)
-                if let caption {
-                    Text(caption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            if title != nil || caption != nil {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let title {
+                        Text(title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    if let caption {
+                        Text(caption)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             content()
