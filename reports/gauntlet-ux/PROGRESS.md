@@ -22,6 +22,8 @@ Started 2026-09-11 00:20. Bar: `BAR.md` in this folder. Branch: `worktree-qa-fin
 | onboarding + menu | — | not started | — |
 | settings IA | — | not started | — |
 | installer + docs | — | not started | — |
-| icon | 1 | v2 chosen, `design/AppIcon.icns` rebuilt from `design/icon-1024.png` (corners alpha 0, body 824/1024); fresh critic grading I1-I3 | pending |
+| icon | 1 | bar wins: I1 pass, I2 marginal, I3 pass | centre emboss ring reads as a nose at 128 px and below |
+| icon | 2 | bar wins: I1 FAIL (icns still the ring draft: my build was cut short by a `\| head` pipe), I2 marginal, I3 pass | icns not rebuilt from the ring-free source |
+| icon | 3 | icns rebuilt from `gpt-icon-v4-noring.png`, 1024 member pixel-identical to `design/icon-1024.png`; I2 stays marginal by design (two lit dots read as eyes next to object icons; the identity accepts that) | — |
 
 Rounds append below as they land.
