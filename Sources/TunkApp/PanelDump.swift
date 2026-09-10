@@ -150,9 +150,14 @@ enum PanelDump {
         }
 
         let engine = Engine(settings: settings)
+        let granted = PermissionState(accessibility: true, inputMonitoring: true)
+        // The card, with every note verbatim, lives under Advanced; General
+        // gets one plain sentence pointing there. Both rendered, so the critic
+        // can check that the detector vocabulary stays off General.
         write("panel-migration", into: url, settings: settings, engine: engine,
-              section: .general,
-              permissions: PermissionState(accessibility: true, inputMonitoring: true))
+              section: .advanced, permissions: granted)
+        write("panel-migration-general", into: url, settings: settings, engine: engine,
+              section: .general, permissions: granted)
     }
 
     /// Hosts the panel in an offscreen window so it picks up a real appearance,
