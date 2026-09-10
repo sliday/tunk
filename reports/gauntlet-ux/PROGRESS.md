@@ -22,6 +22,6 @@ Started 2026-09-11 00:20. Bar: `BAR.md` in this folder. Branch: `worktree-qa-fin
 | onboarding + menu | — | not started | — |
 | settings IA | — | not started | — |
 | installer + docs | — | not started | — |
-| icon | 0 | three GPT drafts in `design/mockups/gpt-icon-v{1,2,3}.png`, alpha verified transparent | — |
+| icon | 1 | v2 chosen, `design/AppIcon.icns` rebuilt from `design/icon-1024.png` (corners alpha 0, body 824/1024); fresh critic grading I1-I3 | pending |
 
 Rounds append below as they land.
