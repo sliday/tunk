@@ -40,6 +40,7 @@
 
 <link rel="stylesheet" href="vendor/daub.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="demo.css">
 
 <script type="application/ld+json">
 {
@@ -181,39 +182,36 @@
 
 <main id="main">
 
-  <section class="hero wrap">
-    <div class="hero-meta">
-      <p class="eyebrow">macOS menubar utility</p>
-      <p class="status" role="status">
-        <span class="status__dot" aria-hidden="true"></span>
-        In development. First build is out.
+  <section class="hero wrap demo-hero">
+    <div class="demo-hero__text">
+      <p class="demo-hero__brand">
+        <img src="favicon.svg" width="34" height="34" alt="" aria-hidden="true">
+        <span>Tunk</span>
       </p>
+
+      <h1>Back Tap, for your Mac.</h1>
+
+      <p class="lede">
+        Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs any
+        macOS&nbsp;Shortcut. Tunk reads the accelerometer already inside the machine at
+        796&nbsp;Hz and picks your deliberate tap out of everything else the laptop feels.
+      </p>
+
+      <div class="cta-row">
+        <a class="btn btn--primary" href="https://github.com/sliday/tunk/releases/tag/v0.1.0">
+          Get the 0.1.0 build
+        </a>
+        <a class="btn btn--quiet" href="demo.html">See it running</a>
+      </div>
+      <p class="cta-note">Apple silicon, macOS&nbsp;13 or later. Signed ad hoc, so macOS asks twice.
+        <a href="https://github.com/sliday/tunk">Source on GitHub</a>.</p>
     </div>
 
-    <h1>Back Tap, for your Mac.</h1>
-
-    <p class="lede">
-      Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs any
-      macOS&nbsp;Shortcut. Tunk reads the accelerometer already inside the machine at
-      796&nbsp;Hz and picks your deliberate tap out of everything else the laptop feels:
-      typing, trackpad clicks, a mug set down, footfall, bass through the desk.
-    </p>
-
-    <div class="cta-row">
-      <a class="btn btn--primary" href="https://github.com/sliday/tunk/releases/tag/v0.1.0">
-        Get the 0.1.0 build
-      </a>
-      <a class="btn btn--quiet" href="demo.html">See it running</a>
-    </div>
-    <p class="cta-note">Apple silicon, macOS&nbsp;13 or later. Signed ad hoc, so macOS asks twice.
-      <a href="https://github.com/sliday/tunk">Source on GitHub</a>.</p>
-
-    <figure class="hero-fig">
-      <img src="img/hero.jpg" srcset="img/hero.jpg 720w, img/hero@2x.jpg 1440w"
-           sizes="(min-width: 1160px) 1080px, 92vw"
-           width="1440" height="960" fetchpriority="high" decoding="async"
-           alt="A hand reaching to the aluminium palm rest of an open MacBook on a wooden desk, two fingertips touching the bare metal beside the trackpad.">
-      <figcaption>Tap the body, not a key. Tunk feels the knock through the aluminium.</figcaption>
+    <figure class="demo-hero__media">
+      <video src="video/tap-monitor.mp4" poster="video/tap-monitor-poster.jpg"
+             width="1012" height="1080" autoplay muted loop playsinline
+             aria-label="The Tunk settings window while the machine is being tapped: the tap monitor draws each knock as it lands and the taps-fired counter moves from one to two."></video>
+      <figcaption>Not a mock-up. The monitor drawing real knocks, at 796&nbsp;Hz, while the counter moves.</figcaption>
     </figure>
   </section>
 
