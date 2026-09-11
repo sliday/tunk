@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TunkEmit
 
@@ -112,7 +113,8 @@ private struct WhatItDoesStep: View {
                 + "camera, and nothing leaves your Mac.")
             row("keyboard", "Your shortcut runs",
                 "A keyboard combination or a macOS Shortcut. Built for hands-free "
-                + "dictation with VoiceInk, but the action is yours to choose.")
+                + "dictation, one app or the whole system, and the action is yours "
+                + "to choose.")
         }
     }
 
@@ -164,7 +166,7 @@ private struct PermissionsStep: View {
                     .transition(.opacity)
             } else {
                 note
-                if !model.permissions.inputMonitoring { stalledGrantOffer }
+                if !model.permissions.ready { stalledGrantOffer }
             }
         }
         .tunkAnimation(.tunkSnappy, value: model.permissions, reduceMotion: reduceMotion)
@@ -400,9 +402,11 @@ private struct TryItStep: View {
                     KeyCaps(text: spec.description)
                     Spacer(minLength: 0)
                 }
-                Text("To drive dictation, paste the same combination into VoiceInk → "
-                   + "Settings → Shortcuts → Second Shortcut, recording mode \"toggle\". "
-                   + "Your existing VoiceInk shortcut keeps working.")
+                Text("Tunk sends that combination on every double tap. For it to do "
+                   + "something, bind the same combination in the app that should "
+                   + "react, or change it under Settings → Actions. A dictation app "
+                   + "such as VoiceInk takes it as a second shortcut in toggle mode, "
+                   + "which leaves your existing shortcut alone.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -507,7 +511,34 @@ private struct StepIndicator: View {
 struct AppMark: View {
     var size: CGFloat
 
+    /// The shipped icns, when there is a bundle to read it from. A drawn copy
+    /// that is nearly the mark is worse than either the mark or an honest
+    /// placeholder: it teaches the owner a shape the Dock will not show them.
+    private static let bundled: NSImage? = {
+        guard Bundle.main.bundleIdentifier != nil,
+              let path = Bundle.main.path(forResource: "AppIcon", ofType: "icns")
+        else { return nil }
+        return NSImage(contentsOfFile: path)
+    }()
+
     var body: some View {
+        Group {
+            if let icon = AppMark.bundled {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+            } else {
+                drawn
+            }
+        }
+        .frame(width: size, height: size)
+        .shadow(color: .black.opacity(0.10), radius: 1, y: 0.5)
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+        .shadow(color: .black.opacity(0.06), radius: 16, y: 8)
+        .accessibilityHidden(true)
+    }
+
+    private var drawn: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .fill(LinearGradient(
@@ -516,16 +547,9 @@ struct AppMark: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-            core(diameter: size * 0.19)
-                .offset(x: -size * 0.11, y: size * 0.08)
-            core(diameter: size * 0.13)
-                .offset(x: size * 0.13, y: -size * 0.11)
+            core(diameter: size * 0.30).offset(x: -size * 0.155)
+            core(diameter: size * 0.244).offset(x: size * 0.175)
         }
-        .frame(width: size, height: size)
-        .shadow(color: .black.opacity(0.10), radius: 1, y: 0.5)
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
-        .shadow(color: .black.opacity(0.06), radius: 16, y: 8)
-        .accessibilityHidden(true)
     }
 
     private func core(diameter: CGFloat) -> some View {

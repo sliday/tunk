@@ -770,10 +770,10 @@ struct SettingsView: View {
             get: { settings.hotkeyDraft(for: count) },
             set: { settings.setHotkeyDraft($0, for: count) }))
         // The reason the app exists. It stays on screen in this mode.
-        let voiceInk = Text("Paste the same combination into VoiceInk → Settings → Shortcuts → "
-                          + "Second Shortcut, recording mode \"toggle\"."
-                          + (compact ? "" : " Leave your Right Shift binding alone; it stays "
-                                            + "your manual trigger."))
+        let voiceInk = Text("Bind the same combination in whatever app should react."
+                          + (compact ? "" : " A dictation app such as VoiceInk takes it as a "
+                                            + "second shortcut in toggle mode, which leaves the "
+                                            + "shortcut you already use alone."))
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
