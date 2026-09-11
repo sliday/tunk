@@ -104,7 +104,7 @@ struct OnboardingView: View {
 private struct WhatItDoesStep: View {
     var body: some View {
         VStack(spacing: 10) {
-            row("hand.tap", "Knock twice on the case",
+            row("laptopcomputer", "Knock twice on the case",
                 "Palm rest, lid, or the deck beside the trackpad. A firm double knock, "
                 + "like Back Tap on iPhone.")
             row("waveform.path.ecg", "Tunk feels it through the accelerometer",
@@ -164,6 +164,7 @@ private struct PermissionsStep: View {
                     .transition(.opacity)
             } else {
                 note
+                if !model.permissions.inputMonitoring { stalledGrantOffer }
             }
         }
         .tunkAnimation(.tunkSnappy, value: model.permissions, reduceMotion: reduceMotion)
@@ -184,6 +185,39 @@ private struct PermissionsStep: View {
         }
         .padding(.horizontal, 6)
         .padding(.top, 2)
+    }
+
+    /// macOS keys a grant to the app's signature, and an ad-hoc signed Tunk gets
+    /// a new signature every time it is rebuilt or replaced. The switch in
+    /// System Settings then reads as on for a Tunk that is not this one, and no
+    /// amount of polling will ever see it: the answer this process gets is fixed
+    /// for its lifetime. Both ways out are two clicks, so the window says them
+    /// rather than leaving the owner to guess why nothing happened.
+    private var stalledGrantOffer: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 18))
+                .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Switched it on and nothing changed here?")
+                    .font(.system(size: 12, weight: .medium))
+                Text("macOS answers this question once per launch, so relaunch first. If it "
+                   + "still reads Not granted, the list is holding an older copy of Tunk: "
+                   + "pick Tunk there, take it out of the list, then add this one.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button("Relaunch Tunk") { model.relaunch() }
+                .buttonStyle(TunkButtonStyle())
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.04)))
     }
 
     private var relaunchOffer: some View {
@@ -317,7 +351,7 @@ private struct TryItStep: View {
                     .fill(OnboardingView.amber.opacity(0.18 + 0.5 * model.pulse))
                     .frame(width: 64, height: 64)
                     .scaleEffect(reduceMotion ? 1 : 1 + 0.12 * model.pulse)
-                Image(systemName: model.feltRecently ? "checkmark" : "hand.tap.fill")
+                Image(systemName: model.feltRecently ? "checkmark" : "circle.grid.2x1.fill")
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(model.feltRecently ? Color.white : OnboardingView.amber)
                     .contentTransition(.opacity)

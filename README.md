@@ -69,6 +69,20 @@ replace Tunk.app (an update, or a rebuild from source), macOS asks for both
 permissions again.** That is macOS behaviour, not a Tunk bug; the first-run
 window comes back to walk you through it.
 
+**If the switch is already on and Tunk still says the permission is missing**,
+quit Tunk and open it again: macOS answers the Input Monitoring question once per
+launch, so a grant made while Tunk is running cannot reach it. If it still says
+missing after that, the list is holding an older copy of Tunk — select Tunk in
+that pane, press −, then add the copy in `/Applications`. To see what the running
+copy can actually see:
+
+```bash
+/Applications/Tunk.app/Contents/MacOS/Tunk --permissions 20
+```
+
+It prints both answers once a second for twenty seconds, so you can flip the
+switch and watch whether this copy of Tunk ever sees it.
+
 The App Sandbox is disabled deliberately. The private `IOHIDEventSystemClient`
 interface the sensor needs is not reachable from inside it.
 

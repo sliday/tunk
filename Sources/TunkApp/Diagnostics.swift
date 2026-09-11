@@ -1637,4 +1637,73 @@ extension Diagnostics {
                    : "  LEAKS: samples reach the detector after sleep removed the keystroke gate")
         exit(gated ? 0 : 1)
     }
+
+    /// `tunk --permissions [seconds]` prints what THIS binary can see, once a
+    /// second, and says which of the two answers can still change while it runs.
+    ///
+    /// It exists because the two ways a grant fails look identical from the
+    /// outside. A switch that is off, and a switch that is on for an older copy
+    /// of Tunk, both present as "not granted" with a switch that looks on. macOS
+    /// answers the Input Monitoring question once per process, so an owner who
+    /// grants it and waits is waiting for something that cannot arrive. Reading
+    /// it is how that gets settled in ten seconds instead of an afternoon.
+    static func permissionsProbe(seconds: Double) {
+        let exe = Bundle.main.executablePath ?? CommandLine.arguments.first ?? "unknown"
+        let stamp = (try? FileManager.default.attributesOfItem(atPath: exe)[.modificationDate]) as? Date
+        line("binary   \(exe)")
+        if let stamp { line("built    \(stamp)") }
+        line("bundle   \(Bundle.main.bundleIdentifier ?? "none") at \(Bundle.main.bundlePath)")
+        line("")
+        line("A grant is keyed to this binary's signature. Replace the app and the")
+        line("switch in System Settings belongs to the copy you replaced.")
+        // Unconditional, because the reader cannot tell from the numbers alone.
+        // macOS credits a permission to the process responsible for the launch,
+        // so started from a terminal this reads the terminal's grants, not
+        // Tunk's, and it reads them as confidently as it reads its own.
+        line("")
+        line("Started from a terminal, this reads YOUR TERMINAL's grants: macOS credits")
+        line("a permission to whichever process was responsible for the launch. The")
+        line("reading that describes Tunk is the one the first-run window shows when")
+        line("you open Tunk.app itself.")
+        line("")
+
+        let first = PermissionState.current()
+        var last = first
+        func pad(_ text: String, _ width: Int) -> String {
+            text.count >= width ? text : text + String(repeating: " ", count: width - text.count)
+        }
+        line(pad("t", 6) + "  " + pad("Input Monitoring", 18) + "  Accessibility")
+        func report(_ t: Int, _ p: PermissionState) {
+            line(pad("\(t)s", 6) + "  "
+               + pad(p.inputMonitoring ? "granted" : "not granted", 18) + "  "
+               + (p.accessibility ? "granted" : "not granted"))
+        }
+        report(0, first)
+        var t = 1
+        while Double(t) <= seconds {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            let now = PermissionState.current()
+            if now != last { report(t, now); last = now }
+            t += 1
+        }
+        if seconds >= 1 { report(t - 1, last) }
+
+        line("")
+        if last.ready {
+            line("READY: both granted, Tunk can arm.")
+        } else {
+            if !last.inputMonitoring {
+                line("Input Monitoring is not granted to THIS binary.")
+                line("  If its switch is already on: quit Tunk and open it again. macOS")
+                line("  fixed this answer when the process started.")
+                line("  If it is still not granted after that: the list holds an older copy.")
+                line("  Take Tunk out of the list with the minus button, then add this one.")
+            }
+            if !last.accessibility {
+                line("Accessibility is not granted to THIS binary. Same two remedies.")
+            }
+        }
+        exit(last.ready ? 0 : 1)
+    }
+
 }

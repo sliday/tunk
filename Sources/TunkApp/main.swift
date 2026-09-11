@@ -118,6 +118,11 @@ if arguments.contains("--live-emit-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.liveEmitProbe()
 }
+if let index = arguments.firstIndex(of: "--permissions") {
+    let seconds = index + 1 < arguments.count ? (Double(arguments[index + 1]) ?? 0) : 0
+    app.setActivationPolicy(.accessory)
+    Diagnostics.permissionsProbe(seconds: seconds)
+}
 if arguments.contains("--config-trace") {
     app.setActivationPolicy(.accessory)
     Diagnostics.configTrace()

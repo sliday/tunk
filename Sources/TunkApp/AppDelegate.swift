@@ -75,6 +75,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             .store(in: &cancellables)
 
+        // A grant is the one state change that moves nothing else. Without this
+        // sink the menu kept saying it needed permission after the owner had
+        // granted it, because `status` had not moved and only `status` redrew.
+        engine.$permissions
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.render(status: self.engine.status)
+            }
+            .store(in: &cancellables)
+
         settings.$enabled
             .receive(on: RunLoop.main)
             .sink { [weak self] on in self?.enableItem?.state = on ? .on : .off }
@@ -190,7 +202,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if engine.lastActionFailed { return "Last action failed" }
             return "Listening"
         case .off: return "Off"
-        case .needsPermission: return "Needs permission"
+        case .needsPermission:
+            // Name the one that is missing. "Needs permission" sent the owner to
+            // System Settings without saying which of the two panes to open.
+            switch (engine.permissions.inputMonitoring, engine.permissions.accessibility) {
+            case (false, true): return "Needs \(PermissionState.inputMonitoringName)"
+            case (true, false): return "Needs \(PermissionState.accessibilityName)"
+            default: return "Needs two permissions"
+            }
         case .sensorLost: return "Sensor unavailable"
         }
     }
