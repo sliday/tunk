@@ -394,3 +394,22 @@
 @media (max-width: 860px) {
   .method--media { grid-template-columns: 1fr; }
 }
+
+
+/* Desktop only: the three cards explain the gesture, the photograph lets you
+   perform it. Side by side they read as one idea; stacked they read as two. */
+@media (min-width: 901px) {
+  .gesture-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(28px, 4vw, 56px);
+    align-items: start;
+  }
+
+  .gesture-split .gesture-list {
+    grid-template-columns: 1fr;
+    margin-top: 0;
+  }
+
+  .gesture-split .demo-try { margin: 0 auto; }
+}
