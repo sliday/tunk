@@ -1,0 +1,102 @@
+[
+{
+"key": "detector-onesample",
+"area": "detector",
+"severity": "latent",
+"title": "One non-finite sample (NaN or Inf) deafens the detector for the rest of the session",
+"file": "Sources/TunkCore/DSP.swift",
+"line": 40,
+"demonstration": "Tests/TunkCoreTests/AuditDetectorProbeTests.swift. testANaNSampleDoesNotDeafenTheDetectorForever: same synthetic stream, one sample's z set to .nan 376.8 ms in, clean double-tap 1.1 s later. Control run: 1 trigger, 2 onsets. Poisoned run: 0 triggers, 0 onsets. testAnInfiniteSampleDoesNotDeafenTheDetectorForever: x = .infinity, 0 triggers vs 1. testANaNSampleAfterAGestureDoesNotDeafenTheNext: gesture, NaN, gesture 2.5 s later fires 1 of 2, and after the stream detector.envelope and detector.noiseFloor both read nan. Trace: Detector.swift:206 hands Double(sample.x) to the chain; OnePoleHighPass.process (DSP.swift:40) does y = c*(prevOut + x - prevIn), so after one NaN prevIn and prevOut are NaN and every later output is NaN; NoiseFloorTracker.update then makes the floor NaN; envelope >= threshold is false forever, so the detector never declares an onset again until reset(). The gap-reset path (Detector.swift:196) covers dropped samples but not bad values. AccelReader.read (Sources/TunkFormat/Session.swift:341) builds Float(bitPattern:) with no finiteness check, so a corrupted recording replays as silent zero detections rather than an error.",
+"fix": "In TapDetector.ingest(sample:) before the chain call at Detector.swift:206: `guard sample.x.isFinite, sample.y.isFinite, sample.z.isFinite else { dropSignalState(); lastSampleNs = sample.tNs; return nil }` (treat a bad value like a dropout). No clock, no new state."
+},
+{
+"key": "detector-absoluclamp",
+"area": "detector",
+"severity": "latent",
+"title": "Calibration's absolute clamp is bypassed by a non-finite noise floor; NaN floor yields a threshold under minThresholdG, +Inf yields an infinite threshold",
+"file": "Sources/TunkCore/DetectorCalibration.swift",
+"line": 160,
+"demonstration": "testCalibrationIsSafeOnDegenerateInputs: calibrate(tapStrengths: [0.001, 0.001], noiseFloor: .nan) returns threshold 0.0006 (minThresholdG is 0.02), noiseLimited false, result.noiseFloor nan; calibrate(tapStrengths: [0.05, 0.06], noiseFloor: .infinity) returns threshold inf. Trace: line 160 `max(noiseSnrMultiple * max(noiseFloor, 0), minThresholdG)`; Swift's max(x, y) returns `y >= x ? y : x`, so max(NaN, 0) is NaN and max(NaN, 0.02) is NaN; then threshold = max(raw, NaN) = raw, so neither clamp applies. Reachability today is only through finding 1 (the app passes readout?.noiseFloor at CalibrationView.swift:373); the running detector still applies its own 0.02 floor in currentThreshold(), and madeCoherent() nils an infinite calibratedThreshold, so the damage is a wrong stored/displayed calibration number, not a wrong live bar. Identical, single, huge and subnormal tap sets all produced safe thresholds.",
+"fix": "Sanitise once at the top of calibrate(tapStrengths:): `let floor = noiseFloor.isFinite ? max(noiseFloor, 0) : 0` and use `floor` in both the clamp and the stored `noiseFloor`."
+},
+{
+"key": "detector-learnithejoin",
+"area": "detector",
+"severity": "latent",
+"title": "Learning the join window leaves a hand-set minInterTapNs above it; coherence clamps min == max and the calibrated gesture can no longer fire",
+"file": "Sources/TunkCore/DetectorCalibration.swift",
+"line": 232,
+"demonstration": "testCalibratedWindowUnderAHandSetMinimumStillDetectsTheCalibratedGesture: config.minInterTapNs = 200 ms (the panel slider allows 40...200, SettingsView.swift:337), ten calibration gestures at 150 ms. calibrate(gestures:) learns interTapNs = 172.5 ms with interTapClamped = false; apply() writes max = confirm = 172.5 ms and leaves min at 200; madeCoherent() reports 'minInterTapNs: no spacing can be both over 200 ms and under 172 ms. Using 172 ms.' so the in-force band is [172.5, 172.5] ms. Replaying a synthetic 150 ms double-tap with the applied config: 0 triggers. Calibration reports success and a learned window for a cadence the resulting config cannot group. Requires the user to have raised the minimum above their own cadence first, which is why this is latent rather than user-visible.",
+"fix": "In apply(), when a window is learned also lower the minimum so the observed band fits: `out.minInterTapNs = min(out.minInterTapNs, result.interTapP10Ns ?? out.minInterTapNs)`; or have CalibrationView show `applied.coherenceIssues` before commit."
+},
+{
+"key": "detector-retroagateflag",
+"area": "detector",
+"severity": "hygiene",
+"title": "Retroactive gate flag is lost on an onset published before the keystroke arrives (12-25 ms band), so consumers that drain per sample see a retracted onset as clear",
+"file": "Sources/TunkCore/Detector.swift",
+"line": 213,
+"demonstration": "testReplayHelperKeepsTheRetroactiveGateFlagOnAPublishedOnset: keystroke 20 ms after the second onset of a clean double. Both TapDetector.replay and an undrained detector produce zero triggers (the group is cleared via groupLastOnsetNs at line 275, decision path correct). OnsetEvent.suppressedByGate: replay [false, false], undrained detector [false, true]. Trace: pending publishes at line 213 once peakHoldNs (12 ms) has passed; ingest(input:) at lines 278-283 can only flag `pending` or the last entry still in onsetLog, and preGateNs is 25 ms. Consumers that drain every sample lose it: TapDetector.replayGroups (Detector.swift:678), and the app's Engine.feed (Engine.swift:495), so the tap monitor draws the onset as clear (TapMonitorView.swift:315) and, while calibrating, Engine.record(onset:) at Engine.swift:617 counts the retracted onset as a clean calibration tap. The harness's Replay.run drains every 4096 samples (Replay.swift:150) and is mostly unaffected.",
+"fix": "Line 213: publish only once both windows have passed: `if sample.tNs - pending!.tNs >= max(tuning.peakHoldNs, tuning.preGateNs) { publishPending() }`. Delays the strength readout by 13 ms; triggers and grouping are unchanged."
+},
+{
+"key": "emit-watchdclosesthe",
+"area": "emit",
+"severity": "user-visible",
+"title": "Watchdog closes the stderr read end, so a Shortcut that outlives it is killed by SIGPIPE on its next stderr write (the contract says it is left running)",
+"file": "Sources/TunkEmit/ShortcutSpawner.swift",
+"line": 114,
+"demonstration": "Tests/TunkCoreTests/AuditEmitTests.swift, AuditSpawnerWatchdogTests.testChildThatOutlivesTheWatchdogIsKilledOnItsNextStderrWrite (fails as intended). Executable: `( echo $$ > pid; sleep 0.6; echo 'still going' >&2; touch done; exit 0 ); echo $? > status`, watchdog 0.2 s. Output: `AUDIT child pid 68522 after watchdog: ps -> [] inner exit status [141]`, `AUDIT marker exists: false`. 141 = 128+SIGPIPE; the line after the stderr write never ran. Control test testSameChildFinishesWhenNoWatchdogClosesThePipe (watchdog 0) passes: marker created, outcome succeeded. The real CLI behaves the same: `/usr/bin/shortcuts run zzz 2>&1 >/dev/null | true` -> PIPESTATUS[0]=141, versus exit 1 with stderr to a file. Path: once.onFire (line 114-116) runs on the watchdog path and closes errPipe.fileHandleForReading; the child's next write(2) to fd 2 has no reader. Docstring at line 51 and testWatchdogSurfacesAShortcutThatNeverFinishes both assert the process is deliberately not killed.",
+"fix": "On the watchdog path do not close the read end. Replace the readabilityHandler with a discard reader (read availableData, drop it) so the child never sees EPIPE, and close the handle in terminationHandler / the run() failure path only. Cost is one read fd per hung child until it exits; testFileDescriptorsAfterHungSpawns measured 4 -> 4 -> 4 fds across 30 hung spawns with the current code, so the leak that motivated the close is gone either way while the child is reaped."
+},
+{
+"key": "emit-hotkeypost",
+"area": "emit",
+"severity": "latent",
+"title": "Bare-modifier hotkeys post absolute flagsChanged events (down = own bits only, up = 0x0) and skip the live-subtracting release, the exact shape releaseModifiers documents as clearing modifiers Tunk never asserted",
+"file": "Sources/TunkEmit/HotkeyEmitter.swift",
+"line": 311,
+"demonstration": "Tests/TunkCoreTests/AuditEmitTests.swift, AuditModifierHotkeyFlagsTests.testBareModifierUpIsAnAbsoluteEmptyFlagsChangedAndSkipsTheLiveRelease (passes, pinning the shape): emitting HotkeySpec(keyCode: 60 /*RShift*/, modifiers: []) through RecordingPoster yields down.flagsRaw == maskShift|0x4, up.flagsRaw == 0, modifierReleases == 0. Trace: HotkeySpec.releaseFlags line 201 returns down & ~clear == 0 for a bare modifier; HotkeyEmitter.postBalanced line 311 `if up.flagsRaw != 0` therefore skips releaseModifiers; CGEventPoster.makeEvent line 137 sets type .flagsChanged for a modifier key and line 142 stamps `cg.flags = event.flags` verbatim, never reading flagsState(.combinedSessionState) the way releaseModifiers does at line 124. Poster.swift lines 100-118 record the measured effect of a flagsChanged carrying an empty set: hardware Caps Lock and a held Control went to 0 in NSEvent.modifierFlags and stayed there. The same applies to the down half, which asserts only shift. NOT measured live in this session: the screen is locked and secure input is held by pid 408, so every CGEvent.post is discarded; severity is therefore latent on this evidence, user-visible if the documented measurement transfers, which the trace says it does.",
+"fix": "In CGEventPoster.makeEvent, when KeyCodes.isModifier(event.keyCode): let live = CGEventSource.flagsState(.combinedSessionState); for .down set cg.flags = live.union(event.flags); for .up set cg.flags = live.subtracting(spec's own bits) instead of event.flags. Keep the non-modifier branch unchanged."
+},
+{
+"key": "emit-paneldowns",
+"area": "emit",
+"severity": "user-visible",
+"title": "Panel \"key downs / ups\" readout never learns about the pair a detector tap posted; it always shows the previous tap's counts",
+"file": "Sources/TunkEmit/ActionRunner.swift",
+"line": 133,
+"demonstration": "Tests/TunkCoreTests/AuditEmitTests.swift, AuditModifierHotkeyFlagsTests.testDetectorPathSnapshotPredatesItsOwnPair (fails as intended). runner.run(tapCount: 2) on a hotkey binding, drain the post queue, inspect the last onChange snapshot: `AUDIT after one tap: panel sees downs/ups 0/0, emitter has 1/1, snapshots delivered 1`. Trace: run(_:) hotkey path calls emitter.emitAsync then record(), whose `snapshot.emit = emitter.stats` is read before postQueue has posted the pair; the pair's own completion reaches ActionRunner only through emitter.onEmit, and line 133 `guard let self, let text = emitStats.lastErrorText else { return }` drops every successful emission. SettingsView.swift:521-523 renders engine.actionStats.emit.keyDownsPosted/keyUpsPosted, fed solely by runner.onChange (Engine.swift:265-266), so after the first tap it reads 0 / 0 and stays one tap behind. The Test button path (waitForHotkey: true, Engine.swift:814-816) is unaffected.",
+"fix": "In the onEmit closure, forward every snapshot: keep `guard let self`, set _stats.lastErrorText = emitStats.lastErrorText only when non-nil, then always build the snapshot with snapshot.emit = emitStats and call onChange."
+},
+{
+"key": "emit-istrue",
+"area": "emit",
+"severity": "hygiene",
+"title": "EmitStats.hasStuckKey is true for the whole of every key-down hold, so a healthy pair reads as the invariant the docstring says must never be true",
+"file": "Sources/TunkEmit/HotkeyEmitter.swift",
+"line": 65,
+"demonstration": "Tests/TunkCoreTests/AuditEmitTests.swift, AuditModifierHotkeyFlagsTests.testHasStuckKeyIsTrueForTheWholeOfEveryHold (fails as intended). emitAsync with a 300 ms hold, read stats at 100 ms: `AUDIT mid-hold: downs 1 ups 0 hasStuckKey true unbalanced 0`; after drainPending it is false. Line 65 `unbalancedPairs > 0 || keyDownsPosted > keyUpsPosted`: the second clause is true between countDown() and countUp() on every pair. SettingsView.swift:523 paints the readout orange on it and Diagnostics.swift:198 exits 1 on it; both happen to read after the hold today, and the panel snapshot in finding 3 races the down post by microseconds, so this is mostly a false-alarm hazard rather than a shipped flicker.",
+"fix": "`public var hasStuckKey: Bool { unbalancedPairs > 0 }`. unbalancedPairs already records a down whose up did not go out (recordPair), which is the only case the second clause was meant to catch."
+},
+{
+"key": "engine-offmeansoff",
+"area": "engine",
+"severity": "latent",
+"title": "Off-means-off guard is an unsynchronized cross-thread read: TSan reports a data race on wantsRunning | AND | willSleep removes the keystroke gate but leaves wantsRunning true, so samples keep reaching the detector until the queued close runs; on a wedged sensor queue that is the whole wedge",
+"file": "Sources/TunkApp/Engine.swift",
+"line": 492,
+"demonstration": "Built with `swift build --scratch-path .build-audit-tsan --sanitize=thread` and ran `TSAN_OPTIONS=halt_on_error=0 ./.build-audit-tsan/debug/tunk --reacquire-probe 5`. Output: `WARNING: ThreadSanitizer: data race \u2014 Write of size 1 by main thread: #0 Engine.setEnabled(_:) Engine.swift:312 ... Previous read of size 1 by thread T2 (GCD worker): #0 Engine.feed(sample:) Engine.swift:492 ... #3 AccelSource.handle(event:) AccelSource.swift:233 ... __IOHIDEventSystemClientQueueCallback. SUMMARY: ThreadSanitizer: data race Engine.swift:312 in Engine.setEnabled(_:)`. The probe's own counters still print CLEAN/ALIVE/SETTLED because they only count off-main @Published writes. RESUME records `TSan clean across three 20-cycle runs` and then, later in the same round, the `guard wantsRunning` fix in feed(sample:); the race is the fix itself (main writes `wantsRunning` at :312 with no lock, the accel queue reads it at :492 with no lock), and no TSan run is recorded after it landed.\n\nSECOND FINDING SHARING THE SAME FIX (Sources/TunkApp/Engine.swift:891): Same temporary probe, engine armed (`status=running inputTapActive=true rate=798.9`), posting NSWorkspace.willSleepNotification on NSWorkspace.shared.notificationCenter and measuring how far the detector's own ring timeline (`snapshot().startNs`, advanced only by feed(sample:) past its guard) moved: healthy queue, 1 s after willSleep: `status=off inputTapActive=false detector timeline advanced 8.33 ms`; with `probeWedgeSensorQueue(seconds: 3)` first, 2 s after willSleep: `status=off inputTapActive=false detector timeline advanced 2008.33 ms`; control, same wedge but `setEnabled(false)`: `status=off detector timeline advanced 0.0 ms`. Trace: willSleep at :891-895 calls stopSensors() (input monitor removed at :451-452, close only enqueued at :456) and never clears wantsRunning, so the guard at :492 admits every sample of the old stream; the action runner at :556 is still reachable from those samples with the typing gate gone. The user's own off switch closes this window (0 ms); sleep does not (2008 ms).",
+"fix": "Make the guard a lock-protected flag: in feed(sample:) take detectorLock first and check the flag under it; write the flag under detectorLock in start() (after the monitor is installed) and in stopSensors(). That also fixes finding 3 (see below), since stopSensors() is the one path every gate-removal shares.\nAlso: Same as finding 1: clear the sample-accepting flag inside stopSensors() under detectorLock, so every path that removes the monitor (stop, willSleep, reacquire, the needsPermission branch) also stops feeding the detector."
+},
+{
+"key": "engine-aconfigwrite",
+"area": "engine",
+"severity": "latent",
+"title": "A config write during calibration replaces the saved 'before' config with the resonator-derived one, and cancelling calibration persists it; switching the resonator off then leaves 0.011 g on the default chain",
+"file": "Sources/TunkApp/Engine.swift",
+"line": 718,
+"demonstration": "Temporary probe (added to Sources/TunkApp, run, then removed; `git status --porcelain` is empty) against a fresh AppSettings suite, real Engine: `before: stored default=0.032 engine.effective=0.032` \u2192 `engine.beginCalibration()` \u2192 `settings.experimentalResonator = true` \u2192 `_ = engine.endCalibration(commit: nil)` \u2192 `cancel calibration: STORED config.defaultThreshold=0.011` \u2192 `settings.experimentalResonator = false` \u2192 `resonator off: stored=0.011 settings.effective=0.011 engine.effective=0.011 (shipped default is 0.032)`. Trace: AppSettings.config.didSet and experimentalResonator.didSet post `effectiveConfig` (derived, 0.011) to onConfigChange; Engine.apply(config:) at :717-718 does `if configBeforeCalibration != nil { configBeforeCalibration = config }`, so the derived value overwrites the stored one it was holding; endCalibration at :872-881 restores from it and writes `settings.config = restored`, which AppSettings persists as the stored value. RESUME's contract 'switching it off restores yours exactly' does not hold through this path. Latent because the calibration sheet blocks the panel's toggle and sliders today, so no UI route writes config mid-calibration; the code path exists to handle exactly that case and mishandles it.",
+"fix": "In endCalibration, base the restoration on the stored value AppSettings keeps current, not on the copy apply(config:) overwrote: `let base = settings.config; let restored = result.map { TapCalibration.apply($0, to: base) } ?? base` (keep configBeforeCalibration as the in-flight flag only). Alternatively have apply(config:) during calibration ignore the write, since settings.config already holds it."
+}
+]
