@@ -12,10 +12,9 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let size = CGSize(width: 560, height: 640)
-    /// Amber, the icon's core colour. Used for the current step and the
-    /// primary button so the window reads as Tunk rather than as a generic
-    /// blue system sheet.
-    static let amber = Color(red: 0.96, green: 0.65, blue: 0.16)
+    /// The app's one accent, used for the current step and the primary button
+    /// so the window reads as Tunk rather than as a generic blue system sheet.
+    static let amber = Color.tunkAmber
 
     var body: some View {
         VStack(spacing: 0) {
@@ -150,13 +149,13 @@ private struct PermissionsStep: View {
     var body: some View {
         VStack(spacing: 10) {
             PermissionRow(
-                name: "Input Monitoring",
-                why: "Reads the accelerometer, and sees when you type so typing never counts as a tap.",
+                name: PermissionState.inputMonitoringName,
+                why: PermissionState.inputMonitoringWhy,
                 granted: model.permissions.inputMonitoring,
                 open: model.openInputMonitoring)
             PermissionRow(
-                name: "Accessibility",
-                why: "Presses the keyboard shortcut for you.",
+                name: PermissionState.accessibilityName,
+                why: PermissionState.accessibilityWhy,
                 granted: model.permissions.accessibility,
                 open: model.openAccessibility)
 
@@ -230,7 +229,7 @@ private struct PermissionRow: View {
             }
             Spacer(minLength: 8)
             StatusPill(granted: granted)
-            Button("Open System Settings", action: open)
+            Button(PermissionState.openButtonTitle, action: open)
                 .buttonStyle(TunkButtonStyle())
         }
         .padding(.leading, 16)

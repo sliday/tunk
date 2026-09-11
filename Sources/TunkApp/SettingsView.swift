@@ -21,7 +21,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var caption: String {
         switch self {
         case .general:     return "Turn detection on, watch taps land, and choose what a double-tap does."
-        case .actions:     return "One action per tap count. Double tap is the one that ships armed."
+        case .actions:     return "One action per tap count. Double tap is on by default; single tap is off."
         case .calibration: return "Teach Tunk how hard you tap, and how long to ignore taps after typing."
         case .advanced:    return "Timing, the raw signal, and two experiments that ship off."
         }
@@ -42,6 +42,9 @@ final class PanelModel: ObservableObject {
     /// Which page is showing. Owned here so the window controller can land the
     /// user on Calibration when the menu's Calibrate… opened the window.
     @Published var section: SettingsSection = .general
+    /// Opens the first-run window. Set by the window controller; nil under
+    /// `--dump-panel`, where the button renders and does nothing.
+    var openSetup: (() -> Void)?
 
     /// The tap monitor's 60 Hz poll loop, owned here so the window controller
     /// can start and stop it imperatively.
@@ -173,6 +176,13 @@ struct SettingsView: View {
 
             Spacer(minLength: 16)
 
+            // The same entry as the menu's, so the walkthrough is reachable
+            // from wherever a person happens to be looking.
+            Button("Set up Tunk…") { panel.openSetup?() }
+                .buttonStyle(TunkButtonStyle())
+                .padding(.horizontal, 8)
+                .padding(.bottom, 6)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("Reads only the accelerometer. Nothing leaves your Mac.")
                     .font(.system(size: 10))
@@ -207,7 +217,7 @@ struct SettingsView: View {
                 Image(systemName: section.symbol)
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 20)
-                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(selected ? Color.tunkAmber : Color.secondary)
                 Text(section.title)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(.primary)
@@ -276,17 +286,18 @@ struct SettingsView: View {
     // MARK: - permissions
 
     private var permissionCard: some View {
-        Card(title: "Tunk is not armed",
-             caption: "Detection stays off until both permissions are granted. Without them "
-                    + "Tunk cannot see your typing, and a detector that cannot see typing "
-                    + "fires while you type.") {
+        Card(title: "Tunk needs two permissions",
+             caption: "Detection stays off until both are granted. Set up Tunk… walks "
+                    + "you through them.") {
             VStack(alignment: .leading, spacing: 8) {
-                permissionRow("Input Monitoring", "reads the accelerometer",
+                permissionRow(PermissionState.inputMonitoringName,
+                              PermissionState.inputMonitoringWhy,
                               granted: permissions.inputMonitoring) {
                     PermissionState.promptInputMonitoring()
                     PermissionState.openInputMonitoringPane()
                 }
-                permissionRow("Accessibility", "posts the hotkey and watches for typing",
+                permissionRow(PermissionState.accessibilityName,
+                              PermissionState.accessibilityWhy,
                               granted: permissions.accessibility) {
                     PermissionState.promptAccessibility()
                     PermissionState.openAccessibilityPane()
@@ -300,21 +311,27 @@ struct SettingsView: View {
                                action: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(granted ? Color.green : Color.orange)
+                .fill(granted ? Color.green : Color.red)
                 .frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.system(size: 12, weight: .medium))
-                Text(why).font(.system(size: 10)).foregroundStyle(.tertiary)
+                Text(why)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Text(granted ? "Granted" : "Not granted")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(granted ? Color.green : Color.orange)
+                .foregroundStyle(granted ? Color.green : Color.red)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Capsule().fill((granted ? Color.green : Color.orange).opacity(0.12)))
+                .background(Capsule().fill((granted ? Color.green : Color.red).opacity(0.12)))
             if !granted {
-                Button("Open Settings", action: action).buttonStyle(TunkButtonStyle())
+                // Never truncated: the reason column wraps instead.
+                Button(PermissionState.openButtonTitle, action: action)
+                    .buttonStyle(TunkButtonStyle())
+                    .fixedSize()
             }
         }
         .frame(minHeight: Metrics.hitTarget)
@@ -415,7 +432,7 @@ struct SettingsView: View {
         case .running: return "Listening"
         case .off: return "Off"
         case .needsPermission: return "Needs permission"
-        case .sensorLost: return "Sensor lost"
+        case .sensorLost: return "Sensor unavailable"
         }
     }
 
@@ -652,7 +669,7 @@ struct SettingsView: View {
     ///   controls writing the same settings; it leaves out the emission counters
     ///   and the Shortcut timing, which live on the full row under Actions.
     private func actionCard(tapCount count: Int, compact: Bool) -> some View {
-        Card(title: count == 2 && compact ? "Double-tap action" : rowTitle(count),
+        Card(title: rowTitle(count),
              caption: rowCaption(count, compact: compact)) {
             Picker(rowTitle(count), selection: actionKind(count)) {
                 Text("Send a hotkey").tag(TunkAction.Kind.hotkey)
@@ -723,15 +740,13 @@ struct SettingsView: View {
                 set: { settings.setHotkeyDraft($0, for: count) }))
             // The reason the app exists. It stays on screen in this mode.
             Text("Paste the same combination into VoiceInk → Settings → Shortcuts → "
-               + "Second Shortcut, recording mode \"toggle\". Leave your Right Shift "
-               + "binding alone; it stays your manual trigger.")
+               + "Second Shortcut, recording mode \"toggle\". Your existing VoiceInk "
+               + "shortcut keeps working.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !compact {
                 HStack(spacing: 18) {
-                    Readout(label: "paste into VoiceInk",
-                            value: settings.hotkeyDraft(for: count).description, accent: .primary)
                     Readout(label: "key downs / ups",
                             value: "\(engine.actionStats.emit.keyDownsPosted) / "
                                  + "\(engine.actionStats.emit.keyUpsPosted)",
@@ -875,7 +890,7 @@ struct SettingsView: View {
             }
             switch settings.bindings[count] {
             case .hotkey(let spec):
-                testResults[count] = "Sent \(spec.symbolicDescription) to the frontmost app."
+                testResults[count] = "Sent \(spec.description) to the frontmost app."
             case .shortcut(let name, _):
                 testResults[count] = "Started \"\(name)\". Tunk does not wait for it to finish."
             case .none:
@@ -908,7 +923,7 @@ struct SettingsView: View {
                     Readout(label: "in force",
                             value: String(format: "%.3f",
                                           engine.effectiveConfig.effectiveThreshold),
-                            accent: .accentColor)
+                            accent: .tunkAmber)
                 }
                 Spacer()
                 Button("Calibrate…") { panel.showCalibration = true }

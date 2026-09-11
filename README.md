@@ -48,14 +48,16 @@ You need the file `Tunk-<version>.dmg`. Nothing else, and no Terminal.
    window says so and offers a button that does it.
 
 That is the whole install. The last step of the window asks you to double-tap the
-MacBook so you can see it work.
+MacBook so you can see it work. The window is there whenever you want it again:
+click the menu bar icon and choose **Set up Tunk…**, or open **Settings…** and
+press the same button in the sidebar.
 
 ### The two permissions
 
 | Permission | Why Tunk needs it | Where it lives |
 |---|---|---|
-| **Input Monitoring** | reads the accelerometer, and sees keystrokes so typing can pause detection | System Settings → Privacy & Security → Input Monitoring |
-| **Accessibility** | sends the keyboard shortcut you chose | System Settings → Privacy & Security → Accessibility |
+| **Input Monitoring** | reads the accelerometer, and sees when you type so typing never counts as a tap | System Settings → Privacy & Security → Input Monitoring |
+| **Accessibility** | presses the keyboard shortcut for you | System Settings → Privacy & Security → Accessibility |
 
 Tunk says which one is missing rather than silently doing nothing. Without Input
 Monitoring it refuses to arm at all: a detector that cannot see keystrokes cannot
@@ -133,8 +135,9 @@ again after each one. The signature is what the permission is granted to.
 VoiceInk supports a primary and a secondary global shortcut. Leave your existing
 binding alone and give Tunk its own.
 
-1. Open Tunk's settings from the menubar. Under **Double tap**, choose
-   **Send a hotkey** and record a combination.
+1. Click Tunk's menu bar icon and choose **Settings…**. Under **Double tap**,
+   choose **Send a hotkey** and record a combination. Tunk shows it as
+   `Ctrl+Opt+Cmd+;`, the same spelling VoiceInk takes.
 2. In VoiceInk, go to **Settings → Shortcuts → Second Shortcut**, record the same
    combination, and set the recording mode to **toggle**.
 3. Your manual trigger keeps working. Tunk drives the second one.
@@ -294,7 +297,7 @@ session of six prompted taps in which nobody touched the machine.
 | `Sources/TunkCore` | detector and DSP — pure, deterministic, reads no clock |
 | `Sources/TunkIMU` | accelerometer over the private IOHID interface |
 | `Sources/TunkEmit` | actions: hotkeys and Shortcuts |
-| `Sources/TunkApp` | menubar app and settings |
+| `Sources/TunkApp` | menu bar app and settings |
 | `Sources/TunkCapture` | `tunk-capture` — record and verify sessions |
 | `Sources/TunkLabel` | `tunk-label` — ground truth, and did the taps land |
 | `Sources/TunkScore` | `tunk-score` — the referee |

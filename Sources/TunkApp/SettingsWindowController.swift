@@ -10,6 +10,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     private let engine: Engine
 
+    /// What the sidebar's Set up Tunk… does. The app delegate owns the
+    /// first-run window, so it hands this in after construction.
+    var openSetup: (() -> Void)? {
+        get { panel.openSetup }
+        set { panel.openSetup = newValue }
+    }
+
     init(settings: AppSettings, engine: Engine) {
         self.engine = engine
         let width = SettingsView.width
