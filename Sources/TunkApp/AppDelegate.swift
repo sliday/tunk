@@ -327,6 +327,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func showSettings(startCalibration: Bool) {
         if settingsWindow == nil {
             settingsWindow = SettingsWindowController(settings: settings, engine: engine)
+            settingsWindow?.openSetup = { [weak self] in self?.showOnboarding(at: .whatItDoes) }
         }
         settingsWindow?.present(startCalibration: startCalibration)
     }

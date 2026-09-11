@@ -11,9 +11,11 @@ Built for hands-free dictation — bind it to VoiceInk and you start and stop
 dictation by tapping the chassis instead of reaching for a key — but the action
 is yours to choose.
 
-**Status: in development. Not released. There is nothing to download.** The
-sensor layer, the action dispatch, the capture tool and the scoring harness work.
-The detector is being tuned against recorded sessions. See
+**Status: in development. Not released.** There is no public download yet; the
+disk image described under [Install](#install) comes from
+[Build from source](#build-from-source), or from someone who built it for you.
+The sensor layer, the action dispatch, the capture tool and the scoring harness
+work. The detector is being tuned against recorded sessions. See
 [Where it stands](#where-it-stands-against-the-bar), which lists what has and has
 not been measured.
 
@@ -28,48 +30,114 @@ not been measured.
 Tunk reads only the accelerometer. Never the microphone, never the camera, and
 nothing leaves the machine.
 
-## Build and run
+## Install
 
-```bash
-swift build -c release
-./dist/build-app.sh          # assembles and ad-hoc signs dist/Tunk.app
-open dist/Tunk.app
-```
+You need the file `Tunk-<version>.dmg`. Nothing else, and no Terminal.
 
-`xcodebuild` is not required. Tests need Xcode's toolchain for XCTest:
+1. **Open the DMG.** Double-click `Tunk-<version>.dmg`. A window opens that says
+   "Drag Tunk into Applications", with the Tunk icon on the left, an arrow, and
+   an Applications folder on the right.
+2. **Drag Tunk onto Applications.** Then eject the DMG (the ⏏ next to "Tunk" in
+   the Finder sidebar) and delete the `.dmg` file if you like.
+3. **Open Tunk from your Applications folder.** Tunk lives in the menu bar, at the
+   right-hand end near the clock; it has no Dock icon. The first time, a window
+   opens that says what Tunk does and asks for two permissions.
+4. **Grant the two permissions.** Each row in that window has a button that opens
+   the right pane of System Settings; flip the switch next to Tunk and come back.
+   Tunk notices within a couple of seconds. When macOS insists on a relaunch, the
+   window says so and offers a button that does it.
 
-```bash
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
-```
+That is the whole install. The last step of the window asks you to double-tap the
+MacBook so you can see it work. The window is there whenever you want it again:
+click the menu bar icon and choose **Set up Tunk…**, or open **Settings…** and
+press the same button in the sidebar.
 
-## Permissions
+### The two permissions
 
-Two grants, and Tunk explains which is missing rather than silently doing
-nothing.
-
-| Permission | What it is for | Where |
+| Permission | Why Tunk needs it | Where it lives |
 |---|---|---|
-| **Input Monitoring** | read the accelerometer, and see keystrokes so typing can suppress detection | System Settings → Privacy & Security → Input Monitoring |
-| **Accessibility** | post the synthetic key event | System Settings → Privacy & Security → Accessibility |
+| **Input Monitoring** | reads the accelerometer, and sees when you type so typing never counts as a tap | System Settings → Privacy & Security → Input Monitoring |
+| **Accessibility** | presses the keyboard shortcut for you | System Settings → Privacy & Security → Accessibility |
 
-Add `Tunk.app` to both, then quit and reopen it. macOS caches the decision per
-binary, so **re-grant after replacing the app** — a rebuilt bundle is a new binary
-even at the same path.
+Tunk says which one is missing rather than silently doing nothing. Without Input
+Monitoring it refuses to arm at all: a detector that cannot see keystrokes cannot
+suppress typing, and typing false positives are the metric that decides whether
+the app is worth running.
+
+macOS ties each grant to the exact copy of the app it was granted to. **If you
+replace Tunk.app (an update, or a rebuild from source), macOS asks for both
+permissions again.** That is macOS behaviour, not a Tunk bug; the first-run
+window comes back to walk you through it.
 
 The App Sandbox is disabled deliberately. The private `IOHIDEventSystemClient`
 interface the sensor needs is not reachable from inside it.
 
-Without Input Monitoring, Tunk refuses to arm rather than run half-blind: a
-detector that cannot see keystrokes cannot suppress typing, and typing false
-positives are the metric that decides whether the app is worth running.
+## Uninstall
+
+1. Quit Tunk: click its menu bar icon and choose **Quit Tunk**.
+2. Drag `/Applications/Tunk.app` to the Trash.
+3. In System Settings → Privacy & Security, remove Tunk from **Input Monitoring**
+   and from **Accessibility** (select it and press the − button). macOS does not
+   clean these up on its own.
+4. Settings live in `~/Library/Preferences/dev.tunk.settings.plist`; delete that
+   file if you want no trace left.
+
+## Build from source
+
+**Xcode is required, not just the Command Line Tools.** The app's settings and
+first-run windows are SwiftUI, and SwiftUI's `@State` and friends are compiled by
+a macro plugin (`SwiftUIMacros`) that Apple ships inside Xcode and leaves out of
+the Command Line Tools. Under the CLT toolchain `swift build` stops at the first
+`@State` with `plugin for module SwiftUIMacros not found`. The core libraries
+and the three command-line tools build fine either way; the app does not.
+
+Install Xcode from the App Store, open it once so it finishes setting up, then:
+
+```bash
+make -C dist app     # builds and ad-hoc signs dist/Tunk.app
+make -C dist dmg     # builds the app, then dist/Tunk-<version>.dmg
+open dist/Tunk.app
+```
+
+You do not need to run `sudo xcode-select`. The build scripts look for
+`/Applications/Xcode.app` and use its toolchain for that one build when the
+selected toolchain cannot compile SwiftUI. Building by hand needs the same thing
+spelled out:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build -c release
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
+```
+
+The DMG is assembled with `hdiutil` only. Its window layout (size, 128 px icons,
+their positions, the background) is a `.DS_Store` that ships in the repo as
+`dist/dmg-assets/DS_Store`, so a fresh clone builds the finished image with no
+Finder involved and no prompt. To regenerate that file after changing the
+geometry in `dist/build-dmg.sh` or the background in `dist/dmg-background.swift`,
+install two small Python modules once and run with `REFRESH_LAYOUT=1`:
+
+```bash
+pip3 install --user ds_store mac_alias   # add --break-system-packages if pip refuses (Homebrew Python)
+REFRESH_LAYOUT=1 make -C dist dmg        # rewrites dist/dmg-assets/DS_Store; commit it
+```
+
+The modules are a build-time tool only; the app never sees them. Without them
+the script falls back to driving Finder with AppleScript (macOS will ask whether
+the Terminal may control Finder; it gives up after 10 s if nobody answers), and
+without that too it still builds and verifies the image and prints the one-line
+fix; only the window layout is then Finder's default.
+
+Every rebuild produces a new ad-hoc signature, so macOS asks for both permissions
+again after each one. The signature is what the permission is granted to.
 
 ## VoiceInk
 
 VoiceInk supports a primary and a secondary global shortcut. Leave your existing
 binding alone and give Tunk its own.
 
-1. Open Tunk's settings from the menubar. Under **Double tap**, choose
-   **Send a hotkey** and record a combination.
+1. Click Tunk's menu bar icon and choose **Settings…**. Under **Double tap**,
+   choose **Send a hotkey** and record a combination. Tunk shows it as
+   `Ctrl+Opt+Cmd+;`, the same spelling VoiceInk takes.
 2. In VoiceInk, go to **Settings → Shortcuts → Second Shortcut**, record the same
    combination, and set the recording mode to **toggle**.
 3. Your manual trigger keeps working. Tunk drives the second one.
@@ -229,7 +297,7 @@ session of six prompted taps in which nobody touched the machine.
 | `Sources/TunkCore` | detector and DSP — pure, deterministic, reads no clock |
 | `Sources/TunkIMU` | accelerometer over the private IOHID interface |
 | `Sources/TunkEmit` | actions: hotkeys and Shortcuts |
-| `Sources/TunkApp` | menubar app and settings |
+| `Sources/TunkApp` | menu bar app and settings |
 | `Sources/TunkCapture` | `tunk-capture` — record and verify sessions |
 | `Sources/TunkLabel` | `tunk-label` — ground truth, and did the taps land |
 | `Sources/TunkScore` | `tunk-score` — the referee |

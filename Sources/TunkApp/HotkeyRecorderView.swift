@@ -15,7 +15,7 @@ struct HotkeyRecorderView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Button(action: toggle) {
-                    Text(recording ? "Press keys…" : binding.symbolicDescription)
+                    Text(recording ? "Press keys…" : binding.description)
                         .font(.system(size: 13, weight: .medium))
                         .monospacedDigit()
                         .frame(minWidth: 96)
@@ -102,11 +102,11 @@ struct HotkeyRecorderView: View {
         // flagsChanged keyCode=60 flags=0x20020004, with the right-hand device
         // bit set. So this is advice, not a veto.
         if spec.isTypingModifier {
-            complaint = "\(spec.symbolicDescription) is also a typing key, so a stray "
+            complaint = "\(spec.description) is also a typing key, so a stray "
                 + "double-tap sends a real modifier. Harmless on its own, but a rare "
                 + "combination misfires less."
         } else if spec.isBareModifier {
-            complaint = "\(spec.symbolicDescription) works. A lone modifier is easier to "
+            complaint = "\(spec.description) works. A lone modifier is easier to "
                 + "hit by accident than a combination."
         } else {
             complaint = nil

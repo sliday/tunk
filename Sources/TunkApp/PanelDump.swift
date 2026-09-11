@@ -3,14 +3,18 @@ import SwiftUI
 import TunkCore
 import TunkEmit
 
-/// `tunk --dump-panel <dir>` renders the settings panel to PNGs, one per action
-/// kind, in light and dark. The same idea as `--dump-glyphs`: a reviewer should
-/// be able to look at the artifact rather than at a description of it, without
-/// granting Accessibility to a build first.
+/// `tunk --dump-panel <dir>` renders the settings window to PNGs: every
+/// section, in light and dark, plus the states a reviewer cannot reach from a
+/// terminal that already holds both grants. The same idea as `--dump-glyphs`:
+/// a reviewer should be able to look at the artifact rather than at a
+/// description of it, without granting Accessibility to a build first.
 ///
 /// It renders against a throwaway defaults suite, so running it cannot disturb
 /// the settings the operator is using. It never runs a Shortcut — the panel
 /// lists them, which is read-only.
+///
+/// Each PNG's rendered height is printed next to its path. The General page is
+/// held to 680 pt without scrolling; the number on stdout is the measurement.
 enum PanelDump {
     static func run(into directory: String) {
         let url = URL(fileURLWithPath: directory, isDirectory: true)
@@ -21,63 +25,67 @@ enum PanelDump {
 
         let settings = AppSettings(suiteName: suite)
         let engine = Engine(settings: settings)
-        let panel = PanelModel()
         engine.refreshShortcutCatalog()
         RunLoop.current.run(until: Date().addingTimeInterval(0.4))
 
+        // Both grants forced on, whatever the calling terminal holds, so every
+        // section renders the way a set-up machine shows it. The one render
+        // that wants the permission card forces the opposite below.
+        let granted = PermissionState(accessibility: true, inputMonitoring: true)
+
+        // Every section, shipped defaults, double tap bound to a hotkey.
+        settings.setActionKind(.hotkey, for: 2)
+        settings.setActionKind(.none, for: 1)
+        for section in SettingsSection.allCases {
+            write("panel-\(section.rawValue)", into: url,
+                  settings: settings, engine: engine, section: section, permissions: granted)
+        }
+
+        // The permission card, on the page it appears on. Forced rather than
+        // read: a dump made from a terminal that has both grants would never
+        // show it otherwise.
+        write("panel-nopermissions", into: url, settings: settings, engine: engine,
+              section: .general,
+              permissions: PermissionState(accessibility: false, inputMonitoring: false))
+        write("panel-onepermission", into: url, settings: settings, engine: engine,
+              section: .general,
+              permissions: PermissionState(accessibility: true, inputMonitoring: false))
+
+        // Actions, one per kind. Both rows to the same kind, so one render shows
+        // the double-tap row and the single-tap row with its caution side by side.
         for kind in TunkAction.Kind.allCases {
-            // Both rows to the same kind, so one render shows the double-tap row
-            // and the single-tap row with its caution side by side.
             settings.setActionKind(kind, for: 2)
             settings.setActionKind(kind, for: 1)
-            for dark in [false, true] {
-                let name = "panel-\(kind.rawValue)-\(dark ? "dark" : "light").png"
-                let file = url.appendingPathComponent(name)
-                let view = SettingsView(settings: settings, engine: engine, panel: panel)
-                guard let data = render(view, dark: dark) else {
-                    FileHandle.standardError.write(Data("could not render \(name)\n".utf8))
-                    continue
-                }
-                try? data.write(to: file)
-                FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
-            }
+            write("panel-actions-\(kind.rawValue)", into: url,
+                  settings: settings, engine: engine, section: .actions, permissions: granted)
         }
+        settings.setActionKind(.hotkey, for: 2)
+        settings.setActionKind(.none, for: 1)
 
         renderMigrationCard(into: url)
 
         // One pass with the resonator switched on. This is the only place the
-        // switch's WIRING is checked end to end: the panel's "effective
+        // switch's WIRING is checked end to end: the Advanced page's "effective
         // threshold" readout comes from `engine.effectiveConfig`, so if the
         // derivation in `AppSettings.effectiveConfig` were not reaching the
         // detector this render would still say 0.032. A switch that silently
         // does nothing is the failure this project keeps finding, and reading
-        // the number off the artifact is how it gets caught.
-        settings.setActionKind(.hotkey, for: 2)
-        settings.setActionKind(.none, for: 1)
+        // the number off the artifact is how it gets caught. General gets the
+        // same pass, for the plain-words line that points at Advanced.
         settings.experimentalResonator = true
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        for dark in [false, true] {
-            let file = url.appendingPathComponent("panel-resonator-\(dark ? "dark" : "light").png")
-            let view = SettingsView(settings: settings, engine: engine, panel: panel)
-            guard let data = render(view, dark: dark) else { continue }
-            try? data.write(to: file)
-            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
-        }
+        write("panel-resonator", into: url, settings: settings, engine: engine,
+              section: .advanced, permissions: granted)
+        write("panel-resonator-general", into: url, settings: settings, engine: engine,
+              section: .general, permissions: granted)
         settings.experimentalResonator = false
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
 
         // One extra pass at the gate slider's floor, so the caution that only
         // appears at low values is inspectable rather than merely written.
-        settings.setActionKind(.hotkey, for: 2)
-        settings.setActionKind(.none, for: 1)
         settings.config.gateWindowNs = Int64(SettingsView.gateFloorMs) * 1_000_000
-        for dark in [false, true] {
-            let file = url.appendingPathComponent("panel-gatefloor-\(dark ? "dark" : "light").png")
-            let view = SettingsView(settings: settings, engine: engine, panel: panel)
-            guard let data = render(view, dark: dark) else { continue }
-            try? data.write(to: file)
-            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
-        }
+        write("panel-gatefloor", into: url, settings: settings, engine: engine,
+              section: .calibration, permissions: granted)
 
         // And one at the far end of the tap-spacing slider, where the detector
         // clamps what the panel stores. Both halves of that story have to be on
@@ -85,13 +93,29 @@ enum PanelDump {
         // the value in force instead of only the one that was dragged to.
         settings.config.gateWindowNs = DetectorConfig.default.gateWindowNs
         settings.config.maxInterTapNs = 700_000_000
+        write("panel-clamped", into: url, settings: settings, engine: engine,
+              section: .advanced, permissions: granted, showAdvanced: true)
+    }
+
+    /// One state, light and dark.
+    private static func write(_ stem: String, into url: URL,
+                              settings: AppSettings, engine: Engine,
+                              section: SettingsSection, permissions: PermissionState,
+                              showAdvanced: Bool = false) {
         for dark in [false, true] {
-            let file = url.appendingPathComponent("panel-clamped-\(dark ? "dark" : "light").png")
+            let name = "\(stem)-\(dark ? "dark" : "light").png"
+            let file = url.appendingPathComponent(name)
+            let panel = PanelModel()
+            panel.section = section
             let view = SettingsView(settings: settings, engine: engine, panel: panel,
-                                    showAdvanced: true)
-            guard let data = render(view, dark: dark) else { continue }
+                                    showAdvanced: showAdvanced, forcedPermissions: permissions)
+            guard let (data, height) = render(view, dark: dark) else {
+                FileHandle.standardError.write(Data("could not render \(name)\n".utf8))
+                continue
+            }
             try? data.write(to: file)
-            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
+            FileHandle.standardOutput.write(
+                Data("wrote \(file.path) (\(Int(height)) pt tall)\n".utf8))
         }
     }
 
@@ -126,20 +150,18 @@ enum PanelDump {
         }
 
         let engine = Engine(settings: settings)
-        for dark in [false, true] {
-            let file = url.appendingPathComponent("panel-migration-\(dark ? "dark" : "light").png")
-            let view = SettingsView(settings: settings, engine: engine, panel: PanelModel())
-            guard let data = render(view, dark: dark) else { continue }
-            try? data.write(to: file)
-            FileHandle.standardOutput.write(Data("wrote \(file.path)\n".utf8))
-        }
+        write("panel-migration", into: url, settings: settings, engine: engine,
+              section: .general,
+              permissions: PermissionState(accessibility: true, inputMonitoring: true))
     }
 
     /// Hosts the panel in an offscreen window so it picks up a real appearance,
-    /// lays it out, then caches the display into a bitmap.
-    private static func render<V: View>(_ view: V, dark: Bool) -> Data? {
+    /// lays it out, then caches the display into a bitmap. Returns the PNG and
+    /// the height the content asked for.
+    private static func render<V: View>(_ view: V, dark: Bool) -> (Data, CGFloat)? {
+        let width = SettingsView.width
         let host = NSHostingView(rootView: view)
-        host.frame = NSRect(x: 0, y: 0, width: 452, height: 900)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: 900)
 
         let window = NSWindow(contentRect: host.frame,
                               styleMask: [.borderless],
@@ -152,13 +174,14 @@ enum PanelDump {
         // content, the second lays out at the height that measurement asked for.
         host.layoutSubtreeIfNeeded()
         let height = max(host.fittingSize.height, 1)
-        host.frame = NSRect(x: 0, y: 0, width: 452, height: height)
-        window.setContentSize(NSSize(width: 452, height: height))
+        host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        window.setContentSize(NSSize(width: width, height: height))
         host.layoutSubtreeIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
 
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return nil }
         host.cacheDisplay(in: host.bounds, to: rep)
-        return rep.representation(using: .png, properties: [:])
+        guard let png = rep.representation(using: .png, properties: [:]) else { return nil }
+        return (png, height)
     }
 }

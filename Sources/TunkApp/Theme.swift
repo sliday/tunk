@@ -13,6 +13,15 @@ enum Metrics {
     static let stagger: Double = 0.1
 }
 
+extension Color {
+    /// The one accent in the app: the icon's amber core. Every view uses it
+    /// where a system accent would otherwise appear, so the settings window,
+    /// the first-run window and the tap monitor read as one thing whatever the
+    /// user's system accent is set to. Cautions stay `.orange`, the system's
+    /// warning colour, so a warning is never mistaken for a highlight.
+    static let tunkAmber = Color(red: 0.96, green: 0.65, blue: 0.16)
+}
+
 extension Animation {
     /// `.snappy` where the OS has it, its spring equivalent below that. Always
     /// interruptible — no keyframes anywhere in this panel.
@@ -38,21 +47,26 @@ extension View {
 /// A section. Depth comes from three stacked low-alpha shadows; there is not a
 /// single hairline divider in this panel.
 struct Card<Content: View>: View {
-    var title: String
+    /// Nil when the card's first control is its own title (the enable switch).
+    var title: String?
     var caption: String?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.primary)
-                if let caption {
-                    Text(caption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            if title != nil || caption != nil {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let title {
+                        Text(title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    if let caption {
+                        Text(caption)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             content()
@@ -94,7 +108,7 @@ struct TunkButtonStyle: ButtonStyle {
                 .background(
                     RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous)
                         .fill(prominent
-                              ? AnyShapeStyle(Color.accentColor)
+                              ? AnyShapeStyle(Color.tunkAmber)
                               : AnyShapeStyle(Color.primary.opacity(0.07)))
                 )
                 .opacity(isEnabled ? 1 : 0.4)

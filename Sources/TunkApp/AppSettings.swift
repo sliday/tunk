@@ -370,6 +370,15 @@ struct PermissionState: Equatable {
 
     var ready: Bool { accessibility && inputMonitoring }
 
+    // The words for the two permissions, stated once so the first-run window,
+    // the settings window and README cannot drift apart.
+    static let inputMonitoringName = "Input Monitoring"
+    static let inputMonitoringWhy =
+        "Reads the accelerometer, and sees when you type so typing never counts as a tap."
+    static let accessibilityName = "Accessibility"
+    static let accessibilityWhy = "Presses the keyboard shortcut for you."
+    static let openButtonTitle = "Open System Settings"
+
     static func current() -> PermissionState {
         PermissionState(
             accessibility: AXIsProcessTrusted(),

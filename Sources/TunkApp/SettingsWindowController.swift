@@ -10,24 +10,37 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     private let engine: Engine
 
+    /// What the sidebar's Set up Tunk… does. The app delegate owns the
+    /// first-run window, so it hands this in after construction.
+    var openSetup: (() -> Void)? {
+        get { panel.openSetup }
+        set { panel.openSetup = newValue }
+    }
+
     init(settings: AppSettings, engine: Engine) {
         self.engine = engine
+        let width = SettingsView.width
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 452, height: 680),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: width, height: 680),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false)
         super.init()
 
-        // Vertically resizable, fixed width: the panel is a single column and
-        // stretching it sideways would only strand the readouts.
-        window.contentMinSize = NSSize(width: 452, height: 380)
-        window.contentMaxSize = NSSize(width: 452, height: 4000)
+        // Vertically resizable, fixed width: the content column is sized for
+        // one card width and stretching it sideways would only strand the
+        // readouts. The sidebar runs up under the title bar, System Settings
+        // style, so the title bar is transparent and its text hidden.
+        window.contentMinSize = NSSize(width: width, height: 380)
+        window.contentMaxSize = NSSize(width: width, height: 4000)
         window.title = "Tunk"
+        window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.titlebarAppearsTransparent = true
-        window.setFrameAutosaveName("dev.tunk.settings")
+        // New name with the new width, so a frame saved by the 452 pt panel
+        // is not restored and then fought over by the size constraints.
+        window.setFrameAutosaveName("dev.tunk.settings.sidebar")
 
         let root = SettingsView(settings: settings, engine: engine, panel: panel)
         window.contentView = NSHostingView(rootView: root)
@@ -41,7 +54,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         panel.monitor.start(engine: engine)
-        if startCalibration { panel.showCalibration = true }
+        if startCalibration {
+            // Land on the page the sheet belongs to, so dismissing it leaves
+            // the user next to the Calibrate… button and the learned value.
+            panel.section = .calibration
+            panel.showCalibration = true
+        }
     }
 
     /// Closes the panel the way the user's red button does, for `--cpu-probe`.

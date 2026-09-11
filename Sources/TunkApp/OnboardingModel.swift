@@ -45,6 +45,12 @@ final class OnboardingModel: ObservableObject {
     @Published private(set) var feltRecently = false
 
     let settings: AppSettings
+    /// Fires once per press of Done, after the flag is stored. The window
+    /// closes on this, not on `settings.$onboardingCompleted`: that publisher
+    /// replays the stored value on subscribe, which closed a reopened window
+    /// on its first run-loop turn, and a second completion (flag already true)
+    /// would not change it at all.
+    var onComplete: (() -> Void)?
     private let engine: Engine?
     private let permissionSource: () -> PermissionState
     private var pollTimer: Timer?
@@ -225,6 +231,7 @@ final class OnboardingModel: ObservableObject {
 
     func complete() {
         settings.onboardingCompleted = true
+        onComplete?()
     }
 
     /// Quits and starts a fresh Tunk that opens this window on the same step.

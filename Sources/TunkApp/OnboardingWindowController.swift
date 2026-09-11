@@ -44,15 +44,14 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             }
             .store(in: &cancellables)
 
-        settings.$onboardingCompleted
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] done in
-                guard done, let self, self.window.isVisible else { return }
-                self.window.close()
-                self.onFinish?()
-            }
-            .store(in: &cancellables)
+        // Close on the model's explicit Done, never on the stored flag: a
+        // reopened window (menu, `--onboarding`) starts with the flag already
+        // true, and `settings.$onboardingCompleted` replays that on subscribe.
+        model.onComplete = { [weak self] in
+            guard let self else { return }
+            self.window.close()
+            self.onFinish?()
+        }
     }
 
     func present() {

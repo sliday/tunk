@@ -8,16 +8,25 @@ in your report instead of editing it.
 
 ```bash
 # Build. Use your own scratch path so parallel agents do not fight over the lock.
-swift build --scratch-path .build-<yourname>
+# The app (product `tunk`, SwiftUI) and the tests need Xcode's toolchain; the
+# Command Line Tools have no SwiftUIMacros plugin and no XCTest.
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  swift build --scratch-path .build-<yourname>
 
-# Tests need Xcode's toolchain for XCTest. Command Line Tools alone lack it.
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   swift test --scratch-path .build-<yourname>
 ```
 
-`xcodebuild` is not on the default path (`xcode-select` points at the CLT
-instance and changing it needs sudo). Prefer SwiftPM. Xcode 26.6 lives at
-`/Applications/Xcode.app` if you need its toolchain.
+`xcode-select` on this machine points at the CLT and changing it needs sudo, so
+`swift build --product tunk` without `DEVELOPER_DIR` fails on the first `@State`
+with `plugin for module SwiftUIMacros not found`. That is the toolchain, not the
+code. The pure targets and the three CLI products build under the CLT.
+`dist/build-app.sh` and `dist/build-dmg.sh` source `dist/toolchain.sh`, which
+finds `/Applications/Xcode.app` and exports `DEVELOPER_DIR` for you. The DMG's
+Finder layout ships as `dist/dmg-assets/DS_Store`, so `build-dmg.sh` needs no
+Finder and no Automation prompt; regenerate it with `REFRESH_LAYOUT=1` after
+changing the geometry (needs `pip3 install --user ds_store mac_alias`). Prefer
+SwiftPM over `xcodebuild`. Xcode 26.6 lives at `/Applications/Xcode.app`.
 
 ## Verified sensor facts
 

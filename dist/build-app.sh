@@ -3,19 +3,30 @@
 #
 # The operator gets something to double-click. Everything here is deliberate:
 #   - LSUIElement in Info.plist is what removes the dock icon
-#   - the bundle id is dev.tunk.Tunk, which is also the UserDefaults suite the
-#     app stores settings in, so the bundle and the bare binary share settings
+#   - the bundle id is dev.tunk.Tunk; settings live in the explicit suite
+#     dev.tunk.settings (AppSettings.suiteName), so the bundle and the bare
+#     binary share settings
 #   - ad-hoc codesign, because Accessibility and Input Monitoring are granted to
 #     a signature; an unsigned bundle gets re-prompted on every rebuild
+#   - the toolchain comes from dist/toolchain.sh: the Command Line Tools cannot
+#     compile SwiftUI macros, so it finds Xcode.app and uses that even when
+#     xcode-select points at the CLT
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 DIST="$ROOT/dist"
 CONFIG="${CONFIG:-release}"
 SCRATCH="${SCRATCH:-$ROOT/.build-app}"
 APP="$DIST/Tunk.app"
+ICON="$ROOT/design/AppIcon.icns"
 
-echo "==> building tunk ($CONFIG)"
+# shellcheck source=dist/toolchain.sh
+. "$DIST/toolchain.sh"
+tunk_pick_toolchain
+
+[ -f "$ICON" ] || { echo "no icon at $ICON (run design/build-icons.sh)" >&2; exit 1; }
+
+echo "==> building tunk ($CONFIG) with $DEVELOPER_DIR"
 swift build --package-path "$ROOT" -c "$CONFIG" --scratch-path "$SCRATCH" --product tunk
 
 BIN="$(swift build --package-path "$ROOT" -c "$CONFIG" --scratch-path "$SCRATCH" \
@@ -28,6 +39,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$DIST/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp "$BIN" "$APP/Contents/MacOS/Tunk"
+# CFBundleIconFile in Info.plist names this file. Without it Finder and the
+# Dock show the generic app tile.
+cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 
 # Ad-hoc signature. TCC keys its grants off this, and it changes on every
 # rebuild, so expect to re-approve Accessibility and Input Monitoring after a

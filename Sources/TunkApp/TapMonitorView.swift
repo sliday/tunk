@@ -149,8 +149,6 @@ struct TapMonitorView: View {
                     idleOverlay
                 }
             }
-            MonitorNumbers(model: store.numbers)
-                .opacity(armed ? 1 : 0.4)
             legend
         }
     }
@@ -162,7 +160,7 @@ struct TapMonitorView: View {
             VStack(spacing: 3) {
                 Text("Detection is off")
                     .font(.system(size: 12, weight: .medium))
-                Text("Turn it on above to watch onsets land.")
+                Text("Turn it on above to watch taps land.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -172,10 +170,10 @@ struct TapMonitorView: View {
 
     private var legend: some View {
         HStack(spacing: 12) {
-            swatch(Color.accentColor, "onset", dashed: false)
-            swatch(Color.secondary.opacity(0.6), "suppressed", dashed: false)
-            swatch(Color.orange.opacity(0.4), "gate window", dashed: false)
-            swatch(Color.accentColor.opacity(0.6), "threshold", dashed: true)
+            swatch(Color.tunkAmber, "tap", dashed: false)
+            swatch(Color.secondary.opacity(0.6), "ignored while typing", dashed: false)
+            swatch(Color.tunkAmber.opacity(0.4), "typing pause", dashed: false)
+            swatch(Color.tunkAmber.opacity(0.6), "trigger level", dashed: true)
             Spacer()
             Text("3.5 s · √g")
                 .font(.system(size: 10))
@@ -197,14 +195,16 @@ struct TapMonitorView: View {
     }
 }
 
-/// Everything here is in g, the unit the detector thresholds in.
-private struct MonitorNumbers: View {
+/// Everything here is in g, the unit the detector thresholds in. Drawn under
+/// Advanced, not next to the trace: these are the detector's own words, and
+/// the General page is held to plain ones.
+struct MonitorNumbersView: View {
     @ObservedObject var model: NumbersModel
 
     var body: some View {
         HStack(spacing: 18) {
             Readout(label: "envelope, g", value: model.envelope)
-            Readout(label: "threshold, g", value: model.threshold, accent: .accentColor)
+            Readout(label: "threshold, g", value: model.threshold, accent: .tunkAmber)
             Readout(label: "noise floor, g", value: model.noiseFloor)
             Readout(label: "onsets, 3.5 s", value: model.onsetCount)
         }
@@ -221,7 +221,7 @@ private struct GatePill: View {
             Circle()
                 .fill(model.gateActive ? Color.orange : Color.green)
                 .frame(width: 6, height: 6)
-            Text(model.gateActive ? "SUPPRESSING" : "GATE OPEN")
+            Text(model.gateActive ? "PAUSED FOR TYPING" : "LISTENING")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(model.gateActive ? Color.orange : Color.secondary)
         }
@@ -242,7 +242,7 @@ private struct TraceView: View {
         Canvas(rendersAsynchronously: false) { context, size in
             draw(context: &context, size: size)
         }
-        .frame(height: 118)
+        .frame(height: 92)
         .background(
             RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous)
                 .fill(Color.primary.opacity(0.055))
@@ -279,7 +279,7 @@ private struct TraceView: View {
             let x1 = x(min(span.upperBound, frame.nowNs))
             guard x1 > x0 else { continue }
             context.fill(Path(CGRect(x: x0, y: 0, width: max(x1 - x0, 1), height: size.height)),
-                         with: .color(.orange.opacity(0.16)))
+                         with: .color(.tunkAmber.opacity(0.16)))
         }
 
         // The detector's own transient envelope, in g.
@@ -300,7 +300,7 @@ private struct TraceView: View {
         var dashes = Path()
         dashes.move(to: CGPoint(x: 0, y: line))
         dashes.addLine(to: CGPoint(x: size.width, y: line))
-        context.stroke(dashes, with: .color(.accentColor.opacity(0.55)),
+        context.stroke(dashes, with: .color(.tunkAmber.opacity(0.55)),
                        style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
 
         // Onsets: a spike whose alpha decays with age, so a burst reads as a
@@ -312,7 +312,7 @@ private struct TraceView: View {
             let px = x(onset.tNs)
             let top = y(onset.strength)
             let bar = Path(CGRect(x: px - 1, y: top, width: 2, height: size.height - top))
-            let color: Color = onset.suppressedByGate ? .secondary : .accentColor
+            let color: Color = onset.suppressedByGate ? .secondary : .tunkAmber
             context.fill(bar,
                          with: .color(color.opacity(alpha * (onset.suppressedByGate ? 0.5 : 0.95))))
         }
@@ -323,9 +323,9 @@ private struct TraceView: View {
             let alpha = max(0, 1 - age / MonitorStore.window)
             let px = x(t)
             context.fill(Path(CGRect(x: px - 1.5, y: 0, width: 3, height: size.height)),
-                         with: .color(.accentColor.opacity(alpha * 0.35)))
+                         with: .color(.tunkAmber.opacity(alpha * 0.35)))
             context.fill(Path(ellipseIn: CGRect(x: px - 3.5, y: 3, width: 7, height: 7)),
-                         with: .color(.accentColor.opacity(alpha)))
+                         with: .color(.tunkAmber.opacity(alpha)))
         }
     }
 }

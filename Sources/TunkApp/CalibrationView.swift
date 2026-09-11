@@ -61,7 +61,7 @@ struct CalibrationView: View {
             HStack(spacing: 6) {
                 ForEach(0..<Self.target, id: \.self) { index in
                     Circle()
-                        .fill(index < gestures.count ? Color.accentColor
+                        .fill(index < gestures.count ? Color.tunkAmber
                               : Color.primary.opacity(0.12))
                         .frame(width: 12, height: 12)
                         .scaleEffect(index < gestures.count ? 1 : 0.72)
@@ -108,7 +108,7 @@ struct CalibrationView: View {
                             accent: .primary)
                     Readout(label: scaledBySensitivity ? "threshold in force" : "threshold",
                             value: format(thresholdInForce ?? result.threshold),
-                            accent: .accentColor)
+                            accent: .tunkAmber)
                     Readout(label: "margin",
                             value: String(format: "%.2f×", marginInForce),
                             accent: marginInForce < TapCalibration.comfortableMargin
@@ -275,7 +275,7 @@ struct CalibrationView: View {
                 ZStack(alignment: .bottomLeading) {
                     if let derived {
                         Rectangle()
-                            .fill(Color.accentColor.opacity(0.55))
+                            .fill(Color.tunkAmber.opacity(0.55))
                             .frame(height: 1)
                             .offset(y: -CGFloat(derived) * unit)
                             .frame(maxHeight: .infinity, alignment: .bottom)
@@ -283,7 +283,7 @@ struct CalibrationView: View {
                     HStack(alignment: .bottom, spacing: 5) {
                         ForEach(Array(sorted.enumerated()), id: \.offset) { index, value in
                             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.75))
+                                .fill(Color.tunkAmber.opacity(0.75))
                                 .frame(height: max(CGFloat(value) * unit, 2))
                                 .scaleEffect(y: revealed ? 1 : 0.05, anchor: .bottom)
                                 .tunkAnimation(.tunkSnappy.delay(Double(index) * 0.02),
