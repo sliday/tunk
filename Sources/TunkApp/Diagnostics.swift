@@ -386,7 +386,9 @@ enum Diagnostics {
     /// (resonator) threshold into the stored config when calibration ends.
     /// Toggles the resonator while the learn step is open, cancels, and checks
     /// that the stored config is the one the user had, and that switching the
-    /// resonator off afterwards leaves the shipped default in force.
+    /// resonator off afterwards leaves the shipped default in force. Also
+    /// checks that a cancel with the resonator on hands the detector the
+    /// derived threshold rather than the stored one.
     ///
     /// Runs against a throwaway defaults suite.
     static func calibrationConfigProbe() {
@@ -432,6 +434,21 @@ enum Diagnostics {
         check("stored write during calibration survives cancel",
               settings.config.sensitivity == 1.35,
               "stored sensitivity=\(String(format: "%.2f", settings.config.sensitivity))")
+
+        // Resonator already on when the learn step opens, then cancelled: the
+        // detector has to come back on the derived threshold, not the stored
+        // one. Cancel writes the stored config back unchanged, so `didSet`
+        // does not publish, and the detector keeps whatever `endCalibration`
+        // handed it directly.
+        settings.experimentalResonator = true
+        let derived = settings.effectiveConfig.effectiveThreshold
+        engine.beginCalibration()
+        _ = engine.endCalibration(commit: nil)
+        check("cancel with the resonator on hands the detector the derived threshold",
+              engine.effectiveConfig.effectiveThreshold == derived,
+              "in force=\(g(engine.effectiveConfig.effectiveThreshold)) "
+              + "derived=\(g(derived)) stored=\(g(settings.config.effectiveThreshold))")
+        settings.experimentalResonator = false
 
         line("")
         line(failures == 0
