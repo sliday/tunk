@@ -62,6 +62,9 @@ public final class CGEventPoster: KeyEventPosting {
 
     private let source: CGEventSource?
     private let tapLocation: CGEventTapLocation
+    /// What the session currently holds. Read live by default; a test injects
+    /// a value so the flag arithmetic can be pinned without posting.
+    var liveFlags: () -> CGEventFlags = { CGEventSource.flagsState(.combinedSessionState) }
 
     /// - Parameter stateID: `.privateState` by default. That keeps the user's
     ///   physically held modifiers out of our synthetic event; with
@@ -120,13 +123,13 @@ public final class CGEventPoster: KeyEventPosting {
         else { throw EmitError.eventCreationFailed(keyCode: 0) }
         cg.type = .flagsChanged
         // Read what the session holds right now and subtract only our own bits.
-        let live = CGEventSource.flagsState(.combinedSessionState)
+        let live = liveFlags()
         cg.flags = live.subtracting(asserted)
         cg.setIntegerValueField(.eventSourceUserData, value: Self.userDataTag)
         cg.post(tap: tapLocation)
     }
 
-    private func makeEvent(_ event: EmittedKeyEvent) -> CGEvent? {
+    func makeEvent(_ event: EmittedKeyEvent) -> CGEvent? {
         guard let cg = CGEvent(keyboardEventSource: source,
                                virtualKey: CGKeyCode(event.keyCode),
                                keyDown: event.phase == .down) else { return nil }
@@ -135,11 +138,22 @@ public final class CGEventPoster: KeyEventPosting {
         // that; a synthesized key-down with keycode 60 would be ignored.
         if KeyCodes.isModifier(event.keyCode) {
             cg.type = .flagsChanged
+            // A flagsChanged is absolute: it replaces the session's modifier
+            // set. Stamping only our own bits told every listener the user had
+            // let go of everything else, the same shape `releaseModifiers`
+            // documents clearing hardware Caps Lock and a held Control. So
+            // start from what the session holds, add ours on the down, and on
+            // the up drop only the key's own bits (those the caller already
+            // cleared from the release half).
+            let own = HotkeySpec(keyCode: event.keyCode, modifiers: []).eventFlags()
+            let live = liveFlags()
+            cg.flags = live.union(event.flags).subtracting(own.subtracting(event.flags))
+        } else {
+            // Flags go on both halves: a listener that reads them off the key-up
+            // (VoiceInk's toggle mode does) must see the same combination. The
+            // caller clears the key's own bit on the release half.
+            cg.flags = event.flags
         }
-        // Flags go on both halves: a listener that reads them off the key-up
-        // (VoiceInk's toggle mode does) must see the same combination. The
-        // caller clears the key's own bit on the release half.
-        cg.flags = event.flags
         cg.setIntegerValueField(.eventSourceUserData, value: Self.userDataTag)
         return cg
     }
