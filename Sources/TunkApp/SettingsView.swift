@@ -3,8 +3,45 @@ import SwiftUI
 import TunkCore
 import TunkEmit
 
+/// The four pages of the settings window. Sidebar order.
+enum SettingsSection: String, CaseIterable, Identifiable {
+    case general, actions, calibration, advanced
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general:     return "General"
+        case .actions:     return "Actions"
+        case .calibration: return "Calibration"
+        case .advanced:    return "Advanced"
+        }
+    }
+
+    var caption: String {
+        switch self {
+        case .general:     return "Turn detection on, watch taps land, and choose what a double-tap does."
+        case .actions:     return "One action per tap count. Double tap is the one that ships armed."
+        case .calibration: return "Teach Tunk how hard you tap, and how long to ignore taps after typing."
+        case .advanced:    return "Timing, the raw signal, and two experiments that ship off."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general:     return "switch.2"
+        case .actions:     return "keyboard"
+        case .calibration: return "waveform.path.ecg"
+        case .advanced:    return "slider.horizontal.3"
+        }
+    }
+}
+
 final class PanelModel: ObservableObject {
     @Published var showCalibration = false
+    /// Which page is showing. Owned here so the window controller can land the
+    /// user on Calibration when the menu's Calibrate… opened the window.
+    @Published var section: SettingsSection = .general
 
     /// The tap monitor's 60 Hz poll loop, owned here so the window controller
     /// can start and stop it imperatively.
@@ -50,48 +87,190 @@ struct SettingsView: View {
     /// cannot drift apart.
     static let gateCautionMs = Double(SettingsMigration.minimumSafeGateNs) / 1_000_000
 
-    @State private var showAdvanced: Bool
+    /// Window width. Fixed: the sidebar is 168 pt and the content column is
+    /// sized for one card width, so stretching sideways would only strand the
+    /// readouts. The window controller and `--dump-panel` both read this.
+    static let width: CGFloat = 640
+    static let sidebarWidth: CGFloat = 168
+
     /// The lap-pairing card carries three long caveats. Collapsed by default so
-    /// the panel keeps its rhythm; every word is still one click away, and
+    /// the page keeps its rhythm; every word is still one click away, and
     /// `--dump-panel` opens it so the copy is reviewable as a rendered artifact.
     @State private var showLapPairingDetail: Bool
     /// Keyed by tap count: each row's Test button reports into its own row.
     @State private var testResults: [Int: String] = [:]
+    /// Only `--dump-panel` sets this. The permission card appears only when a
+    /// grant is missing, and a dump made from a terminal that has both grants
+    /// would never show it; forcing the state here is how the card gets
+    /// rendered without revoking anything.
+    private let forcedPermissions: PermissionState?
 
-    /// - Parameter showAdvanced: opens the Timing group. Only `--dump-panel`
-    ///   passes true, so the timing sliders and their in-force readouts can be
-    ///   reviewed as a rendered artifact rather than as a description.
-    init(settings: AppSettings, engine: Engine, panel: PanelModel, showAdvanced: Bool = false) {
+    /// - Parameter showAdvanced: opens the lap-pairing caveats. Only
+    ///   `--dump-panel` passes true, so the copy can be reviewed as a rendered
+    ///   artifact rather than as a description.
+    /// - Parameter forcedPermissions: what the view should believe macOS has
+    ///   granted, overriding the engine's reading. `--dump-panel` only.
+    init(settings: AppSettings, engine: Engine, panel: PanelModel, showAdvanced: Bool = false,
+         forcedPermissions: PermissionState? = nil) {
         self.settings = settings
         self.engine = engine
         self.panel = panel
-        _showAdvanced = State(initialValue: showAdvanced)
+        self.forcedPermissions = forcedPermissions
         _showLapPairingDetail = State(initialValue: showAdvanced)
     }
 
+    private var permissions: PermissionState { forcedPermissions ?? engine.permissions }
+
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(spacing: 14) {
-                if !engine.permissions.ready { permissionCard }
-                if !settings.migrationNotes.isEmpty { migrationCard }
-                statusCard
-                monitorCard
-                detectionCard
-                // Double first: it is what ships armed and the reason the app
-                // exists. Single sits below with its caution.
-                ForEach(ActionBindings.wiredCounts, id: \.self) { actionCard(tapCount: $0) }
-                calibrationCard
-                lapPairingCard
-                footnote
+        HStack(spacing: 0) {
+            sidebar
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionHeader
+                    switch panel.section {
+                    case .general:     generalPage
+                    case .actions:     actionsPage
+                    case .calibration: calibrationPage
+                    case .advanced:    advancedPage
+                    }
+                }
+                .padding(Metrics.panelPadding)
+                // Room for the title bar, which overlays the content.
+                .padding(.top, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(Metrics.panelPadding)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(width: 452)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(width: Self.width)
         .onAppear { engine.refreshShortcutCatalog() }
         .sheet(isPresented: $panel.showCalibration) {
             CalibrationView(engine: engine) { panel.showCalibration = false }
         }
+    }
+
+    // MARK: - sidebar
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tunk")
+                    .font(.system(size: 15, weight: .bold))
+                Text("Double tap. Do more.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            // Clears the traffic lights, which sit over the sidebar.
+            .padding(.top, 44)
+            .padding(.bottom, 16)
+
+            VStack(spacing: 2) {
+                ForEach(SettingsSection.allCases) { section in
+                    sidebarRow(section)
+                }
+            }
+            .padding(.horizontal, 8)
+
+            Spacer(minLength: 16)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Reads only the accelerometer. Nothing leaves your Mac.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Tunk \(Self.version)")
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
+        }
+        .frame(width: Self.sidebarWidth)
+        .frame(maxHeight: .infinity, alignment: .top)
+        // A shade off the content column, in both appearances, without a
+        // hairline between them.
+        .background(Color(nsColor: .windowBackgroundColor)
+                        .overlay(Color.primary.opacity(0.045)))
+    }
+
+    private static var version: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "dev"
+    }
+
+    private func sidebarRow(_ section: SettingsSection) -> some View {
+        let selected = panel.section == section
+        return Button {
+            panel.section = section
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: section.symbol)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 20)
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                Text(section.title)
+                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: Metrics.controlRadius, style: .continuous)
+                    .fill(selected ? Color.primary.opacity(0.09) : Color.clear)
+            )
+            .contentShape(Rectangle())
+            .frame(minHeight: Metrics.hitTarget)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .tunkAnimation(.tunkQuick, value: selected, reduceMotion: reduceMotion)
+    }
+
+    private var sectionHeader: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(panel.section.title)
+                .font(.system(size: 17, weight: .bold))
+            Text(panel.section.caption)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 2)
+        .padding(.bottom, 2)
+    }
+
+    // MARK: - pages
+
+    /// Everything a non-technical person needs, and nothing that needs a
+    /// glossary. Fits 680 pt without scrolling when both permissions are
+    /// granted and no migration note is pending; either card pushes it over,
+    /// and both are cards the user is meant to act on and dismiss.
+    @ViewBuilder private var generalPage: some View {
+        if !permissions.ready { permissionCard }
+        if !settings.migrationNotes.isEmpty { migrationCard }
+        statusCard
+        monitorCard
+        actionCard(tapCount: 2, compact: true)
+    }
+
+    @ViewBuilder private var actionsPage: some View {
+        // Double first: it is what ships armed and the reason the app exists.
+        // Single sits below with its caution.
+        ForEach(ActionBindings.wiredCounts, id: \.self) { actionCard(tapCount: $0, compact: false) }
+    }
+
+    @ViewBuilder private var calibrationPage: some View {
+        calibrationCard
+        detectionCard
+    }
+
+    @ViewBuilder private var advancedPage: some View {
+        timingCard
+        signalCard
+        lapPairingCard
+        footnote
     }
 
     // MARK: - permissions
@@ -103,12 +282,12 @@ struct SettingsView: View {
                     + "fires while you type.") {
             VStack(alignment: .leading, spacing: 8) {
                 permissionRow("Input Monitoring", "reads the accelerometer",
-                              granted: engine.permissions.inputMonitoring) {
+                              granted: permissions.inputMonitoring) {
                     PermissionState.promptInputMonitoring()
                     PermissionState.openInputMonitoringPane()
                 }
                 permissionRow("Accessibility", "posts the hotkey and watches for typing",
-                              granted: engine.permissions.accessibility) {
+                              granted: permissions.accessibility) {
                     PermissionState.promptAccessibility()
                     PermissionState.openAccessibilityPane()
                 }
@@ -128,6 +307,12 @@ struct SettingsView: View {
                 Text(why).font(.system(size: 10)).foregroundStyle(.tertiary)
             }
             Spacer()
+            Text(granted ? "Granted" : "Not granted")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(granted ? Color.green : Color.orange)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill((granted ? Color.green : Color.orange).opacity(0.12)))
             if !granted {
                 Button("Open Settings", action: action).buttonStyle(TunkButtonStyle())
             }
@@ -178,9 +363,16 @@ struct SettingsView: View {
     // MARK: - status
 
     private var statusCard: some View {
-        Card(title: "Status") {
-            HStack(alignment: .top, spacing: 10) {
-                HStack(spacing: 8) {
+        Card(title: nil) {
+            HStack(alignment: .center, spacing: 14) {
+                Toggle("Enable detection", isOn: $settings.enabled)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize()
+                    .frame(minHeight: Metrics.hitTarget)
+                    .contentShape(Rectangle())
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
                     Circle()
                         .fill(statusColor)
                         .frame(width: 8, height: 8)
@@ -188,21 +380,25 @@ struct SettingsView: View {
                                        reduceMotion: reduceMotion)
                     Text(statusLabel)
                         .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
-                .frame(minWidth: 120, alignment: .leading)
-
+            }
+            HStack(spacing: 18) {
                 Readout(label: "sample rate",
                         value: String(format: "%.0f Hz", engine.sampleRateHz))
-                Readout(label: "fired", value: "\(engine.triggerCount)")
+                Readout(label: "taps fired", value: "\(engine.triggerCount)")
                 Readout(label: "last latency",
                         value: engine.lastLatencyMs.map { String(format: "%.0f ms", $0) } ?? "—")
             }
-            Toggle("Enable detection", isOn: $settings.enabled)
-                .toggleStyle(.switch)
-                .font(.system(size: 12))
-                .frame(minHeight: Metrics.hitTarget)
-                .contentShape(Rectangle())
-
+            // The live tuning is named in full under Advanced. Here it only has
+            // to be impossible to miss.
+            if !Self.nonDefaultParts(engine.liveTuning).isEmpty {
+                Text("Running an experiment, not the shipped detector. See Advanced.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -227,8 +423,7 @@ struct SettingsView: View {
 
     private var monitorCard: some View {
         Card(title: "Tap monitor",
-             caption: "Onsets as they land, with the gate window shaded. If a spike is grey "
-                    + "the gate ate it on purpose — that is typing suppression working.") {
+             caption: "Taps as they land. A grey spike was ignored because you were typing.") {
             TapMonitorView(engine: engine, armed: engine.status.isArmed,
                            store: panel.monitor)
             // A gesture the detector saw and deliberately did not act on. Without
@@ -252,10 +447,10 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - detection
+    // MARK: - detection (Calibration page)
 
     private var detectionCard: some View {
-        Card(title: "Detection",
+        Card(title: "Sensitivity",
              caption: "These write straight into the detector. There is no second copy.") {
             slider(title: "Sensitivity",
                    value: $settings.config.sensitivity,
@@ -267,19 +462,19 @@ struct SettingsView: View {
             // typing from firing the detector, and the PRD calls typing false
             // positives the make-or-break metric — a slider that reaches 0
             // lets a user switch that defence off by dragging, with no idea
-            // what they just did. The floor is 60 ms; below the PRD's own
-            // 150 ms starting point the panel says what it costs.
-            slider(title: "Gate window",
+            // what they just did. Below the PRD's own 150 ms starting point the
+            // panel says what it costs.
+            slider(title: "Ignore taps after typing",
                    value: Binding(
                     get: { Double(settings.config.gateWindowNs) / 1_000_000 },
                     set: { settings.config.gateWindowNs = Int64($0 * 1_000_000) }),
                    range: Self.gateFloorMs...400, step: 10,
                    readout: String(format: "%.0f ms", Double(settings.config.gateWindowNs) / 1_000_000),
-                   help: "Onsets are ignored for this long after any keystroke or click. "
-                       + "This is the knob that kills typing false positives.")
+                   help: "Taps are ignored for this long after any keystroke or click. "
+                       + "This is the knob that stops typing from firing Tunk.")
 
             if Double(settings.config.gateWindowNs) / 1_000_000 < Self.gateCautionMs {
-                Text("Below \(Int(Self.gateCautionMs)) ms the gate stops covering the gap "
+                Text("Below \(Int(Self.gateCautionMs)) ms this stops covering the gap "
                    + "between keystrokes, so typing can fire a tap. Raise it back to "
                    + "180 ms if Tunk starts triggering mid-sentence.")
                     .font(.system(size: 11))
@@ -287,13 +482,21 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
 
-            // Read what is in force, not what was typed. The detector clamps
-            // incoherent combinations on every write, so these two can differ —
-            // and a readout showing the number that is not running would be
-            // worse than no readout.
-            let inForce = engine.effectiveConfig
-            let frontEnd = engine.liveTuning
+    // MARK: - timing (Advanced page)
+
+    private var timingCard: some View {
+        // Read what is in force, not what was typed. The detector clamps
+        // incoherent combinations on every write, so these two can differ —
+        // and a readout showing the number that is not running would be
+        // worse than no readout.
+        let inForce = engine.effectiveConfig
+        let frontEnd = engine.liveTuning
+        return Card(title: "Timing",
+                    caption: "Gaps and windows in milliseconds. The readouts show what the "
+                           + "detector is running right now.") {
             // Anything running that is not the shipped detector gets named here,
             // read from the LIVE detector rather than from the switches. The
             // harness prints the same warning on a run; the app said nothing, so
@@ -331,58 +534,59 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            DisclosureGroup(isExpanded: $showAdvanced) {
-                VStack(alignment: .leading, spacing: 10) {
-                    slider(title: "Min gap between taps",
-                           value: msBinding(\.minInterTapNs), range: 40...200, step: 10,
-                           readout: msReadout(settings.config.minInterTapNs,
-                                              inForce: inForce.minInterTapNs), help: nil)
-                    slider(title: "Max gap between taps",
-                           value: msBinding(\.maxInterTapNs), range: 200...700, step: 10,
-                           readout: msReadout(settings.config.maxInterTapNs,
-                                              inForce: inForce.maxInterTapNs), help: nil)
-                    // Range starts at 160, not 100. Below that the app cannot
-                    // detect a double-tap AT ALL, because madeCoherent() clamps
-                    // maxInterTapNs down to the confirm window, so lowering this
-                    // silently narrows the join window with it. Driven over the
-                    // real detector at the spacings this project has measured on
-                    // itself (desk 168-199 ms, soft 149-371 ms):
-                    //
-                    //   confirm 100/120/140 ms -> 0 of 8 double-taps detected
-                    //   confirm 160 ms         -> 2 of 8
-                    //   confirm 180 ms         -> 4 of 8
-                    //   confirm 220 ms         -> 8 of 8   (shipped)
-                    //
-                    // The help text said the opposite: that this only governed
-                    // room for a future third tap. A slider whose own minimum
-                    // breaks the product is worse than no slider.
-                    slider(title: "Confirm window",
-                           value: msBinding(\.confirmWindowNs), range: 160...300, step: 10,
-                           readout: msReadout(settings.config.confirmWindowNs,
-                                              inForce: inForce.confirmWindowNs),
-                           help: "How long Tunk waits after your second tap before acting. "
-                               + "It is also the widest gap allowed between the two taps, so "
-                               + "lowering it makes a slower double-tap stop registering: "
-                               + "measured on this machine, 180 ms catches about half the "
-                               + "gestures 220 ms catches. Raising it adds the same delay to "
-                               + "every tap.")
-                    slider(title: "Refractory",
-                           value: msBinding(\.refractoryNs), range: 200...1500, step: 50,
-                           readout: ms(settings.config.refractoryNs), help: nil)
-                    HStack {
-                        Spacer()
-                        Button("Reset to defaults") { settings.resetDetectionToDefaults() }
-                            .buttonStyle(TunkButtonStyle())
-                    }
-                }
-                .padding(.top, 8)
-            } label: {
-                Text("Timing")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(minHeight: 24)
-                    .contentShape(Rectangle())
+            slider(title: "Min gap between taps",
+                   value: msBinding(\.minInterTapNs), range: 40...200, step: 10,
+                   readout: msReadout(settings.config.minInterTapNs,
+                                      inForce: inForce.minInterTapNs), help: nil)
+            slider(title: "Max gap between taps",
+                   value: msBinding(\.maxInterTapNs), range: 200...700, step: 10,
+                   readout: msReadout(settings.config.maxInterTapNs,
+                                      inForce: inForce.maxInterTapNs), help: nil)
+            // Range starts at 160, not 100. Below that the app cannot
+            // detect a double-tap AT ALL, because madeCoherent() clamps
+            // maxInterTapNs down to the confirm window, so lowering this
+            // silently narrows the join window with it. Driven over the
+            // real detector at the spacings this project has measured on
+            // itself (desk 168-199 ms, soft 149-371 ms):
+            //
+            //   confirm 100/120/140 ms -> 0 of 8 double-taps detected
+            //   confirm 160 ms         -> 2 of 8
+            //   confirm 180 ms         -> 4 of 8
+            //   confirm 220 ms         -> 8 of 8   (shipped)
+            //
+            // The help text said the opposite: that this only governed
+            // room for a future third tap. A slider whose own minimum
+            // breaks the product is worse than no slider.
+            slider(title: "Confirm window",
+                   value: msBinding(\.confirmWindowNs), range: 160...300, step: 10,
+                   readout: msReadout(settings.config.confirmWindowNs,
+                                      inForce: inForce.confirmWindowNs),
+                   help: "How long Tunk waits after your second tap before acting. "
+                       + "It is also the widest gap allowed between the two taps, so "
+                       + "lowering it makes a slower double-tap stop registering: "
+                       + "measured on this machine, 180 ms catches about half the "
+                       + "gestures 220 ms catches. Raising it adds the same delay to "
+                       + "every tap.")
+            slider(title: "Refractory",
+                   value: msBinding(\.refractoryNs), range: 200...1500, step: 50,
+                   readout: ms(settings.config.refractoryNs), help: nil)
+            HStack {
+                Spacer()
+                Button("Reset to defaults") { settings.resetDetectionToDefaults() }
+                    .buttonStyle(TunkButtonStyle())
             }
-            .tunkAnimation(.tunkSnappy, value: showAdvanced, reduceMotion: reduceMotion)
+        }
+    }
+
+    /// The monitor's numbers, in the detector's units. They move at 6 Hz while
+    /// the panel is open and belong next to the timing sliders, not on the page
+    /// a first-time user lands on.
+    private var signalCard: some View {
+        Card(title: "Live signal",
+             caption: "Everything in g, the unit the detector thresholds in. Same feed as "
+                    + "the tap monitor on General.") {
+            MonitorNumbersView(model: panel.monitor.numbers)
+                .opacity(engine.status.isArmed ? 1 : 0.4)
         }
     }
 
@@ -443,8 +647,13 @@ struct SettingsView: View {
     /// One row of the Back Tap model: a tap count, and the action bound to it.
     /// The kind picker is the only control always on screen; the rest of the
     /// card is whatever that kind needs.
-    private func actionCard(tapCount count: Int) -> some View {
-        Card(title: rowTitle(count), caption: rowCaption(count)) {
+    ///
+    /// - Parameter compact: the General page's copy of the double-tap row. Same
+    ///   controls writing the same settings; it leaves out the emission counters
+    ///   and the Shortcut timing, which live on the full row under Actions.
+    private func actionCard(tapCount count: Int, compact: Bool) -> some View {
+        Card(title: count == 2 && compact ? "Double-tap action" : rowTitle(count),
+             caption: rowCaption(count, compact: compact)) {
             Picker(rowTitle(count), selection: actionKind(count)) {
                 Text("Send a hotkey").tag(TunkAction.Kind.hotkey)
                 Text("Run a Shortcut").tag(TunkAction.Kind.shortcut)
@@ -458,25 +667,30 @@ struct SettingsView: View {
 
             Group {
                 switch settings.actionKind(for: count) {
-                case .hotkey:   hotkeySection(count)
+                case .hotkey:   hotkeySection(count, compact: compact)
                 case .shortcut: shortcutSection(count)
                 case .none:     nothingSection(count)
                 }
             }
             .transition(.opacity)
 
-            actionFooter(count)
+            actionFooter(count, compact: compact)
                 .transition(.opacity.animation(.tunkSnappy.delay(Metrics.stagger)))
         }
         .tunkAnimation(.tunkSnappy, value: settings.bindings, reduceMotion: reduceMotion)
         .tunkAnimation(.tunkSnappy, value: testResults[count], reduceMotion: reduceMotion)
     }
 
-    private func rowCaption(_ count: Int) -> String {
-        count == 2
-            ? "What a confirmed double-tap does. The gesture is fixed; the action is yours, "
-            + "the way Back Tap works on iPhone."
-            : "A single deliberate tap. Unbound by default."
+    private func rowCaption(_ count: Int, compact: Bool) -> String {
+        switch (count, compact) {
+        case (2, true):
+            return "What a confirmed double-tap does, the way Back Tap works on iPhone."
+        case (2, false):
+            return "What a confirmed double-tap does. The gesture is fixed; the action is yours, "
+                + "the way Back Tap works on iPhone."
+        default:
+            return "A single deliberate tap. Unbound by default."
+        }
     }
 
     /// Stated once, plainly, and only when the row is actually armed. The point
@@ -502,7 +716,7 @@ struct SettingsView: View {
 
     // MARK: - action: hotkey
 
-    private func hotkeySection(_ count: Int) -> some View {
+    private func hotkeySection(_ count: Int, compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HotkeyRecorderView(binding: Binding(
                 get: { settings.hotkeyDraft(for: count) },
@@ -514,13 +728,15 @@ struct SettingsView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 18) {
-                Readout(label: "paste into VoiceInk",
-                        value: settings.hotkeyDraft(for: count).description, accent: .primary)
-                Readout(label: "key downs / ups",
-                        value: "\(engine.actionStats.emit.keyDownsPosted) / "
-                             + "\(engine.actionStats.emit.keyUpsPosted)",
-                        accent: engine.actionStats.hasStuckKey ? .orange : .secondary)
+            if !compact {
+                HStack(spacing: 18) {
+                    Readout(label: "paste into VoiceInk",
+                            value: settings.hotkeyDraft(for: count).description, accent: .primary)
+                    Readout(label: "key downs / ups",
+                            value: "\(engine.actionStats.emit.keyDownsPosted) / "
+                                 + "\(engine.actionStats.emit.keyUpsPosted)",
+                            accent: engine.actionStats.hasStuckKey ? .orange : .secondary)
+                }
             }
         }
     }
@@ -587,8 +803,8 @@ struct SettingsView: View {
     private func nothingSection(_ count: Int) -> some View {
         Text(count == 1
              ? "Nothing is bound to a single tap. Single taps are still detected and drawn in "
-             + "the monitor above; Tunk just does not act on them."
-             : "Taps are still detected, counted and drawn in the monitor above — Tunk just "
+             + "the tap monitor; Tunk just does not act on them."
+             : "Taps are still detected, counted and drawn in the tap monitor — Tunk just "
              + "does not send anything. Useful while you tune sensitivity.")
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
@@ -598,7 +814,7 @@ struct SettingsView: View {
 
     // MARK: - action: per-row footer
 
-    private func actionFooter(_ count: Int) -> some View {
+    private func actionFooter(_ count: Int, compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 18) {
                 // Only the row that last fired shows a latency. Attributing
@@ -610,7 +826,7 @@ struct SettingsView: View {
                 Readout(label: "dispatch",
                         value: mine ? (engine.actionStats.lastDispatchMs
                             .map { String(format: "%.2f ms", $0) } ?? "—") : "—")
-                if settings.actionKind(for: count) == .shortcut {
+                if !compact, settings.actionKind(for: count) == .shortcut {
                     // Reported, never waited on. A nine-second Shortcut is not a
                     // Tunk latency failure.
                     Readout(label: "Shortcut took",
@@ -637,7 +853,7 @@ struct SettingsView: View {
     private func canTest(_ count: Int) -> Bool {
         guard settings.bindings[count].isRunnable else { return false }
         guard settings.actionKind(for: count) == .hotkey else { return true }
-        return engine.permissions.accessibility
+        return permissions.accessibility
     }
 
     private func testHelp(_ count: Int) -> String {
@@ -682,8 +898,7 @@ struct SettingsView: View {
                 // sensitivity slider multiplies it, so at 1.35x this card read
                 // 0.043 while the detector ran 0.058. Naming a number after
                 // what it is beats showing a number that is not in force, and
-                // the effective bar already has its own readout on the
-                // Detection card.
+                // the effective bar already has its own readout under Advanced.
                 Readout(label: "learned from your taps",
                         value: settings.config.calibratedThreshold
                             .map { String(format: "%.3f", $0) } ?? "uncalibrated",
@@ -704,9 +919,9 @@ struct SettingsView: View {
 
     // MARK: - experimental
 
-    /// The one unproven mechanism the app can switch on. It sits last, below
-    /// calibration, because nothing above it depends on it and because an owner
-    /// scrolling past should be able to ignore it.
+    /// The one unproven mechanism the app can switch on. It sits last, under
+    /// Advanced, because nothing else depends on it and because an owner who
+    /// never opens that page should be able to ignore it.
     ///
     /// Every number in this card was measured. The three lines under the toggle
     /// are the three reasons its critics stopped it from shipping on, kept in the
@@ -773,7 +988,7 @@ struct SettingsView: View {
                        reduceMotion: reduceMotion)
     }
 
-    /// Everything the owner needs before switching it on, kept out of the panel's
+    /// Everything the owner needs before switching it on, kept out of the page's
     /// default rhythm because it is three screens of caveat on an off-by-default
     /// experiment. Nothing here is softened; it is only folded.
     private var lapPairingDetail: some View {
