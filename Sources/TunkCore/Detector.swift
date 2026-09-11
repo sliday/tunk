@@ -203,6 +203,13 @@ public final class TapDetector: TapDetecting {
         lastSampleNs = sample.tNs
         sampleIndex &+= 1
 
+        // A NaN or Inf value is a dropout in disguise: the high pass would
+        // carry it in its state and every later envelope would be NaN.
+        guard sample.x.isFinite, sample.y.isFinite, sample.z.isFinite else {
+            dropSignalState()
+            return nil
+        }
+
         let envelope = chain.process(x: Double(sample.x),
                                      y: Double(sample.y),
                                      z: Double(sample.z),
