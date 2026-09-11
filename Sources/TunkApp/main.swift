@@ -125,8 +125,31 @@ if let index = arguments.firstIndex(of: "--dump-panel") {
     exit(0)
 }
 
+if let index = arguments.firstIndex(of: "--dump-onboarding") {
+    let directory = index + 1 < arguments.count ? arguments[index + 1] : "."
+    app.setActivationPolicy(.accessory)
+    OnboardingDump.run(into: directory)
+    exit(0)
+}
+
+// `--onboarding` opens the first-run window even after it was completed;
+// `--onboarding-step N` (1-3) is what a relaunch passes to land on the same
+// step. Neither writes anything.
+var onboardingStep: OnboardingModel.Step?
+if arguments.contains("--onboarding") {
+    var step = OnboardingModel.Step.whatItDoes
+    if let index = arguments.firstIndex(of: "--onboarding-step"),
+       index + 1 < arguments.count,
+       let n = Int(arguments[index + 1]),
+       let parsed = OnboardingModel.Step(rawValue: n - 1) {
+        step = parsed
+    }
+    onboardingStep = step
+}
+
 let delegate = AppDelegate(openSettingsOnLaunch: arguments.contains("--settings"),
-                          openCalibrationOnLaunch: arguments.contains("--calibrate"))
+                          openCalibrationOnLaunch: arguments.contains("--calibrate"),
+                          openOnboardingAt: onboardingStep)
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()

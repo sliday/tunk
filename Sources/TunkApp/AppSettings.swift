@@ -25,6 +25,7 @@ final class AppSettings: ObservableObject {
         static let enabled = "enabled"
         static let lapPairing = "experimentalLapPairing"
         static let resonator = "experimentalResonator"
+        static let onboardingCompleted = "onboardingCompleted"
     }
 
     /// A named suite, not the bundle's own domain, so the bare SwiftPM binary
@@ -210,6 +211,16 @@ final class AppSettings: ObservableObject {
         return c
     }
 
+    /// Set once, when the user reaches the end of the first-run window. Read
+    /// at launch to decide whether to show it. Never cleared by the app: the
+    /// window stays reachable from the menu and from `tunk --onboarding`.
+    @Published var onboardingCompleted: Bool {
+        didSet {
+            guard onboardingCompleted != oldValue else { return }
+            defaults.set(onboardingCompleted, forKey: Key.onboardingCompleted)
+        }
+    }
+
     @Published private(set) var launchAtLoginError: String?
 
     /// What the migration changed on this launch, for the panel to show. Empty
@@ -250,6 +261,7 @@ final class AppSettings: ObservableObject {
         // switch, runs the shipped detector.
         experimentalLapPairing = d.object(forKey: Key.lapPairing) as? Bool ?? false
         experimentalResonator = d.object(forKey: Key.resonator) as? Bool ?? false
+        onboardingCompleted = d.object(forKey: Key.onboardingCompleted) as? Bool ?? false
 
         // Seed each row's drafts from what was loaded, falling back to what was
         // stored, so the first switch between kinds offers the user's own value.
