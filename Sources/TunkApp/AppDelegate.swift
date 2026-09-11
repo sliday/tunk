@@ -115,6 +115,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.showOnboarding(at: step)
             } else if !self.settings.onboardingCompleted {
                 self.showOnboarding(at: .whatItDoes)
+            } else if !self.engine.permissions.ready {
+                // Set up once, then the grants went away. Replacing the app is
+                // enough to do it, because macOS keys a grant to a signature.
+                // Without this the menubar names the state and offers no way
+                // out of it, which is where an owner gets stuck.
+                self.showOnboarding(at: .permissions)
             }
         }
     }
