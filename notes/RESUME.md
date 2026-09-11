@@ -1,5 +1,25 @@
 # Resuming
 
+## 2026-09-11: the app around the detector was rebuilt, the detector was not
+
+`reports/QA-FINAL.md` is the report. Branch `worktree-qa-finalize-ux`, 413 tests,
+held-out byte-identical to the baseline (desk 20/20, soft 20/20, lap 16/20,
+VERDICT FAIL).
+
+New since: a first-run window that walks both permissions and offers a relaunch,
+a drag-to-Applications DMG, a settings window with sections, an icon rebuilt from
+a transparent source, and fourteen audit defects fixed. Five confirmed defects
+are still open, listed at the end of the report.
+
+The owner reported that granting a permission produced no reaction. Three causes,
+all closed: the menu never subscribed to permission changes, it never named the
+missing one, and macOS answers Input Monitoring once per process so a grant made
+while Tunk runs cannot arrive. `tunk --permissions 20` prints both answers, and
+warns that a terminal launch reads the terminal's grants rather than Tunk's.
+
+The tap runs below are still the thing only hands can do.
+
+
 ## Do this first
 
 Everything that can be measured without your hands has been. Two bars need you.
