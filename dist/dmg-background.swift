@@ -37,7 +37,11 @@ func draw(scale: CGFloat) -> NSBitmapImageRep {
                                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                isPlanar: false, colorSpaceName: .calibratedRGB,
                                bytesPerRow: 0, bitsPerPixel: 0)!
-    rep.size = NSSize(width: width, height: height)   // points; pixels/points = scale
+    // rep.size is set to points only after drawing. NSGraphicsContext(bitmapImageRep:)
+    // honours a size that differs from the pixel count by scaling user space,
+    // so setting it first stacked a second 2x on top of the scaleBy below and
+    // pushed the arrow and text off the 2x canvas: Finder on a Retina display
+    // picked that rep and showed a bare gradient.
 
     NSGraphicsContext.saveGraphicsState()
     let ctx = NSGraphicsContext(bitmapImageRep: rep)!
@@ -98,6 +102,7 @@ func draw(scale: CGFloat) -> NSBitmapImageRep {
     ctx.cgContext.restoreGState()
 
     NSGraphicsContext.restoreGraphicsState()
+    rep.size = NSSize(width: width, height: height)   // points; pixels/points = scale
     return rep
 }
 

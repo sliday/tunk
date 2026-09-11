@@ -22,7 +22,10 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 with `plugin for module SwiftUIMacros not found`. That is the toolchain, not the
 code. The pure targets and the three CLI products build under the CLT.
 `dist/build-app.sh` and `dist/build-dmg.sh` source `dist/toolchain.sh`, which
-finds `/Applications/Xcode.app` and exports `DEVELOPER_DIR` for you. Prefer
+finds `/Applications/Xcode.app` and exports `DEVELOPER_DIR` for you. The DMG's
+Finder layout ships as `dist/dmg-assets/DS_Store`, so `build-dmg.sh` needs no
+Finder and no Automation prompt; regenerate it with `REFRESH_LAYOUT=1` after
+changing the geometry (needs `pip3 install --user ds_store mac_alias`). Prefer
 SwiftPM over `xcodebuild`. Xcode 26.6 lives at `/Applications/Xcode.app`.
 
 ## Verified sensor facts
