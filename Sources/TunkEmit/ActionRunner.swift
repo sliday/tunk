@@ -130,9 +130,9 @@ public final class ActionRunner: @unchecked Sendable {
         // the panel — the same "reported success for something unverified" the
         // secure-input check exists to stop.
         emitter.onEmit = { [weak self] emitStats in
-            guard let self, let text = emitStats.lastErrorText else { return }
+            guard let self else { return }
             self.lock.lock()
-            _stats.lastErrorText = text
+            if let text = emitStats.lastErrorText { _stats.lastErrorText = text }
             var snapshot = _stats
             self.lock.unlock()
             snapshot.emit = emitStats
