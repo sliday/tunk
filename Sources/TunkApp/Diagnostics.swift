@@ -1405,3 +1405,79 @@ extension Diagnostics {
         exit(clean && responsive && settled ? 0 : 1)
     }
 }
+
+// MARK: - sleep gate
+
+extension Diagnostics {
+    /// `tunk --sleep-gate-probe`
+    ///
+    /// `willSleep` removes the keystroke gate and queues the sensor close. On a
+    /// wedged sensor queue the old stream keeps delivering until that close
+    /// runs, so the question is whether those samples still reach the detector
+    /// with the typing defence already gone. The detector's own ring timeline
+    /// (`snapshot().startNs`) advances only from `feed(sample:)` past its
+    /// guard, so how far it moves after the gate is removed is the measurement.
+    /// The user's own off switch is the control: it must read the same.
+    static func sleepGateProbe() {
+        let settings = AppSettings()
+        let engine = Engine(settings: settings)
+        let perms = PermissionState.current()
+        line("permissions: accessibility=\(perms.accessibility) "
+           + "inputMonitoring=\(perms.inputMonitoring)")
+        guard perms.ready else {
+            line("NOTE: not both granted, so the sensor is never opened and there is")
+            line("      no stream to measure. Grant both and rerun.")
+            exit(2)
+        }
+
+        func arm() -> Bool {
+            engine.setEnabled(true)
+            let until = Date().addingTimeInterval(6)
+            while Date() < until, !engine.status.isArmed { spin(for: 0.1) }
+            spin(for: 0.5)
+            line("  armed: status=\(engine.status) inputTapActive=\(engine.inputTapActive)")
+            return engine.status.isArmed
+        }
+        func advanceMs(_ body: () -> Void, wait: Double) -> Double {
+            let before = engine.snapshot().startNs
+            body()
+            spin(for: wait)
+            let after = engine.snapshot().startNs
+            let ms = Double(after - before) / 1_000_000
+            line("  status=\(engine.status) inputTapActive=\(engine.inputTapActive)"
+               + String(format: " detector timeline advanced %.2f ms", ms))
+            return ms
+        }
+        let center = NSWorkspace.shared.notificationCenter
+        func postWillSleep() {
+            center.post(name: NSWorkspace.willSleepNotification, object: NSWorkspace.shared)
+        }
+
+        line("healthy queue, willSleep, 1 s:")
+        guard arm() else { exit(2) }
+        let healthy = advanceMs(postWillSleep, wait: 1.0)
+
+        line("sensor queue wedged 3 s, willSleep, 2 s:")
+        guard arm() else { exit(2) }
+        engine.probeWedgeSensorQueue(seconds: 3.0)
+        let wedgedSleep = advanceMs(postWillSleep, wait: 2.0)
+
+        line("control: sensor queue wedged 3 s, setEnabled(false), 2 s:")
+        guard arm() else { exit(2) }
+        engine.probeWedgeSensorQueue(seconds: 3.0)
+        let wedgedOff = advanceMs({ engine.setEnabled(false) }, wait: 2.0)
+        spin(for: 1.5)
+
+        line("")
+        line(String(format: "  healthy willSleep   %.2f ms", healthy))
+        line(String(format: "  wedged  willSleep   %.2f ms", wedgedSleep))
+        line(String(format: "  wedged  off switch  %.2f ms", wedgedOff))
+        // One bucket (8.33 ms) is the sample already in flight when the gate
+        // went; anything beyond that is the old stream being fed to a detector
+        // with no typing defence.
+        let gated = wedgedSleep <= 10 && wedgedOff <= 10
+        line(gated ? "  GATED: sleep stops feeding the detector as fast as the off switch"
+                   : "  LEAKS: samples reach the detector after sleep removed the keystroke gate")
+        exit(gated ? 0 : 1)
+    }
+}

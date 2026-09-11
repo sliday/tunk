@@ -25,6 +25,10 @@ if let i = arguments.firstIndex(of: "--reacquire-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.reacquireProbe(cycles: n)
 }
+if arguments.contains("--sleep-gate-probe") {
+    app.setActivationPolicy(.accessory)
+    Diagnostics.sleepGateProbe()
+}
 if arguments.contains("--sensor-props") {
     app.setActivationPolicy(.accessory)
     Diagnostics.sensorProperties()
