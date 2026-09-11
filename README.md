@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="site/demo-og.png" alt="An open MacBook seen from above with two amber points of light on the palm rest, beside the words Knock twice on your MacBook." width="880">
+</p>
+
 # Tunk
 
 Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs a

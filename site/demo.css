@@ -49,6 +49,23 @@
   object-fit: cover;
 }
 
+/* The lit screen sits over the dark one and crosses in on a double tap. Two
+   separate photographs rather than a CSS glow: the screen light also falls on
+   the keyboard and the desk, and no filter fakes that convincingly. */
+.demo-hero__lit {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.demo-hero__lit.is-on { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-hero__lit { transition: none; }
+}
+
 /* The Canvas UI ripple draws here. It sits above the hero and takes no
    pointer events; the section below it handles the clicks. */
 .ripple-layer {

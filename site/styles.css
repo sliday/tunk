@@ -423,6 +423,15 @@ code {
 .btn--primary:hover { background: var(--amber-400); }
 .btn--primary:active { background: var(--amber-700); }
 
+/* DAUB's generic `a:hover { color: var(--db-clay) }` is (0,1,1) and outranks
+   `.btn--primary` at (0,1,0), so hovering the one amber button on the page
+   repainted its label amber-700 on amber: measured 1.63:1, against 10.13:1 at
+   rest. Pinning the colour on every state puts it back above that rule. */
+.btn--primary,
+.btn--primary:hover,
+.btn--primary:focus,
+.btn--primary:active { color: var(--on-accent); }
+
 .btn--quiet {
   background: transparent;
   color: var(--text-2);

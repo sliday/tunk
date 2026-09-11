@@ -94,9 +94,11 @@
     <figure class="demo-hero__fig" id="hero-fig">
       <img src="img/demo-hero.jpg" width="1024" height="1024" fetchpriority="high" decoding="async"
            alt="An open MacBook seen from directly above on a dark desk, with two amber points of light blooming out of the aluminium palm rest beside the trackpad.">
+      <img class="demo-hero__lit" id="hero-lit" src="img/demo-hero-on.jpg" width="1024" height="1024"
+           loading="lazy" decoding="async" alt="" aria-hidden="true">
       <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
     </figure>
-    <p class="demo-hero__hint">Click the photograph.</p>
+    <p class="demo-hero__hint">Knock twice on the photograph. Two taps inside 400 ms, the same window the detector joins.</p>
   </section>
 
   <section class="wrap band demo-shots" id="app">
@@ -207,21 +209,47 @@
   // the page. One path, every browser, nothing to detect.
   const fig = document.getElementById("hero-fig");
   const output = document.getElementById("hero-ripple");
+  const lit = document.getElementById("hero-lit");
+  const calm = matchMedia("(prefers-reduced-motion: reduce)");
 
-  if (fig && output) {
-    const ripple = createRipple(
-      { source: null, content: fig, output },
-      { trigger: "click", interval: 7, amplitude: 0.8, wavelength: 64, rings: 2,
-        decay: 1.1, shine: 1.1, dispersion: 0 },
-    );
-    // Two beats, because that is the gesture. The second lands 190 ms after the
-    // first, which is the interval the detector actually joins.
-    if (ripple) {
-      const w = () => output.clientWidth;
-      const h = () => output.clientHeight;
-      setTimeout(() => ripple.splash(w() * 0.62, h() * 0.66, 1), 900);
-      setTimeout(() => ripple.splash(w() * 0.72, h() * 0.63, 0.8), 1090);
-    }
+  const ripple = fig && output
+    ? createRipple(
+        { source: null, content: fig, output },
+        { trigger: "click", interval: 7, amplitude: 0.8, wavelength: 64, rings: 2,
+          decay: 1.1, shine: 1.1, dispersion: 0 },
+      )
+    : null;
+
+  // The gesture, not a click: two knocks inside the window the detector joins.
+  // One tap ripples and does nothing else, which is what the app does too.
+  const JOIN_WINDOW_MS = 400;
+  let previous = 0;
+  let screenOn = false;
+
+  function setScreen(on) {
+    screenOn = on;
+    if (lit) lit.classList.toggle("is-on", on);
+  }
+
+  if (fig) {
+    fig.addEventListener("pointerdown", (event) => {
+      if (previous && event.timeStamp - previous < JOIN_WINDOW_MS) {
+        setScreen(!screenOn);
+        previous = 0;                 // a third knock starts a new pair
+      } else {
+        previous = event.timeStamp;
+      }
+    }, { passive: true });
+  }
+
+  // Show the gesture once on arrival: two beats 190 ms apart, which is the
+  // interval the detector actually joins, then hand it back.
+  if (ripple && !calm.matches) {
+    const w = () => output.clientWidth;
+    const h = () => output.clientHeight;
+    setTimeout(() => ripple.splash(w() * 0.62, h() * 0.66, 1), 1200);
+    setTimeout(() => { ripple.splash(w() * 0.72, h() * 0.63, 0.8); setScreen(true); }, 1390);
+    setTimeout(() => setScreen(false), 3600);
   }
 </script>
 </body>
