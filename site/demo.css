@@ -25,16 +25,6 @@
   padding-block: clamp(36px, 6vw, 76px) clamp(28px, 4vw, 52px);
 }
 
-.demo-hero .demo-stage { margin: 0; max-width: none; }
-
-.demo-hero .demo-controls {
-  margin: 14px 0 0;
-  max-width: none;
-  justify-content: flex-start;
-}
-
-.demo-hero .demo-controls__note { text-align: left; }
-
 .demo-hero__text { max-width: 46ch; }
 
 
@@ -287,8 +277,6 @@
   }
   .demo-hero__text { max-width: 60ch; margin-inline: auto; }
   .demo-hero__text .cta-row { justify-content: center; }
-  .demo-hero .demo-controls { justify-content: center; }
-  .demo-hero .demo-controls__note { text-align: center; }
   .demo-setup { grid-template-columns: 1fr; }
   .demo-shots__row { grid-template-columns: 1fr; }
   .demo-stats { grid-template-columns: 1fr 1fr; }
@@ -316,6 +304,13 @@
 }
 
 .demo-stage .demo-hero__fig { margin: 0; }
+
+/* The stage now lives inside a section rather than the header, so it centres
+   itself under the copy it belongs to. */
+.demo-try {
+  margin-top: clamp(28px, 4vw, 44px);
+  text-align: center;
+}
 
 .demo-controls {
   display: flex;
