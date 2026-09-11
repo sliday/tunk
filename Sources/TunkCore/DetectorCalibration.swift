@@ -157,7 +157,8 @@ public enum TapCalibration {
         let distributionGuard = distributionFloor * median
         let raw = min(aim, max(reach, distributionGuard))
 
-        let clamp = max(tuning.noiseSnrMultiple * max(noiseFloor, 0), tuning.minThresholdG)
+        let floor = noiseFloor.isFinite ? max(noiseFloor, 0) : 0
+        let clamp = max(tuning.noiseSnrMultiple * floor, tuning.minThresholdG)
         let threshold = max(raw, clamp)
 
         return CalibrationResult(
@@ -165,7 +166,7 @@ public enum TapCalibration {
             lowPercentileStrength: p20,
             weakestStrength: strengths[0],
             medianStrength: median,
-            noiseFloor: max(noiseFloor, 0),
+            noiseFloor: floor,
             margin: threshold > 0 ? strengths[0] / threshold : .infinity,
             noiseLimited: clamp > raw,
             sampleCount: strengths.count,
