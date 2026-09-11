@@ -380,6 +380,66 @@ enum Diagnostics {
         exit(failures == 0 ? 0 : 1)
     }
 
+    /// `tunk --calibration-config-probe`
+    ///
+    /// Proves that a config publish during calibration cannot leak the derived
+    /// (resonator) threshold into the stored config when calibration ends.
+    /// Toggles the resonator while the learn step is open, cancels, and checks
+    /// that the stored config is the one the user had, and that switching the
+    /// resonator off afterwards leaves the shipped default in force.
+    ///
+    /// Runs against a throwaway defaults suite.
+    static func calibrationConfigProbe() {
+        let suite = "dev.tunk.calibrationconfigprobe." + UUID().uuidString
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+
+        let settings = AppSettings(suiteName: suite)
+        let engine = Engine(settings: settings)
+        var failures = 0
+
+        func g(_ v: Double) -> String { String(format: "%.3f", v) }
+        func check(_ label: String, _ ok: Bool, _ detail: String) {
+            if !ok { failures += 1 }
+            line("\(ok ? "OK  " : "FAIL") \(label): \(detail)")
+        }
+
+        let storedBefore = settings.config
+        line("before: stored default=\(g(storedBefore.defaultThreshold)) "
+             + "engine.effective=\(g(engine.effectiveConfig.defaultThreshold))")
+
+        // Resonator toggled while the learn step is open, then cancelled.
+        engine.beginCalibration()
+        settings.experimentalResonator = true
+        _ = engine.endCalibration(commit: nil)
+        check("cancel keeps the stored config",
+              settings.config == storedBefore,
+              "stored default=\(g(settings.config.defaultThreshold)) "
+              + "(had \(g(storedBefore.defaultThreshold)))")
+
+        settings.experimentalResonator = false
+        check("resonator off restores the default in force",
+              settings.config == storedBefore
+                && settings.effectiveConfig.defaultThreshold == storedBefore.defaultThreshold
+                && engine.effectiveConfig.defaultThreshold == storedBefore.defaultThreshold,
+              "stored=\(g(settings.config.defaultThreshold)) "
+              + "settings.effective=\(g(settings.effectiveConfig.defaultThreshold)) "
+              + "engine.effective=\(g(engine.effectiveConfig.defaultThreshold))")
+
+        // A stored write during calibration is the user's and has to survive.
+        engine.beginCalibration()
+        settings.config.sensitivity = 1.35
+        _ = engine.endCalibration(commit: nil)
+        check("stored write during calibration survives cancel",
+              settings.config.sensitivity == 1.35,
+              "stored sensitivity=\(String(format: "%.2f", settings.config.sensitivity))")
+
+        line("")
+        line(failures == 0
+             ? "OK: calibration restores the stored config, never the derived one."
+             : "\(failures) FAILURES: calibration persisted a derived config.")
+        exit(failures == 0 ? 0 : 1)
+    }
+
     private static func ms(_ ns: Int64) -> String {
         String(format: "%.0f ms", Double(ns) / 1_000_000)
     }

@@ -714,9 +714,10 @@ final class Engine: ObservableObject {
     private func apply(config: DetectorConfig) {
         detectorLock.lock()
         // Calibration owns the config while it runs; committing restores it.
-        if configBeforeCalibration != nil {
-            configBeforeCalibration = config
-        } else {
+        // The value posted here is the DERIVED one (`effectiveConfig`), which
+        // must not become the restore base: `endCalibration` reads the stored
+        // `settings.config`, which AppSettings keeps current through any write.
+        if configBeforeCalibration == nil {
             detector.config = config
             arm(for: config)
         }
@@ -869,8 +870,9 @@ final class Engine: ObservableObject {
     @discardableResult
     func endCalibration(commit result: CalibrationResult?) -> Bool {
         detectorLock.lock()
-        guard let before = configBeforeCalibration else { detectorLock.unlock(); return false }
+        guard configBeforeCalibration != nil else { detectorLock.unlock(); return false }
         configBeforeCalibration = nil
+        let before = settings.config
         let restored = result.map { TapCalibration.apply($0, to: before) } ?? before
         detector.config = restored
         arm(for: restored)
