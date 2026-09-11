@@ -19,6 +19,11 @@ final class AppSettings: ObservableObject {
         /// at load, to migrate into the double-tap binding. Never written again.
         static let legacyAction = "action"
         static let bindings = "actionBindings"
+        /// Written by the one-action build, which kept its drafts under bare
+        /// keys. Read once, at load, to seed the double-tap row (the count that
+        /// build's action migrates to). Never written again.
+        static let legacyHotkeyDraft = "hotkeyDraft"
+        static let legacyShortcutDraft = "shortcutDraft"
         static func hotkeyDraft(_ count: Int) -> String { "hotkeyDraft.\(count)" }
         static func shortcutDraft(_ count: Int) -> String { "shortcutDraft.\(count)" }
         static func shortcutDraftListed(_ count: Int) -> String { "shortcutDraftListed.\(count)" }
@@ -269,9 +274,13 @@ final class AppSettings: ObservableObject {
             let action = loaded[count]
             hotkeyDrafts[count] = action.hotkeySpec
                 ?? d.string(forKey: Key.hotkeyDraft(count)).flatMap { try? HotkeySpec(parsing: $0) }
+                ?? (count == 2 ? d.string(forKey: Key.legacyHotkeyDraft) : nil)
+                    .flatMap { try? HotkeySpec(parsing: $0) }
                 ?? .recommendedDefault
             shortcutDrafts[count] = action.shortcutName
-                ?? d.string(forKey: Key.shortcutDraft(count)) ?? ""
+                ?? d.string(forKey: Key.shortcutDraft(count))
+                ?? (count == 2 ? d.string(forKey: Key.legacyShortcutDraft) : nil)
+                ?? ""
             shortcutDraftListed[count] = action.shortcutName != nil
                 ? action.shortcutWasListedWhenBound
                 : (d.object(forKey: Key.shortcutDraftListed(count)) as? Bool ?? false)

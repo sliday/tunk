@@ -440,6 +440,86 @@ enum Diagnostics {
         exit(failures == 0 ? 0 : 1)
     }
 
+    /// `tunk --draft-migration-probe`
+    ///
+    /// Proves that a settings file written by the one-action build, which kept
+    /// its drafts under the bare keys `hotkeyDraft` / `shortcutDraft`, still
+    /// seeds the double-tap row's drafts: the user's other-kind combination must
+    /// survive the rename to per-count keys instead of being replaced by the
+    /// recommended default. Also checks that the per-count key wins when both
+    /// are present, and that a fresh suite still gets the defaults.
+    ///
+    /// Runs against throwaway defaults suites.
+    static func draftMigrationProbe() {
+        var failures = 0
+        func check(_ label: String, _ ok: Bool, _ detail: String) {
+            if !ok { failures += 1 }
+            line("\(ok ? "OK  " : "FAIL") \(label): \(detail)")
+        }
+        func withSuite(_ seed: (UserDefaults) -> Void, _ body: (AppSettings) -> Void) {
+            let suite = "dev.tunk.draftmigrationprobe." + UUID().uuidString
+            defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+            let d = UserDefaults(suiteName: suite)!
+            seed(d)
+            body(AppSettings(suiteName: suite))
+        }
+        let oldHotkey = try! HotkeySpec(parsing: "Ctrl+Opt+K")
+        let newHotkey = try! HotkeySpec(parsing: "Ctrl+Opt+J")
+        let encoder = JSONEncoder()
+
+        // A. Old build: shortcut bound, hotkey draft under the bare key.
+        withSuite({ d in
+            d.set(try! encoder.encode(TunkAction.shortcut(name: "Notes")), forKey: "action")
+            d.set(oldHotkey.description, forKey: "hotkeyDraft")
+        }) { s in
+            check("A bound shortcut survives", s.action(for: 2).shortcutName == "Notes",
+                  "action=\(s.action(for: 2))")
+            check("A bare hotkeyDraft seeds count 2", s.hotkeyDraft(for: 2) == oldHotkey,
+                  "hotkeyDraft(for: 2)=\(s.hotkeyDraft(for: 2)) (want \(oldHotkey))")
+        }
+
+        // B. Old build: hotkey bound, shortcut draft under the bare key.
+        withSuite({ d in
+            d.set(try! encoder.encode(TunkAction.hotkey(oldHotkey)), forKey: "action")
+            d.set("Notes", forKey: "shortcutDraft")
+        }) { s in
+            check("B bound hotkey survives", s.action(for: 2).hotkeySpec == oldHotkey,
+                  "action=\(s.action(for: 2))")
+            check("B bare shortcutDraft seeds count 2", s.shortcutDraft(for: 2) == "Notes",
+                  "shortcutDraft(for: 2)=\"\(s.shortcutDraft(for: 2))\" (want \"Notes\")")
+        }
+
+        // C. Both keys present: the per-count key is newer and wins.
+        withSuite({ d in
+            d.set(try! encoder.encode(TunkAction.shortcut(name: "Notes")), forKey: "action")
+            d.set(oldHotkey.description, forKey: "hotkeyDraft")
+            d.set(newHotkey.description, forKey: "hotkeyDraft.2")
+            d.set("Old", forKey: "shortcutDraft")
+            d.set("New", forKey: "shortcutDraft.1")
+        }) { s in
+            check("C per-count hotkey key wins", s.hotkeyDraft(for: 2) == newHotkey,
+                  "hotkeyDraft(for: 2)=\(s.hotkeyDraft(for: 2)) (want \(newHotkey))")
+            check("C bare key does not leak into count 1", s.hotkeyDraft(for: 1) == .recommendedDefault,
+                  "hotkeyDraft(for: 1)=\(s.hotkeyDraft(for: 1))")
+            check("C per-count shortcut key is read for count 1", s.shortcutDraft(for: 1) == "New",
+                  "shortcutDraft(for: 1)=\"\(s.shortcutDraft(for: 1))\"")
+        }
+
+        // D. Fresh install: defaults.
+        withSuite({ _ in }) { s in
+            check("D fresh hotkey draft is the recommended default",
+                  s.hotkeyDraft(for: 2) == .recommendedDefault, "\(s.hotkeyDraft(for: 2))")
+            check("D fresh shortcut draft is empty", s.shortcutDraft(for: 2) == "",
+                  "\"\(s.shortcutDraft(for: 2))\"")
+        }
+
+        line("")
+        line(failures == 0
+             ? "OK: old-build drafts seed the double-tap row."
+             : "\(failures) FAILURES: an old-build draft was replaced by a default.")
+        exit(failures == 0 ? 0 : 1)
+    }
+
     private static func ms(_ ns: Int64) -> String {
         String(format: "%.0f ms", Double(ns) / 1_000_000)
     }

@@ -126,6 +126,10 @@ if arguments.contains("--calibration-config-probe") {
     app.setActivationPolicy(.accessory)
     Diagnostics.calibrationConfigProbe()
 }
+if arguments.contains("--draft-migration-probe") {
+    app.setActivationPolicy(.accessory)
+    Diagnostics.draftMigrationProbe()
+}
 if let index = arguments.firstIndex(of: "--dump-panel") {
     let directory = index + 1 < arguments.count ? arguments[index + 1] : "."
     app.setActivationPolicy(.accessory)
