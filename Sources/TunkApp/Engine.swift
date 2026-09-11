@@ -896,6 +896,12 @@ final class Engine: ObservableObject {
 
         isCalibrating = false
         settings.config = restored          // persists, and hands the same struct back
+        // A cancel writes the stored config back unchanged, so `didSet` does
+        // not publish and the derived config never reaches the detector: with
+        // the resonator on that left 0.032 in force on a chain that needs
+        // 0.011. Publish it here regardless; on a commit this repeats what
+        // `didSet` just did.
+        apply(config: settings.effectiveConfig)
         return result != nil
     }
 
