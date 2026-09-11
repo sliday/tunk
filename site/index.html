@@ -187,9 +187,10 @@
       <h1>Back Tap, for your Mac.</h1>
 
       <p class="lede">
-        Double-tap the body of your MacBook and it fires a keyboard shortcut, or runs any
-        macOS&nbsp;Shortcut. Tunk reads the accelerometer already inside the machine at
-        796&nbsp;Hz and picks your deliberate tap out of everything else the laptop feels.
+        Knock twice <strong>anywhere on the body</strong> and it fires a keyboard shortcut, or
+        runs any macOS&nbsp;Shortcut. Palm rest, lid, bottom case, the deck beside the trackpad:
+        there is no spot to find, because Tunk reads the accelerometer already inside the machine
+        at 796&nbsp;Hz and picks your deliberate knock out of everything else the laptop feels.
       </p>
 
       <div class="cta-row">
@@ -202,12 +203,23 @@
         <a href="https://github.com/sliday/tunk">Source on GitHub</a>.</p>
     </div>
 
-    <figure class="demo-hero__media">
-      <video src="video/tap-monitor.mp4" poster="video/tap-monitor-poster.jpg"
-             width="1012" height="1080" autoplay muted loop playsinline
-             aria-label="The Tunk settings window while the machine is being tapped: the tap monitor draws each knock as it lands and the taps-fired counter moves from one to two."></video>
-      <figcaption>Not a mock-up. The monitor drawing real knocks, at 796&nbsp;Hz, while the counter moves.</figcaption>
-    </figure>
+    <div class="demo-stage" id="wake-stage">
+      <figure class="demo-hero__fig" id="hero-fig">
+        <img src="img/demo-hero.jpg" width="1024" height="1024" fetchpriority="high" decoding="async"
+             alt="An open MacBook seen from directly above on a dark desk, with two amber points of light blooming out of the aluminium palm rest beside the trackpad.">
+        <img class="demo-hero__lit" id="hero-lit" src="img/demo-hero-on.jpg" width="1024" height="1024"
+             loading="lazy" decoding="async" alt="" aria-hidden="true">
+      </figure>
+      <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
+    </div>
+    <p class="demo-hero__hint">Knock twice on the photograph. Two taps inside 400&nbsp;ms, the window the detector joins.</p>
+
+    <div class="demo-controls" id="ripple-controls" hidden>
+      <label>Strength <input type="range" id="c-amp" min="0.2" max="2" step="0.1" value="0.8"></label>
+      <label>Speed <input type="range" id="c-speed" min="0.2" max="1.6" step="0.05" value="0.65"></label>
+      <label>Rings <input type="range" id="c-rings" min="1" max="6" step="1" value="2"></label>
+      <p class="demo-controls__note" id="c-note"></p>
+    </div>
   </section>
 
   <section class="wrap band" id="gesture">
@@ -306,21 +318,24 @@
   <section class="wrap band band--feature" id="dictation">
     <div class="feature enter beat-2">
       <div class="feature__text">
-        <p class="eyebrow enter">The reason it exists</p>
-        <h2 class="enter">Start dictation without reaching for a key</h2>
+        <p class="eyebrow enter">What a tap can fire</p>
+        <h2 class="enter">Whatever a key can do, a knock can do</h2>
         <p>
-          Tunk began as one problem: toggling dictation hands-free. Bind the double tap to
-          <a href="https://tryvoiceink.com/">VoiceInk</a>'s Second Shortcut, set that shortcut to
-          toggle, and you start and stop dictating by tapping the laptop. Your existing manual
-          binding keeps working, untouched.
+          Tunk sends a keyboard combination you choose. Anything that listens for a global
+          hotkey answers it: mute the call, play or pause, skip a track, take a screenshot,
+          start a recording, toggle dictation. Pick the combination in Settings and bind the
+          same one in the app that should react.
         </p>
         <p>
-          Tunk refuses to emit a bare Right&nbsp;Shift, which is the key VoiceInk uses by default,
-          so the two never fight over the same binding.
+          Or skip hotkeys. Point the tap at a macOS Shortcut and a knock runs whatever you have
+          built there, the way Back Tap does on an iPhone.
         </p>
         <p class="note">
-          Any app with a global hotkey works the same way. Bind a Shortcut instead and a tap can
-          run whatever you have built there.
+          A worked example, because it is what Tunk was built for:
+          <a href="https://tryvoiceink.com/">VoiceInk</a> takes the combination as its Second
+          Shortcut in toggle mode, so tapping the case starts and stops dictation and the
+          shortcut you already use keeps working. Tunk refuses to emit a bare Right&nbsp;Shift,
+          the key VoiceInk uses by default, so the two never fight over one binding.
         </p>
       </div>
       <figure class="feature__fig">
@@ -466,7 +481,8 @@
       </div>
     </div>
 
-    <div class="method">
+    <div class="method method--media">
+      <div class="method__text">
       <h3>How reliability gets decided</h3>
       <p>
         Rather than a number chosen to sound good, the build runs a method. A capture tool logs the
@@ -480,6 +496,13 @@
         The felt reference for acceptance is Back Tap on an iPhone. A build that scores well and
         still feels like it is ignoring you has not passed.
       </p>
+      </div>
+      <figure class="method__fig">
+        <video src="video/tap-monitor.mp4" poster="video/tap-monitor-poster.jpg"
+               width="1012" height="1080" autoplay muted loop playsinline preload="metadata"
+               aria-label="The Tunk settings window while the machine is being tapped: the tap monitor draws each knock as it lands and the taps-fired counter moves."></video>
+        <figcaption>The monitor drawing real knocks at 796&nbsp;Hz, while the counter moves.</figcaption>
+      </figure>
     </div>
   </section>
 
@@ -709,6 +732,10 @@
     if (s.querySelector('.enter')) io.observe(s);
   });
 })();
+</script>
+<script type="module">
+  import { initTapDemo } from "./js/tap-demo.js";
+  initTapDemo();
 </script>
 </body>
 </html>

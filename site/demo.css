@@ -278,3 +278,86 @@
 @media (prefers-reduced-motion: reduce) {
   .demo-hero__hint { display: none; }
 }
+
+/* ------------------------------------------------------- interactive stage -- */
+
+/* The photograph and the effect canvas are siblings: the effect must not draw
+   itself. Where html-in-canvas exists the script slips a source canvas between
+   them at runtime, which is why the stage owns the positioning, not the figure. */
+.demo-stage {
+  position: relative;
+  max-width: 520px;
+  margin: clamp(24px, 3vw, 36px) auto 0;
+}
+
+.demo-stage__source {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.demo-stage .demo-hero__fig { margin: 0; }
+
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 22px;
+  max-width: 520px;
+  margin: 18px auto 0;
+}
+
+.demo-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.demo-controls input[type="range"] {
+  width: 92px;
+  accent-color: var(--accent);
+}
+
+.demo-controls__note {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* The method card had a column of empty space beside it. The video belongs
+   there: the claim is that reliability is measured, and this is the measuring
+   running. */
+.method--media {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: clamp(20px, 3vw, 40px);
+  align-items: center;
+}
+
+.method--media .method__fig { margin: 0; }
+
+.method--media .method__fig video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-md, 14px);
+  box-shadow: var(--shadow-2);
+  background: var(--ink-200, #16191E);
+}
+
+.method--media .method__fig figcaption {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-wrap: pretty;
+}
+
+@media (max-width: 860px) {
+  .method--media { grid-template-columns: 1fr; }
+}
