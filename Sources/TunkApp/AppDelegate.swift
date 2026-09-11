@@ -11,16 +11,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusLine: NSMenuItem!
     private var enableItem: NSMenuItem!
     private var loginItem: NSMenuItem!
-    private var permissionItem: NSMenuItem!
+    private var bindingItem: NSMenuItem!
     private var settingsWindow: SettingsWindowController?
+    private var onboardingWindow: OnboardingWindowController?
     private var cancellables = Set<AnyCancellable>()
     private var flashWork: DispatchWorkItem?
     private let openSettingsOnLaunch: Bool
     private let openCalibrationOnLaunch: Bool
+    /// Set by `--onboarding`; nil means "only if never completed".
+    private let openOnboardingAt: OnboardingModel.Step?
 
-    init(openSettingsOnLaunch: Bool = false, openCalibrationOnLaunch: Bool = false) {
+    init(openSettingsOnLaunch: Bool = false, openCalibrationOnLaunch: Bool = false,
+         openOnboardingAt: OnboardingModel.Step? = nil) {
         self.openSettingsOnLaunch = openSettingsOnLaunch
         self.openCalibrationOnLaunch = openCalibrationOnLaunch
+        self.openOnboardingAt = openOnboardingAt
         super.init()
     }
 
@@ -37,7 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         buildMenu()
         statusItem.menu = menu
 
-        engine.onTrigger = { [weak self] in self?.flash() }
+        engine.onTrigger = { [weak self] in
+            self?.flash()
+            self?.onboardingWindow?.model.noteTrigger()
+        }
         engine.$status
             .receive(on: RunLoop.main)
             .sink { [weak self] status in self?.render(status: status) }
@@ -88,6 +96,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if self.openSettingsOnLaunch || self.openCalibrationOnLaunch {
                 self.showSettings(startCalibration: self.openCalibrationOnLaunch)
             }
+            // First launch, or asked for explicitly. The window is the only
+            // way a non-technical person finds out there are two permissions
+            // to grant; a lone menubar glyph says nothing.
+            if let step = self.openOnboardingAt {
+                self.showOnboarding(at: step)
+            } else if !self.settings.onboardingCompleted {
+                self.showOnboarding(at: .whatItDoes)
+            }
         }
     }
 
@@ -111,25 +127,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
 
-        statusLine = NSMenuItem(title: "Tunk", action: nil, keyEquivalent: "")
+        // Order and wording follow the bar: status line, Enable detection,
+        // separator, the bound double-tap readout, Calibrate…, Settings…,
+        // separator, Launch at Login, Quit Tunk. "Set up Tunk…" sits with
+        // Settings…, since that is where a person looks for it.
+        statusLine = NSMenuItem(title: "Off", action: nil, keyEquivalent: "")
         statusLine.isEnabled = false
         menu.addItem(statusLine)
 
-        permissionItem = NSMenuItem(title: "Grant Permissions…",
-                                    action: #selector(grantPermissions), keyEquivalent: "")
-        permissionItem.target = self
-        permissionItem.isHidden = true
-        menu.addItem(permissionItem)
-
-        menu.addItem(.separator())
-
-        enableItem = NSMenuItem(title: "Enable Detection",
+        enableItem = NSMenuItem(title: "Enable detection",
                                 action: #selector(toggleEnabled), keyEquivalent: "")
         enableItem.target = self
         enableItem.state = settings.enabled ? .on : .off
         menu.addItem(enableItem)
 
         menu.addItem(.separator())
+
+        bindingItem = NSMenuItem(title: "Double tap: nothing", action: nil, keyEquivalent: "")
+        bindingItem.isEnabled = false
+        menu.addItem(bindingItem)
 
         let calibrate = NSMenuItem(title: "Calibrate…", action: #selector(openCalibration),
                                    keyEquivalent: "")
@@ -140,6 +156,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                       keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let setup = NSMenuItem(title: "Set up Tunk…", action: #selector(openOnboarding),
+                               keyEquivalent: "")
+        setup.target = self
+        menu.addItem(setup)
 
         menu.addItem(.separator())
 
@@ -158,38 +179,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshMenuText()
     }
 
+    /// Plain words for the menu's first line. The numbers live in the tooltip
+    /// and the panel, not here.
     private func statusText() -> String {
         switch engine.status {
         case .running:
             if let broken = engine.brokenBinding {
-                return "Shortcut \"\(broken.name)\" is missing — open Settings"
+                return "Shortcut \u{201C}\(broken.name)\u{201D} is missing"
             }
-            if engine.lastActionFailed {
-                return "Last tap was detected but its action failed — open Settings"
-            }
-            return String(format: "Listening · %.0f Hz · %d fired",
-                          engine.sampleRateHz, engine.triggerCount)
-        case .off:
-            return "Detection off"
-        case .needsPermission:
-            return "Blocked: permissions needed"
-        case .sensorLost(let why):
-            return "Sensor lost: \(why)"
+            if engine.lastActionFailed { return "Last action failed" }
+            return "Listening"
+        case .off: return "Off"
+        case .needsPermission: return "Needs permission"
+        case .sensorLost: return "Sensor unavailable"
+        }
+    }
+
+    /// The fuller line, for the glyph's tooltip: same words plus the numbers.
+    private func tooltipText() -> String {
+        guard case .running = engine.status, engine.brokenBinding == nil,
+              !engine.lastActionFailed else { return statusText() }
+        return String(format: "Listening · %.0f Hz · %d fired",
+                      engine.sampleRateHz, engine.triggerCount)
+    }
+
+    private func statusDotColor() -> NSColor {
+        switch engine.status {
+        case .running:
+            return (engine.brokenBinding != nil || engine.lastActionFailed)
+                ? .systemOrange : .systemGreen
+        case .off: return .tertiaryLabelColor
+        case .needsPermission, .sensorLost: return .systemOrange
+        }
+    }
+
+    private func bindingText() -> String {
+        switch settings.action(for: 2) {
+        case .hotkey(let spec): return "Double tap: \(spec.description)"
+        case .shortcut(let name, _):
+            return name.isEmpty ? "Double tap: no Shortcut chosen"
+                                : "Double tap: Shortcut \u{201C}\(name)\u{201D}"
+        case .none: return "Double tap: nothing"
         }
     }
 
     private func refreshMenuText() {
-        let text = statusText()
-        // Tabular figures so the Hz readout does not jitter the menu width while
-        // it is open.
-        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
-                                                    weight: .regular)
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         statusLine.attributedTitle = NSAttributedString(
-            string: text,
-            attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor])
-        permissionItem.isHidden = engine.permissions.ready
+            string: statusText(),
+            attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+        statusLine.image = AppDelegate.dot(statusDotColor())
+        // Tabular figures so a readout with digits in it does not jitter the
+        // menu width while it is open.
+        let small = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
+                                                     weight: .regular)
+        bindingItem.attributedTitle = NSAttributedString(
+            string: bindingText(),
+            attributes: [.font: small, .foregroundColor: NSColor.secondaryLabelColor])
         loginItem.state = settings.launchAtLoginEnabled ? .on : .off
         enableItem.state = settings.enabled ? .on : .off
+    }
+
+    /// An 8 pt filled circle for the status line. Not a template image: its
+    /// colour is the information.
+    private static func dot(_ color: NSColor) -> NSImage {
+        let image = NSImage(size: NSSize(width: 10, height: 10), flipped: false) { _ in
+            color.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 1, y: 1, width: 8, height: 8)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
     }
 
     // MARK: - glyph
@@ -209,7 +269,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             state = .actionBroken
         }
         statusItem.button?.image = MenuBarGlyph.image(for: state)
-        statusItem.button?.toolTip = "Tunk — " + statusText()
+        statusItem.button?.toolTip = "Tunk — " + tooltipText()
         refreshMenuText()
     }
 
@@ -239,15 +299,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let error = settings.launchAtLoginError { present(message: error) }
     }
 
-    @objc private func grantPermissions() {
-        let state = engine.permissions
-        if !state.accessibility {
-            PermissionState.promptAccessibility()
-            PermissionState.openAccessibilityPane()
-        } else if !state.inputMonitoring {
-            PermissionState.promptInputMonitoring()
-            PermissionState.openInputMonitoringPane()
+    @objc private func openOnboarding() {
+        showOnboarding(at: .whatItDoes)
+    }
+
+    private func showOnboarding(at step: OnboardingModel.Step) {
+        if let existing = onboardingWindow, existing.isVisible {
+            existing.model.step = step
+            existing.present()
+            return
         }
+        let controller = OnboardingWindowController(settings: settings, engine: engine,
+                                                    startAt: step)
+        controller.onFinish = { [weak self] in self?.onboardingWindow = nil }
+        onboardingWindow = controller
+        controller.present()
     }
 
     @objc private func openSettings() {
