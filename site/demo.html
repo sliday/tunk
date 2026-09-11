@@ -75,7 +75,10 @@
 
   <section class="wrap demo-hero">
     <div class="demo-hero__text">
-      <p class="eyebrow">macOS menubar utility</p>
+      <p class="demo-hero__brand">
+        <img src="favicon.svg" width="34" height="34" alt="" aria-hidden="true">
+        <span>Tunk</span>
+      </p>
       <h1>Knock twice on your MacBook.</h1>
       <p class="lede">
         Tunk feels the knock through the accelerometer already inside the machine, at
@@ -88,17 +91,32 @@
         </a>
         <a class="btn btn--quiet" href="#measured">See the measurements</a>
       </div>
-      <p class="cta-note">4.6&nbsp;MB · Apple silicon · macOS&nbsp;13 or later. Read the note below the steps before you open it.</p>
+      <p class="cta-note">4.6&nbsp;MB · Apple silicon · macOS&nbsp;13 or later.</p>
     </div>
 
+    <figure class="demo-hero__media">
+      <video src="video/tap-monitor.mp4" poster="video/tap-monitor-poster.jpg"
+             width="1012" height="1080" autoplay muted loop playsinline
+             aria-label="The Tunk settings window while the machine is being tapped: the tap monitor draws each knock as it lands and the taps-fired counter moves from one to two."></video>
+      <figcaption>Not a mock-up. The monitor drawing real knocks, at 796&nbsp;Hz, while the counter moves.</figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap band demo-wake">
+    <h2>Try the gesture.</h2>
+    <p class="lede">
+      Two knocks inside 400&nbsp;ms, which is the window the detector joins. One knock on its
+      own ripples and does nothing, the same way the app treats it.
+    </p>
+
     <figure class="demo-hero__fig" id="hero-fig">
-      <img src="img/demo-hero.jpg" width="1024" height="1024" fetchpriority="high" decoding="async"
+      <img src="img/demo-hero.jpg" width="1024" height="1024" loading="lazy" decoding="async"
            alt="An open MacBook seen from directly above on a dark desk, with two amber points of light blooming out of the aluminium palm rest beside the trackpad.">
       <img class="demo-hero__lit" id="hero-lit" src="img/demo-hero-on.jpg" width="1024" height="1024"
            loading="lazy" decoding="async" alt="" aria-hidden="true">
       <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
     </figure>
-    <p class="demo-hero__hint">Knock twice on the photograph. Two taps inside 400 ms, the same window the detector joins.</p>
+    <p class="demo-hero__hint">Knock twice on the photograph to wake the screen. Knock twice again to put it back.</p>
   </section>
 
   <section class="wrap band demo-shots" id="app">
