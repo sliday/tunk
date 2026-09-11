@@ -255,11 +255,15 @@ struct SettingsView: View {
 
     /// Everything a non-technical person needs, and nothing that needs a
     /// glossary. Fits 680 pt without scrolling when both permissions are
-    /// granted and no migration note is pending; either card pushes it over,
-    /// and both are cards the user is meant to act on and dismiss.
+    /// granted; the permission card pushes it over, and that is the card a
+    /// user has to act on before anything else here matters.
+    ///
+    /// A pending migration shows up here as one plain sentence that points at
+    /// Advanced. The card itself names the windows it changed, and those names
+    /// are the vocabulary this page is held to keeping out.
     @ViewBuilder private var generalPage: some View {
         if !permissions.ready { permissionCard }
-        if !settings.migrationNotes.isEmpty { migrationCard }
+        if !settings.migrationNotes.isEmpty { migrationNotice }
         statusCard
         monitorCard
         actionCard(tapCount: 2, compact: true)
@@ -277,6 +281,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var advancedPage: some View {
+        if !settings.migrationNotes.isEmpty { migrationCard }
         timingCard
         signalCard
         lapPairingCard
@@ -339,9 +344,36 @@ struct SettingsView: View {
 
     // MARK: - migration
 
+    /// The General page's pointer to `migrationCard`. Says that something was
+    /// changed and where to read what, in the words Calibration uses, so the
+    /// timing vocabulary stays under Advanced even on an upgrade launch.
+    private var migrationNotice: some View {
+        Card(title: nil) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Settings updated")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("An earlier version of Tunk saved timing that no longer works the "
+                       + "way it did, so this launch changed it. Hotkeys, Shortcuts and tap "
+                       + "bindings are untouched; the details are under Advanced.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Button("Show") { panel.section = .advanced }
+                    .buttonStyle(TunkButtonStyle())
+            }
+            .frame(minHeight: Metrics.hitTarget)
+        }
+        .transition(.opacity)
+        .tunkAnimation(.tunkSnappy, value: settings.migrationNotes, reduceMotion: reduceMotion)
+    }
+
     /// Settings changed on this launch because they were unsafe or incoherent.
     /// Shown rather than applied quietly: rewriting someone's configuration
-    /// without telling them is not better than leaving it broken.
+    /// without telling them is not better than leaving it broken. Lives under
+    /// Advanced because every note names a window by its detector name.
     private var migrationCard: some View {
         Card(title: "Settings updated",
              caption: "These were saved by an earlier version of Tunk and no longer work the "
@@ -734,17 +766,29 @@ struct SettingsView: View {
     // MARK: - action: hotkey
 
     private func hotkeySection(_ count: Int, compact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HotkeyRecorderView(binding: Binding(
-                get: { settings.hotkeyDraft(for: count) },
-                set: { settings.setHotkeyDraft($0, for: count) }))
-            // The reason the app exists. It stays on screen in this mode.
-            Text("Paste the same combination into VoiceInk → Settings → Shortcuts → "
-               + "Second Shortcut, recording mode \"toggle\". Your existing VoiceInk "
-               + "shortcut keeps working.")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        let recorder = HotkeyRecorderView(binding: Binding(
+            get: { settings.hotkeyDraft(for: count) },
+            set: { settings.setHotkeyDraft($0, for: count) }))
+        // The reason the app exists. It stays on screen in this mode.
+        let voiceInk = Text("Paste the same combination into VoiceInk → Settings → Shortcuts → "
+                          + "Second Shortcut, recording mode \"toggle\"."
+                          + (compact ? "" : " Leave your Right Shift binding alone; it stays "
+                                            + "your manual trigger."))
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        return VStack(alignment: .leading, spacing: 8) {
+            if compact {
+                // General's copy sits beside the recorder so the page keeps to
+                // one screen. The Right Shift sentence stays on Actions.
+                HStack(alignment: .center, spacing: 12) {
+                    recorder
+                    voiceInk
+                }
+            } else {
+                recorder
+                voiceInk
+            }
             if !compact {
                 HStack(spacing: 18) {
                     Readout(label: "key downs / ups",
