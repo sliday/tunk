@@ -1,0 +1,235 @@
+/* ============================================================================
+   Tunk — the demo page.
+
+   Loaded after styles.css, which supplies the tokens, the font, the buttons and
+   the page chrome. This file adds only what the demo page needs: the hero, the
+   three app shots, the measured strip, and the four setup steps.
+
+   Order on the page is the decision recorded in design-explorations/demo-page.html:
+   the gesture opens, the real app proves it, the numbers hold it up, and the
+   four steps close it.
+   ============================================================================ */
+
+/* ------------------------------------------------------------------ hero -- */
+
+.demo-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
+  padding-block: clamp(40px, 7vw, 88px) clamp(32px, 5vw, 64px);
+}
+
+.demo-hero__text h1 {
+  font-size: clamp(34px, 5.4vw, 56px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  margin: 10px 0 16px;
+  text-wrap: balance;
+}
+
+.demo-hero__text .lede { margin-bottom: 26px; }
+
+/* The figure is a square photograph. A fixed aspect stops the grid jumping
+   while it decodes, which is the one layout shift this page can have. */
+.demo-hero__fig {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1;
+  border-radius: var(--r-lg, 20px);
+  overflow: hidden;
+  box-shadow: var(--shadow-3);
+}
+
+.demo-hero__fig img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The Canvas UI ripple draws here. It sits above the hero and takes no
+   pointer events; the section below it handles the clicks. */
+.ripple-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.demo-hero__hint {
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  z-index: 3;
+}
+
+/* ----------------------------------------------------------- app screens -- */
+
+.demo-shots { /* .band already supplies the section rhythm; a second padding doubles it. */ }
+
+.demo-shots__row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 2vw, 26px);
+  margin-top: 28px;
+}
+
+.demo-shot { margin: 0; }
+
+.demo-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-md, 14px);
+  box-shadow: var(--shadow-2);
+}
+
+.demo-shot figcaption {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+
+.demo-shot figcaption b {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------- measured -- */
+
+.demo-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--hair);
+  border-radius: var(--r-md, 14px);
+  overflow: hidden;
+  margin-top: 24px;
+}
+
+.demo-stat {
+  background: var(--surface);
+  padding: 20px 18px;
+}
+
+.demo-stat__n {
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-stat__n--live { color: var(--accent-text); }
+
+.demo-stat__l {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.demo-stats__note {
+  margin: 22px 0 0;
+  font-size: 14px;
+  color: var(--text-2);
+  max-width: 66ch;
+  text-wrap: pretty;
+}
+
+/* ----------------------------------------------------------------- setup -- */
+
+.demo-setup {
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  gap: clamp(28px, 5vw, 56px);
+  align-items: start;
+}
+
+.demo-steps {
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.demo-steps li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 42px;
+  margin-bottom: 18px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+
+.demo-steps li b { color: var(--text); font-weight: 600; }
+
+.demo-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-download {
+  padding: 24px;
+  border-radius: var(--r-lg, 20px);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.demo-download h3 { margin: 0 0 6px; font-size: 17px; }
+
+.demo-download__meta {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-download .btn { width: 100%; justify-content: center; }
+
+.demo-download__warn {
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--hair-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+
+.demo-download__warn b { color: var(--text); font-weight: 600; }
+
+/* ---------------------------------------------------------------- narrow -- */
+
+@media (max-width: 900px) {
+  .demo-hero,
+  .demo-setup { grid-template-columns: 1fr; }
+  .demo-shots__row { grid-template-columns: 1fr; }
+  .demo-stats { grid-template-columns: 1fr 1fr; }
+  .demo-hero__hint { position: static; margin-top: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-hero__hint { display: none; }
+}

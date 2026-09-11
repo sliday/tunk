@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<!-- Tunk demo page — four directions · source: site/index.html, reports/QA-FINAL.md · 2026-09-11 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tunk demo page — four directions</title>
+<style>
+  :root {
+    --ink-000:#0B0D10; --ink-100:#101216; --ink-200:#16191E; --ink-300:#20242B;
+    --ink-400:#2C313A; --ink-600:#5A616B; --ink-700:#868D96; --ink-800:#9BA2AB;
+    --ink-900:#E8EAED; --ink-950:#F4F6F8;
+    --alu-300:#B4BBC3; --alu-500:#79808A;
+    --amber-300:#FFD98A; --amber-500:#FFB020; --amber-600:#FF8A12; --amber-700:#F0700A;
+    --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ink-950); color: var(--ink-200);
+    font-family: var(--font); -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  .page { max-width: 1140px; margin: 0 auto; padding: 56px 24px 96px; }
+  .page-head h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 8px; text-wrap: balance; }
+  .page-head p { margin: 0 0 6px; color: var(--ink-600); max-width: 62ch; text-wrap: pretty; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-700); margin-top: 18px; }
+  .variant { margin-top: 64px; }
+  .variant__label { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .variant__letter {
+    display: inline-grid; place-items: center; width: 26px; height: 26px;
+    border-radius: 8px; background: var(--ink-200); color: var(--ink-950);
+    font-size: 13px; font-weight: 600;
+  }
+  .variant__name { font-size: 19px; font-weight: 600; margin: 0; }
+  .variant__trade { font-size: 13px; color: var(--ink-600); margin: 0; }
+  .preview {
+    margin-top: 18px; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.07), 0 10px 30px rgba(0,0,0,0.10), 0 34px 68px rgba(0,0,0,0.10);
+  }
+  .analysis {
+    margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: #fff;
+    font-size: 13px; color: var(--ink-600); max-width: 72ch;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .analysis b { color: var(--ink-200); font-weight: 600; }
+  .decision { margin-top: 72px; padding: 20px 22px; border-radius: 14px; background: #fff;
+              box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06); }
+  .decision h2 { margin: 0 0 10px; font-size: 16px; }
+  .decision li { font-size: 14px; color: var(--ink-600); margin-bottom: 6px; }
+
+  /* shared preview furniture */
+  .p { font-family: var(--font); background: var(--ink-000); color: var(--ink-900); padding: 44px 40px; }
+  .p h2 { text-wrap: balance; }
+  .kbd {
+    display: inline-block; padding: 3px 8px; border-radius: 6px; font-family: var(--mono);
+    font-size: 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10);
+  }
+  .amber { color: var(--amber-500); }
+  .shot { display: block; width: 100%; border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.45); }
+  .cta {
+    display: inline-block; padding: 11px 18px; border-radius: 11px; font-size: 14px; font-weight: 600;
+    background: var(--amber-500); color: #1A1206; text-decoration: none;
+  }
+  .ghost {
+    display: inline-block; padding: 11px 18px; border-radius: 11px; font-size: 14px;
+    color: var(--ink-800); text-decoration: none; border: 1px solid var(--ink-400);
+  }
+
+  /* A — the gesture first */
+  .va { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 40px; align-items: center; }
+  .va h2 { font-size: 40px; line-height: 1.05; letter-spacing: -0.03em; margin: 10px 0 14px; }
+  .va p { color: var(--ink-800); font-size: 15px; line-height: 1.55; margin: 0 0 22px; max-width: 44ch; }
+  .va .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-700); margin: 0; }
+  .va__art { aspect-ratio: 1; border-radius: 14px; background:
+      radial-gradient(58% 46% at 62% 66%, rgba(255,176,32,0.30), transparent 62%),
+      radial-gradient(30% 24% at 76% 62%, rgba(255,138,18,0.22), transparent 60%),
+      linear-gradient(150deg, #22262d, #0e1114 70%);
+      position: relative; }
+  .va__art::after {
+    content: ""; position: absolute; inset: 22% 16% 26% 12%; border-radius: 8px;
+    background: linear-gradient(160deg, #6f757f, #3a4048);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 24px 40px rgba(0,0,0,0.5);
+  }
+
+  /* B — the app first */
+  .vb { text-align: center; }
+  .vb h2 { font-size: 34px; letter-spacing: -0.025em; margin: 0 0 10px; }
+  .vb p { color: var(--ink-800); font-size: 15px; margin: 0 auto 26px; max-width: 54ch; }
+  .vb__row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 30px; }
+  .vb__cap { font-size: 12px; color: var(--ink-700); margin-top: 8px; }
+
+  /* C — the numbers first */
+  .vc h2 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 18px; }
+  .vc__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--ink-400);
+              border-radius: 12px; overflow: hidden; }
+  .vc__cell { background: var(--ink-100); padding: 18px 16px; }
+  .vc__n { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  .vc__l { font-size: 12px; color: var(--ink-700); margin-top: 4px; }
+  .vc__note { font-size: 13px; color: var(--ink-800); margin: 22px 0 0; max-width: 64ch; }
+
+  /* D — the setup first */
+  .vd { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 40px; align-items: center; }
+  .vd h2 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 16px; }
+  .vd ol { margin: 0; padding-left: 20px; color: var(--ink-800); font-size: 14px; line-height: 1.7; }
+  .vd ol b { color: var(--ink-900); }
+
+  @media (max-width: 860px) {
+    .va, .vd { grid-template-columns: 1fr; }
+    .vb__row, .vc__grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="page-head">
+  <h1>Tunk demo page — four directions</h1>
+  <p>Four ways to open the page, all wearing the brand captured in <code>_brand.md</code>. Copy is real,
+     taken from the site and from the measured report. The screenshots are the shipped app.</p>
+  <p class="meta">source: site/index.html, reports/QA-FINAL.md · surface: demo page hero and tour · 2026-09-11</p>
+</div>
+
+<section class="variant">
+  <div class="variant__label">
+    <span class="variant__letter">A</span>
+    <h2 class="variant__name">Gesture first</h2>
+    <p class="variant__trade">Optimises for the one idea a stranger needs. Gives up proof and product detail above the fold.</p>
+  </div>
+  <div class="preview">
+    <div class="p va">
+      <div>
+        <p class="eyebrow">macOS menubar utility</p>
+        <h2>Knock twice on your MacBook.</h2>
+        <p>Tunk feels it through the accelerometer already inside the machine and fires the shortcut you
+           chose. Like Back Tap on iPhone, for a laptop.</p>
+        <a class="cta" href="#">Download for Apple silicon</a>
+        <a class="ghost" href="#" style="margin-left:8px">See the measurements</a>
+      </div>
+      <div class="va__art" aria-hidden="true"></div>
+    </div>
+  </div>
+  <p class="analysis"><b>Works:</b> one sentence carries the whole product, and the art says the physics
+     without a hand in frame. <b>Risks:</b> nothing on screen proves it works, so a sceptic bounces before
+     the evidence. <b>Pick when</b> the audience has never heard of Back Tap.</p>
+</section>
+
+<section class="variant">
+  <div class="variant__label">
+    <span class="variant__letter">B</span>
+    <h2 class="variant__name">App first</h2>
+    <p class="variant__trade">Optimises for "this is real software". Gives up the emotional hook of the gesture.</p>
+  </div>
+  <div class="preview">
+    <div class="p vb">
+      <h2>Three screens, no manual.</h2>
+      <p>Turn it on, watch taps land, choose what a double tap does. Everything else lives under Advanced.</p>
+      <div class="vb__row">
+        <div><img class="shot" src="../site/img/app/general.jpg" alt="General settings">
+             <p class="vb__cap">General · live tap monitor</p></div>
+        <div><img class="shot" src="../site/img/app/actions.jpg" alt="Actions settings">
+             <p class="vb__cap">Actions · hotkey or Shortcut</p></div>
+        <div><img class="shot" src="../site/img/app/calibration.jpg" alt="Calibration settings">
+             <p class="vb__cap">Calibration · learned from your taps</p></div>
+      </div>
+    </div>
+  </div>
+  <p class="analysis"><b>Works:</b> the real UI is the strongest proof available, and all three screens fit
+     one row. <b>Risks:</b> a visitor who does not yet want the product is being shown settings.
+     <b>Pick when</b> the traffic already knows what Tunk is.</p>
+</section>
+
+<section class="variant">
+  <div class="variant__label">
+    <span class="variant__letter">C</span>
+    <h2 class="variant__name">Numbers first</h2>
+    <p class="variant__trade">Optimises for credibility with an engineering audience. Gives up warmth entirely.</p>
+  </div>
+  <div class="preview">
+    <div class="p vc">
+      <h2>Measured, not claimed.</h2>
+      <div class="vc__grid">
+        <div class="vc__cell"><div class="vc__n amber">796 Hz</div><div class="vc__l">sensor rate</div></div>
+        <div class="vc__cell"><div class="vc__n">209 ms</div><div class="vc__l">latency p95</div></div>
+        <div class="vc__cell"><div class="vc__n">0</div><div class="vc__l">false triggers</div></div>
+        <div class="vc__cell"><div class="vc__n">16/20</div><div class="vc__l">on a lap, still failing</div></div>
+      </div>
+      <p class="vc__note">The harness reports FAIL on lap detection and INCOMPLETE where nothing was
+         recorded. Both numbers are on this page because hiding the second one would make the first
+         worthless.</p>
+    </div>
+  </div>
+  <p class="analysis"><b>Works:</b> publishing the failing number is the most persuasive thing here, and it
+     matches the voice in the identity. <b>Risks:</b> a general visitor reads a table and leaves.
+     <b>Pick when</b> the page is for Hacker News rather than for buyers.</p>
+</section>
+
+<section class="variant">
+  <div class="variant__label">
+    <span class="variant__letter">D</span>
+    <h2 class="variant__name">Setup first</h2>
+    <p class="variant__trade">Optimises for the thing that actually loses people: two permissions. Gives up the hook and the proof.</p>
+  </div>
+  <div class="preview">
+    <div class="p vd">
+      <div>
+        <h2>Running in four steps.</h2>
+        <ol>
+          <li><b>Open the DMG</b> and drag Tunk into Applications.</li>
+          <li><b>Open it.</b> It lives in the menu bar, no Dock icon.</li>
+          <li><b>Grant two permissions.</b> The window opens the right pane for each.</li>
+          <li><b>Double-tap the case.</b> The ring lights up for each knock it hears.</li>
+        </ol>
+        <p style="margin-top:20px"><a class="cta" href="#">Download the DMG</a>
+           <span style="margin-left:10px;font-size:12px;color:var(--ink-700)">4.6 MB · Apple silicon · macOS 13+</span></p>
+      </div>
+      <img class="shot" src="../site/img/app/general.jpg" alt="Tunk settings, General">
+    </div>
+  </div>
+  <p class="analysis"><b>Works:</b> answers the question that actually defeated the first install, and the
+     download sits with the steps. <b>Risks:</b> leads with admin, which reads as friction before any
+     desire exists. <b>Pick when</b> the page is a download page rather than a pitch.</p>
+</section>
+
+<div class="decision">
+  <h2>Decision</h2>
+  <ul>
+    <li>If the page must convert a stranger, pick <b>A</b>, with B directly below it.</li>
+    <li>If it is shown to people who already know the idea, pick <b>B</b>.</li>
+    <li>If it is going to an engineering audience, pick <b>C</b>, with the failing number kept.</li>
+    <li>If it is where the download link is shared, pick <b>D</b>.</li>
+  </ul>
+  <p style="font-size:13px;color:var(--ink-600);margin:10px 0 0">
+    Built as A into B into C into D: the gesture opens, the real app proves it, the numbers hold it up,
+    and the four steps close it. That order is what <code>site/demo.html</code> implements.</p>
+</div>
+
+</div>
+</body>
+</html>

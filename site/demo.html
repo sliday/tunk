@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<title>Tunk — see it, and take the build</title>
+<meta name="description" content="The Tunk demo page: the gesture, the three screens of the app, the numbers that were measured, and the four steps to run it. Download the current build for Apple silicon.">
+<link rel="canonical" href="https://tunk.dev/demo.html">
+
+<meta name="theme-color" content="#F4F6F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0D10" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tunk">
+<meta property="og:url" content="https://tunk.dev/demo.html">
+<meta property="og:title" content="Tunk — see it, and take the build">
+<meta property="og:description" content="Knock twice on your MacBook and it fires the shortcut you chose. The app, the measurements, and the build.">
+<meta property="og:image" content="https://tunk.dev/demo-og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="An open MacBook seen from above with two amber points of light on the palm rest, beside the words Knock twice on your MacBook.">
+<meta property="og:locale" content="en_GB">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tunk — see it, and take the build">
+<meta name="twitter:description" content="Knock twice on your MacBook and it fires the shortcut you chose. The app, the measurements, and the build.">
+<meta name="twitter:image" content="https://tunk.dev/demo-og.png">
+<meta name="twitter:image:alt" content="An open MacBook seen from above with two amber points of light on the palm rest, beside the words Knock twice on your MacBook.">
+
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="32x32 48x48">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="demo.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Tunk",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS 13 or later, Apple silicon",
+  "softwareVersion": "0.1.0",
+  "url": "https://tunk.dev/",
+  "downloadUrl": "https://tunk.dev/download/Tunk-0.1.0.dmg",
+  "fileSize": "4.6 MB",
+  "description": "A macOS menubar utility. Double-tap the body of your MacBook and it fires a keyboard shortcut or runs a macOS Shortcut, read from the built-in accelerometer at 796 Hz.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+</head>
+
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap head-row">
+    <a class="brand" href="/" aria-label="Tunk, home">
+      <img class="brand__mark" src="favicon.svg" width="32" height="32" alt="" aria-hidden="true">
+      <span class="brand__word">Tunk</span>
+    </a>
+    <nav class="head-nav" aria-label="Sections">
+      <a href="index.html#how">How it works</a>
+      <a href="index.html#measured">What we measured</a>
+      <a href="#setup">Get it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="wrap demo-hero">
+    <div class="demo-hero__text">
+      <p class="eyebrow">macOS menubar utility</p>
+      <h1>Knock twice on your MacBook.</h1>
+      <p class="lede">
+        Tunk feels the knock through the accelerometer already inside the machine, at
+        796&nbsp;Hz, and fires the shortcut you chose. It is Back&nbsp;Tap on an iPhone,
+        applied to a laptop. It reads that one sensor and nothing else.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn--primary" href="download/Tunk-0.1.0.dmg" download>
+          Download the build
+        </a>
+        <a class="btn btn--quiet" href="#measured">See the measurements</a>
+      </div>
+      <p class="cta-note">4.6&nbsp;MB · Apple silicon · macOS&nbsp;13 or later. Read the note below the steps before you open it.</p>
+    </div>
+
+    <figure class="demo-hero__fig" id="hero-fig">
+      <img src="img/demo-hero.jpg" width="1024" height="1024" fetchpriority="high" decoding="async"
+           alt="An open MacBook seen from directly above on a dark desk, with two amber points of light blooming out of the aluminium palm rest beside the trackpad.">
+      <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
+    </figure>
+    <p class="demo-hero__hint">Click the photograph.</p>
+  </section>
+
+  <section class="wrap band demo-shots" id="app">
+    <h2>Three screens, no manual.</h2>
+    <p class="lede">
+      Turn detection on and watch taps land. Choose what a double tap does. Teach it how hard
+      you knock. Everything an experiment rather than a feature lives under Advanced, switched off.
+    </p>
+    <div class="demo-shots__row">
+      <figure class="demo-shot">
+        <img src="img/app/general.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, General: an enable switch, live sample rate, taps fired, last latency, and a tap monitor drawing onsets.">
+        <figcaption><b>General</b> The tap monitor draws every onset as it lands. A grey spike is one the typing gate ate on purpose.</figcaption>
+      </figure>
+      <figure class="demo-shot">
+        <img src="img/app/actions.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, Actions: double tap and single tap, each bound to a hotkey, a Shortcut, or nothing.">
+        <figcaption><b>Actions</b> A hotkey or any macOS Shortcut. Single tap ships unbound, because one knock is a mug set down.</figcaption>
+      </figure>
+      <figure class="demo-shot">
+        <img src="img/app/calibration.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, Calibration: a learned threshold, a sensitivity slider, and a slider for how long to ignore taps after typing.">
+        <figcaption><b>Calibration</b> The threshold comes from your own taps. Coupling changes with the machine and the surface.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="wrap band" id="measured">
+    <h2>Measured, not claimed.</h2>
+    <div class="demo-stats">
+      <div class="demo-stat">
+        <div class="demo-stat__n demo-stat__n--live">796 Hz</div>
+        <div class="demo-stat__l">sensor rate, measured</div>
+      </div>
+      <div class="demo-stat">
+        <div class="demo-stat__n">209 ms</div>
+        <div class="demo-stat__l">latency p95, second tap to key</div>
+      </div>
+      <div class="demo-stat">
+        <div class="demo-stat__n">0</div>
+        <div class="demo-stat__l">false triggers, held out</div>
+      </div>
+      <div class="demo-stat">
+        <div class="demo-stat__n">16/20</div>
+        <div class="demo-stat__l">on a lap, still failing</div>
+      </div>
+    </div>
+    <p class="demo-stats__note">
+      On a hard desk and on a soft surface the detector finds 20 of 20 held-out double-taps. On a
+      lap it finds 16, against a bar of 98&nbsp;%, so the harness returns FAIL. The typing metric,
+      the one that decides whether this is worth running, has never been graded out of sample and
+      reads INCOMPLETE. Both numbers are here because hiding the second would make the first
+      worthless.
+    </p>
+  </section>
+
+  <section class="wrap band demo-setup" id="setup">
+    <div>
+      <h2>Running in four steps.</h2>
+      <ol class="demo-steps">
+        <li><b>Open the DMG</b> and drag Tunk onto Applications.</li>
+        <li><b>Open it from Applications.</b> Tunk lives at the right-hand end of the menu bar and has no Dock icon.</li>
+        <li><b>Grant two permissions.</b> A window opens on first launch: Input Monitoring to read the
+            accelerometer, Accessibility to press the key. Each row opens the right pane for you, and
+            the window notices the moment you come back.</li>
+        <li><b>Double-tap the case.</b> Palm rest, lid, or the deck beside the trackpad. The ring lights
+            up for each knock it hears.</li>
+      </ol>
+    </div>
+
+    <div class="demo-download">
+      <h3>Tunk 0.1.0</h3>
+      <p class="demo-download__meta">
+        4.6 MB · Apple silicon · macOS 13 or later<br>
+        sha256 d285a62f2fe402ab…
+      </p>
+      <a class="btn btn--primary" href="download/Tunk-0.1.0.dmg" download>Download the DMG</a>
+      <p class="demo-download__warn">
+        <b>This build is signed ad hoc, not with a Developer ID.</b> On a Mac that is not the one it
+        was built on, macOS will refuse to open it and say it cannot verify the developer. Opening it
+        from the right-click menu is the usual way past that, and a notarised build is the real fix.
+        It is also why macOS asks for both permissions again after every update: a grant belongs to
+        one signature, and each build makes a new one.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p class="foot-meta">
+      Numbers on this page were measured on an M4 Max MacBook running macOS 26.5. Nothing here is
+      projected. The photograph at the top is generated, not a picture of the machine that was
+      measured. The ripple over it is
+      <a href="https://canvasui.dev/docs/components/ripple">Ripple from Canvas UI</a>,
+      by David Haz, MIT with Commons Clause.
+    </p>
+  </div>
+</footer>
+
+<script type="module">
+  import { createRipple } from "./vendor/canvasui-ripple.js";
+
+  // No `source` canvas is passed, so the effect never asks for html-in-canvas.
+  // That API is behind a Chrome flag or an origin trial; without it the same
+  // wave field still renders, as light on the metal rather than refraction of
+  // the page. One path, every browser, nothing to detect.
+  const fig = document.getElementById("hero-fig");
+  const output = document.getElementById("hero-ripple");
+
+  if (fig && output) {
+    const ripple = createRipple(
+      { source: null, content: fig, output },
+      { trigger: "click", interval: 7, amplitude: 0.8, wavelength: 64, rings: 2,
+        decay: 1.1, shine: 1.1, dispersion: 0 },
+    );
+    // Two beats, because that is the gesture. The second lands 190 ms after the
+    // first, which is the interval the detector actually joins.
+    if (ripple) {
+      const w = () => output.clientWidth;
+      const h = () => output.clientHeight;
+      setTimeout(() => ripple.splash(w() * 0.62, h() * 0.66, 1), 900);
+      setTimeout(() => ripple.splash(w() * 0.72, h() * 0.63, 0.8), 1090);
+    }
+  }
+</script>
+</body>
+</html>
