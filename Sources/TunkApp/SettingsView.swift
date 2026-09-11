@@ -21,7 +21,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var caption: String {
         switch self {
         case .general:     return "Turn detection on, watch taps land, and choose what a double-tap does."
-        case .actions:     return "One action per tap count. Double tap is on by default; single tap is off."
+        case .actions:     return "One action per tap count. Double tap is on by default; single and triple are off."
         case .calibration: return "Teach Tunk how hard you tap, and how long to ignore taps after typing."
         case .advanced:    return "Timing, the raw signal, and two experiments that ship off."
         }
@@ -271,7 +271,8 @@ struct SettingsView: View {
 
     @ViewBuilder private var actionsPage: some View {
         // Double first: it is what ships armed and the reason the app exists.
-        // Single sits below with its caution.
+        // Single sits below with its caution, then triple, which is the safest
+        // of the three and the only one that needs no warning.
         ForEach(ActionBindings.wiredCounts, id: \.self) { actionCard(tapCount: $0, compact: false) }
     }
 
@@ -737,6 +738,9 @@ struct SettingsView: View {
         case (2, false):
             return "What a confirmed double-tap does. The gesture is fixed; the action is yours, "
                 + "the way Back Tap works on iPhone."
+        case (3, _):
+            return "Three knocks inside the same join window. Unbound by default, and the "
+                + "hardest of the three to fire by accident."
         default:
             return "A single deliberate tap. Unbound by default."
         }
