@@ -81,7 +81,9 @@
   aspect-ratio: 1;
   border-radius: var(--r-lg, 20px);
   overflow: hidden;
-  box-shadow: var(--shadow-3);
+  /* On a near-black page a drop shadow does nothing. A hairline ring gives the
+     photograph an edge, so the column reads as a frame rather than a hole. */
+  box-shadow: var(--shadow-3), inset 0 0 0 1px var(--hair);
 }
 
 .demo-hero__fig img {
