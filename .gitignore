@@ -4,7 +4,7 @@ spike/imuspike
 spike/imuspike2
 spike/batchtest
 *.o
-# dist/ build output only; the scripts and plist that make it are tracked
+# dist/ build output only; the scripts, plist and dmg-assets/ that make it are tracked
 dist/Tunk.app/
 dist/*.dmg
 dist/dmg-staging/
