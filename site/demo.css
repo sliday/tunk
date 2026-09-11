@@ -12,26 +12,35 @@
 
 /* ------------------------------------------------------------------ hero -- */
 
-/* Centred, single column: the claim, then the proof directly under it. The
-   video is the product working, so nothing should sit beside it competing. */
+/* Two columns: the claim on the left, the thing you can knock on the right, both
+   above the fold. Centred put the laptop below the fold, which is the wrong half
+   of the page for the one element a visitor can touch. */
 .demo-hero {
   position: relative;
-  text-align: center;
+  display: grid;
+  grid-template-columns: 1.04fr 0.96fr;
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
+  text-align: left;
   padding-block: clamp(36px, 6vw, 76px) clamp(28px, 4vw, 52px);
 }
 
-.demo-hero__text {
-  max-width: 62ch;
-  margin-inline: auto;
+.demo-hero .demo-stage { margin: 0; max-width: none; }
+
+.demo-hero .demo-controls {
+  margin: 14px 0 0;
+  max-width: none;
+  justify-content: flex-start;
 }
 
+.demo-hero .demo-controls__note { text-align: left; }
 
-.demo-hero__text .cta-row { justify-content: center; }
+.demo-hero__text { max-width: 46ch; }
 
-.demo-hero__media {
-  margin: clamp(28px, 4vw, 48px) auto 0;
-  max-width: 620px;
-}
+
+.demo-hero__text .cta-row { justify-content: flex-start; }
+
+.demo-hero__media { margin: 0; }
 
 .demo-hero__media video {
   display: block;
@@ -270,6 +279,14 @@
 /* ---------------------------------------------------------------- narrow -- */
 
 @media (max-width: 900px) {
+  .demo-hero {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .demo-hero__text { max-width: 60ch; margin-inline: auto; }
+  .demo-hero__text .cta-row { justify-content: center; }
+  .demo-hero .demo-controls { justify-content: center; }
+  .demo-hero .demo-controls__note { text-align: center; }
   .demo-setup { grid-template-columns: 1fr; }
   .demo-shots__row { grid-template-columns: 1fr; }
   .demo-stats { grid-template-columns: 1fr 1fr; }
