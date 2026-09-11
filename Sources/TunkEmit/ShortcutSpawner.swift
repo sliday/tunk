@@ -103,24 +103,22 @@ public final class ShortcutsProcessSpawner: ShortcutSpawning, @unchecked Sendabl
                 }
             }
             process.standardError = errPipe
-            // Whoever fires the completion first — real termination or the
-            // watchdog — must also detach the reader and close the pipe. Firing
-            // alone left both ends open for as long as the child lived, and a
-            // child that trips the watchdog is by definition one that does not
-            // exit. Measured: 60 hung spawns took /dev/fd from 4 to 124 and it
-            // stayed there after every completion had fired; 200 clean spawns
-            // leaked nothing. A Shortcut waiting on user input plus a user who
-            // keeps tapping walks the app to its file-descriptor limit.
-            once.onFire = {
-                errPipe.fileHandleForReading.readabilityHandler = nil
-                try? errPipe.fileHandleForReading.close()
-            }
+            // The read end is closed only once the child has exited (or never
+            // started), never on the watchdog path. Closing it while the child
+            // still runs leaves its stderr with no reader, so its next write
+            // gets SIGPIPE and the shortcut dies mid-run, the opposite of the
+            // "left running" contract above. Measured: a child that wrote to
+            // stderr after a 0.2 s watchdog exited 141 (128 + SIGPIPE) and the
+            // line after the write never ran. The reader stays attached until
+            // EOF, so a chatty hung child still cannot fill the pipe; the cost
+            // is one descriptor per hung child for as long as it lives.
             process.standardOutput = FileHandle.nullDevice
             process.standardInput = FileHandle.nullDevice
 
             // Set before `run()`: a fast shortcut can exit before the next line.
             process.terminationHandler = { proc in
                 errPipe.fileHandleForReading.readabilityHandler = nil
+                try? errPipe.fileHandleForReading.close()
                 let elapsed = EmitClock.nowNanos() - started
                 let code = proc.terminationStatus
                 guard code != 0 || proc.terminationReason != .exit else {
@@ -139,6 +137,7 @@ public final class ShortcutsProcessSpawner: ShortcutSpawning, @unchecked Sendabl
                 try process.run()
             } catch {
                 errPipe.fileHandleForReading.readabilityHandler = nil
+                try? errPipe.fileHandleForReading.close()
                 once.fire(ShortcutOutcome(
                     name: name,
                     completionLatencyNs: EmitClock.nowNanos() - started,
@@ -162,27 +161,16 @@ public final class ShortcutsProcessSpawner: ShortcutSpawning, @unchecked Sendabl
 final class OneShot: @unchecked Sendable {
     private let lock = NSLock()
     private var handler: (@Sendable (ShortcutOutcome) -> Void)?
-    private var cleanup: (@Sendable () -> Void)?
 
     init(_ handler: @escaping @Sendable (ShortcutOutcome) -> Void) {
         self.handler = handler
     }
 
-    /// Runs once, whichever path fires first. Used to close the stderr pipe:
-    /// the watchdog path used to fire the completion and leave the pipe open.
-    var onFire: (@Sendable () -> Void)? {
-        get { lock.lock(); defer { lock.unlock() }; return cleanup }
-        set { lock.lock(); cleanup = newValue; lock.unlock() }
-    }
-
     func fire(_ outcome: ShortcutOutcome) {
         lock.lock()
         let h = handler
-        let c = cleanup
         handler = nil
-        cleanup = nil
         lock.unlock()
-        c?()
         h?(outcome)
     }
 }
