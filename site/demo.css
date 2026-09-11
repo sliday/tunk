@@ -25,20 +25,6 @@
   margin-inline: auto;
 }
 
-/* The brand reads at hero level rather than as nav text: on a page whose job is
-   to introduce the product, the name should survive the nav being cropped. */
-.demo-hero__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 18px;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-.demo-hero__brand img { display: block; }
 
 .demo-hero__text .cta-row { justify-content: center; }
 
