@@ -84,7 +84,12 @@ final class DetectorNoiseFloorTests: XCTestCase {
             t += 1_000_000_000
         }
         let samples = addingLiveSurface(stream.samples(), amplitude: 0.25, fromNs: 2_000_000_000)
-        let result = TapDetector.replayGroups(samples: samples, inputs: [], armedTapCounts: [2])
+        // 3.0 g fixtures ring far past the shipped ceiling. The subject here is
+        // the adaptive floor, so the ceiling does not belong in the experiment.
+        var config = DetectorConfig.default
+        config.onsetCeilingG = nil
+        let result = TapDetector.replayGroups(samples: samples, inputs: [],
+                                              config: config, armedTapCounts: [2])
 
         XCTAssertEqual(result.triggers.count, expected.count,
                        "every deliberate double on a loud surface must still land")

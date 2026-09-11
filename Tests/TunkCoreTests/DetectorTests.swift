@@ -493,7 +493,12 @@ final class DetectorTests: XCTestCase {
         let base = SyntheticStream.leadInNs
         stream.taps = [.init(tNs: base, amplitude: 1.6),
                        .init(tNs: base + 150_000_000, amplitude: 0.9)]
-        let result = run(stream)
+        // The subject is scoring, not amplitude bounds. The 1.6 g fixture rings
+        // past the shipped ceiling, so take the ceiling out of the question
+        // rather than let a synthetic amplitude decide what the shipped bound is.
+        var config = DetectorConfig.default
+        config.onsetCeilingG = nil
+        let result = run(stream, config: config)
         guard let trigger = result.triggers.first else { return XCTFail("expected a trigger") }
         let weakest = result.onsets.map(\.strength).min() ?? 0
         XCTAssertEqual(trigger.score, weakest, accuracy: 1e-12)
