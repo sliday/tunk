@@ -34,8 +34,9 @@ nothing leaves the machine.
 
 You need the file `Tunk-<version>.dmg`. Nothing else, and no Terminal.
 
-1. **Open the DMG.** Double-click `Tunk-<version>.dmg`. A window opens with the
-   Tunk icon on the left and an Applications folder on the right.
+1. **Open the DMG.** Double-click `Tunk-<version>.dmg`. A window opens that says
+   "Drag Tunk into Applications", with the Tunk icon on the left, an arrow, and
+   an Applications folder on the right.
 2. **Drag Tunk onto Applications.** Then eject the DMG (the ⏏ next to "Tunk" in
    the Finder sidebar) and delete the `.dmg` file if you like.
 3. **Open Tunk from your Applications folder.** Tunk lives in the menu bar, at the
@@ -106,13 +107,23 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build -c release
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
 
-The DMG is assembled with `hdiutil` only. Its window layout (icon positions,
-background) is written by Finder, which the script drives with AppleScript, so
-the first time you run `make -C dist dmg` from a Terminal macOS asks whether the
-Terminal may control Finder; allow it. That run caches the layout in
-`dist/dmg-assets/DS_Store` for builds in sessions without a Finder (SSH, CI). If
-neither is available the image still mounts with the app, the Applications alias
-and the background file; only the window layout is Finder's default.
+The DMG is assembled with `hdiutil` only. Its window layout (size, 128 px icons,
+their positions, the background) is a `.DS_Store` that ships in the repo as
+`dist/dmg-assets/DS_Store`, so a fresh clone builds the finished image with no
+Finder involved and no prompt. To regenerate that file after changing the
+geometry in `dist/build-dmg.sh` or the background in `dist/dmg-background.swift`,
+install two small Python modules once and run with `REFRESH_LAYOUT=1`:
+
+```bash
+pip3 install --user ds_store mac_alias   # add --break-system-packages if pip refuses (Homebrew Python)
+REFRESH_LAYOUT=1 make -C dist dmg        # rewrites dist/dmg-assets/DS_Store; commit it
+```
+
+The modules are a build-time tool only; the app never sees them. Without them
+the script falls back to driving Finder with AppleScript (macOS will ask whether
+the Terminal may control Finder; it gives up after 10 s if nobody answers), and
+without that too it still builds and verifies the image and prints the one-line
+fix; only the window layout is then Finder's default.
 
 Every rebuild produces a new ad-hoc signature, so macOS asks for both permissions
 again after each one. The signature is what the permission is granted to.

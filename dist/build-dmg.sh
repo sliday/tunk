@@ -7,26 +7,34 @@
 #   1. build-app.sh                         (skip with NO_BUILD=1)
 #   2. dist/dmg-staging/                    the folder that becomes the volume
 #   3. dist/Tunk-<version>-rw.dmg           writable image, mounted for step 4
-#   4. Finder via osascript                 writes .DS_Store: window size, icon
-#                                           size, icon positions, background
+#   4. .DS_Store on the mounted image       window size, icon size, icon
+#                                           positions, background picture
 #   5. hdiutil convert -format UDZO         the compressed, read-only artefact
 #   6. hdiutil verify
 #
-# Step 4 needs a logged-in Finder and Automation permission for the terminal
-# running this. When that is missing (an SSH session, a CI box, an agent
-# session whose permission prompt nobody answers) the AppleEvent times out.
-# Fallback, in order:
-#   a. dist/dmg-assets/DS_Store, a .DS_Store that Finder wrote on an earlier
-#      run in a GUI session. It is copied into the image as-is. The layout
-#      keys off the item names (Tunk.app, Applications) and the volume name,
-#      and Finder resolves the background alias by path when the file ids do
-#      not match, so a cached one keeps working across rebuilt images. The
-#      first successful Finder run writes it; commit it.
-#   b. no layout at all: the image still mounts with the app, the alias and
-#      the background file, but Finder shows default positions and no
-#      background until someone runs this once from Terminal.
-# Set NO_FINDER=1 to skip the Finder pass on purpose (uses the cache if it
-# exists), REFRESH_LAYOUT=1 to overwrite the cache from a fresh Finder run.
+# Step 4 never depends on Finder. No unattended session (SSH, CI, an agent)
+# can answer the Automation prompt Finder scripting needs, so the layout is
+# tried in this order and the first one that works wins:
+#   a. dist/dmg-assets/DS_Store   a committed .DS_Store from an earlier run.
+#                                 Copied in as-is. The layout keys off the item
+#                                 names (Tunk.app, Applications) and the volume
+#                                 name, and Finder resolves the background
+#                                 alias by path when file ids differ, so it
+#                                 keeps working across rebuilt images.
+#   b. dist/dmg-layout.py         writes the .DS_Store directly. Needs the
+#                                 optional dev modules ds_store and mac_alias
+#                                 (pip3 install --user ds_store mac_alias; add
+#                                 --break-system-packages if pip refuses on a
+#                                 Homebrew Python). Saves the result to (a) so
+#                                 it gets committed.
+#   c. Finder via osascript       10 s timeout. Needs a logged-in session that
+#                                 has allowed this terminal to control Finder.
+#                                 Also saves to (a).
+#   d. none                       the image still builds and verifies; Finder
+#                                 shows default positions and no background.
+#                                 The script exits 0 and prints the fix.
+# REFRESH_LAYOUT=1 skips (a) and rewrites it from (b) or (c).
+# NO_FINDER=1 skips (c).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -89,12 +97,43 @@ MOUNT="$(hdiutil attach -readwrite -noverify -noautoopen "$RW" \
 echo "  mounted at $MOUNT"
 
 # The custom-icon bit on the volume root makes Finder use .VolumeIcon.icns.
-if command -v SetFile >/dev/null 2>&1; then
+# SetFile ships in Xcode and in the CLT but neither puts it on PATH, so take it
+# from the toolchain; failing that, write the Finder flag (0x0400 at bytes
+# 8-9 of FinderInfo) with xattr.
+if [ -x "$DEVELOPER_DIR/usr/bin/SetFile" ]; then
+    "$DEVELOPER_DIR/usr/bin/SetFile" -a C "$MOUNT" || true
+elif command -v SetFile >/dev/null 2>&1; then
     SetFile -a C "$MOUNT" || true
+else
+    xattr -wx com.apple.FinderInfo \
+        "0000000000000000 0400 0000000000000000000000000000000000000000 0000" "$MOUNT" 2>/dev/null || true
 fi
 
-layout_with_finder() {
-    osascript - "$MOUNT" "$WIN_W" "$WIN_H" "$ICON_SIZE" "$APP_X" "$ICON_Y" "$APPS_X" <<'EOF'
+save_layout() {
+    if [ ! -f "$LAYOUT_CACHE" ] || [ "${REFRESH_LAYOUT:-0}" = 1 ]; then
+        mkdir -p "$(dirname "$LAYOUT_CACHE")"
+        cp "$MOUNT/.DS_Store" "$LAYOUT_CACHE"
+        echo "  cached the layout at $LAYOUT_CACHE (commit it so every clone ships it)"
+    fi
+}
+
+layout_from_cache() {
+    [ "${REFRESH_LAYOUT:-0}" = 1 ] && return 1
+    [ -f "$LAYOUT_CACHE" ] || return 1
+    cp "$LAYOUT_CACHE" "$MOUNT/.DS_Store"
+    echo "  layout: copied $LAYOUT_CACHE"
+}
+
+layout_from_python() {
+    python3 -c 'import ds_store, mac_alias' 2>/dev/null || return 1
+    python3 "$DIST/dmg-layout.py" "$MOUNT" "$WIN_W" "$WIN_H" "$ICON_SIZE" \
+        "$APP_X" "$ICON_Y" "$APPS_X" || return 1
+    save_layout
+}
+
+layout_from_finder() {
+    [ "${NO_FINDER:-0}" = 1 ] && return 1
+    osascript - "$MOUNT" "$WIN_W" "$WIN_H" "$ICON_SIZE" "$APP_X" "$ICON_Y" "$APPS_X" <<'EOF' || return 1
 on run argv
     set mountPath to item 1 of argv
     set winW to (item 2 of argv) as integer
@@ -104,8 +143,8 @@ on run argv
     set iconY to (item 6 of argv) as integer
     set appsX to (item 7 of argv) as integer
     -- Without a timeout an unanswered Automation prompt holds the build for
-    -- 60 s per event. 30 s is enough for a human to click Allow.
-    with timeout of 30 seconds
+    -- 60 s per event. 10 s is enough for a human who is there to click Allow.
+    with timeout of 10 seconds
         tell application "Finder"
             set theDisk to (POSIX file mountPath) as alias
             open theDisk
@@ -117,19 +156,21 @@ on run argv
                 set sidebar width to 0
                 -- {left, top, right, bottom} on screen; the content is winW x winH
                 set bounds to {200, 120, 200 + winW, 120 + winH}
-                set opts to icon view options
-                tell opts
-                    set arrangement to not arranged
-                    set icon size to iconSize
-                    set text size to 13
-                    set label position to bottom
-                    set shows item info to false
-                    set shows icon preview to true
-                    set background picture to file ".background:background.tiff" of theDisk
-                end tell
-                set position of item "Tunk.app" of theDisk to {appX, iconY}
-                set position of item "Applications" of theDisk to {appsX, iconY}
             end tell
+            set opts to icon view options of theWindow
+            -- Some Finder builds refuse this one (-10006) while accepting the
+            -- rest; the positions below still land, so do not let it abort.
+            try
+                set arrangement of opts to not arranged
+            end try
+            set icon size of opts to iconSize
+            set text size of opts to 13
+            set label position of opts to bottom
+            set shows item info of opts to false
+            set shows icon preview of opts to true
+            set background picture of opts to file ".background:background.tiff" of theDisk
+            set position of item "Tunk.app" of theDisk to {appX, iconY}
+            set position of item "Applications" of theDisk to {appsX, iconY}
             update theDisk without registering applications
             delay 1
             close theWindow
@@ -137,42 +178,23 @@ on run argv
     end timeout
 end run
 EOF
-}
-
-use_cached_layout() {
-    if [ -f "$LAYOUT_CACHE" ]; then
-        cp "$LAYOUT_CACHE" "$MOUNT/.DS_Store"
-        echo "  layout: copied cached $LAYOUT_CACHE"
-        return 0
-    fi
-    echo "  WARNING: no cached layout at $LAYOUT_CACHE either. The image mounts with the app," >&2
-    echo "           the Applications alias and the background file, but Finder will show default" >&2
-    echo "           icon positions and no background. Run this once from Terminal in a logged-in" >&2
-    echo "           session, allow it to control Finder, and commit dist/dmg-assets/DS_Store." >&2
-    return 1
-}
-
-layout_done=0
-if [ "${NO_FINDER:-0}" = 1 ]; then
-    echo "==> NO_FINDER=1: skipping the Finder pass"
-    use_cached_layout && layout_done=1 || true
-elif layout_with_finder; then
-    echo "==> Finder wrote the window layout"
     sleep 2   # let Finder flush .DS_Store
-    if [ -f "$MOUNT/.DS_Store" ]; then
-        layout_done=1
-        if [ ! -f "$LAYOUT_CACHE" ] || [ "${REFRESH_LAYOUT:-0}" = 1 ]; then
-            mkdir -p "$(dirname "$LAYOUT_CACHE")"
-            cp "$MOUNT/.DS_Store" "$LAYOUT_CACHE"
-            echo "  cached the layout at $LAYOUT_CACHE (commit it so headless builds keep it)"
-        fi
-    else
-        echo "  WARNING: Finder reported success but wrote no .DS_Store" >&2
-        use_cached_layout && layout_done=1 || true
-    fi
+    [ -f "$MOUNT/.DS_Store" ] || return 1
+    save_layout
+}
+
+layout=none
+if layout_from_cache; then
+    layout=cache
+elif layout_from_python; then
+    layout=python
+elif layout_from_finder; then
+    layout=finder
+    echo "  layout: Finder wrote it"
 else
-    echo "  WARNING: Finder scripting failed (no GUI session, or the Automation prompt was not allowed)." >&2
-    use_cached_layout && layout_done=1 || true
+    echo "  layout: NONE. The image still builds, but Finder will show default icon" >&2
+    echo "          positions and no background." >&2
+    echo "  FIX:    pip3 install --user ds_store mac_alias && make -C dist dmg   (then commit dist/dmg-assets/DS_Store)" >&2
 fi
 
 # Open the window on mount. bless does this without Finder's help.
@@ -195,19 +217,28 @@ echo "==> verifying"
 hdiutil verify -quiet "$DMG"
 echo "  checksum ok"
 
-# Mount the finished image read-only and prove the three things B2 asks for.
+# Mount the finished image read-only and prove the three things B2 asks for,
+# plus that the .DS_Store carries the two keys Finder needs (bwsp for the
+# window, icvp for icon size and background).
 CHECK="$(hdiutil attach -readonly -noverify -noautoopen "$DMG" \
          | awk -F'\t' '/\/Volumes\//{print $NF}' | tail -1)"
 fail=0
 [ -d "$CHECK/Tunk.app" ]                        || { echo "  MISSING Tunk.app" >&2; fail=1; }
 [ -L "$CHECK/Applications" ]                    || { echo "  MISSING Applications link" >&2; fail=1; }
 [ -f "$CHECK/.background/background.tiff" ]     || { echo "  MISSING background" >&2; fail=1; }
-[ -f "$CHECK/.DS_Store" ] && echo "  layout: .DS_Store present" || echo "  layout: default (no .DS_Store)"
+if [ -f "$CHECK/.DS_Store" ]; then
+    if grep -q bwsp "$CHECK/.DS_Store" && grep -q icvp "$CHECK/.DS_Store"; then
+        echo "  layout: .DS_Store has window bounds and icon view settings"
+    else
+        echo "  layout: .DS_Store present but incomplete (bwsp/icvp missing); Finder will not show the background" >&2
+    fi
+else
+    echo "  layout: default (no .DS_Store)"
+fi
 hdiutil detach "$CHECK" -quiet || true
 [ "$fail" -eq 0 ] || exit 1
 
 rm -rf "$STAGING"
 echo
-echo "built: $DMG ($(du -h "$DMG" | cut -f1))"
-[ "$layout_done" -eq 1 ] || echo "       (icon layout: Finder defaults; see the header of this script)"
+echo "built: $DMG ($(du -h "$DMG" | cut -f1))   layout: $layout"
 echo "try:   open $DMG"
