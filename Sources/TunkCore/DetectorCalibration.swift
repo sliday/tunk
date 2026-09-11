@@ -231,6 +231,14 @@ public enum TapCalibration {
             out.calibratedInterTapNs = interTap
             out.maxInterTapNs = interTap
             out.confirmWindowNs = interTap
+            // A hand-raised minimum above the observed cadence leaves no band
+            // for the gesture just calibrated: madeCoherent() clamps min == max
+            // and it can never group again. Lower it to fit, with the same 15 %
+            // margin the window gets above p90, never under the onset debounce.
+            if let p10 = result.interTapP10Ns {
+                let floor = max(DSPTuning.default.onsetDebounceNs, Int64(Double(p10) / 1.15))
+                out.minInterTapNs = min(out.minInterTapNs, floor)
+            }
         }
         return out
     }
