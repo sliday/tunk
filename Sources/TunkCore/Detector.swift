@@ -210,7 +210,7 @@ public final class TapDetector: TapDetecting {
 
         if pending != nil {
             pending!.peak = max(pending!.peak, envelope)
-            if sample.tNs - pending!.tNs >= tuning.peakHoldNs { publishPending() }
+            if sample.tNs - pending!.tNs >= max(tuning.peakHoldNs, tuning.preGateNs) { publishPending() }
         }
 
         let threshold = currentThreshold()
