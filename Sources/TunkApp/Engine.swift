@@ -120,6 +120,13 @@ final class Engine: ObservableObject {
     /// The same object as `detector`, kept typed so the monitor can read the
     /// envelope and the live threshold without a cast per sample.
     private var readout: TapDetector?
+    /// Whether `feed(sample:)` may hand a sample to the detector. True only
+    /// while the keystroke gate is installed: set in `start()` once the monitor
+    /// is up, cleared in `stopSensors()` the moment it comes down, which is the
+    /// one line every disarm path (off switch, sleep, reacquire, lost
+    /// permission) goes through. Read and written under `detectorLock`, so the
+    /// sensor thread cannot see a stale value against a main-thread write.
+    private var acceptingSamples = false
 
     /// Session epoch. Fixed for the life of the process so the monitor timeline
     /// survives a reacquire.
@@ -392,6 +399,9 @@ final class Engine: ObservableObject {
         }
         monitor.start()
         input = monitor
+        detectorLock.lock()
+        acceptingSamples = true
+        detectorLock.unlock()
 
         // Opening the sensor is the part that can hang, so it is the only part
         // that leaves this thread. Nothing it touches is `@Published` and
@@ -450,6 +460,9 @@ final class Engine: ObservableObject {
         requireMain()
         input?.stop()
         input = nil
+        detectorLock.lock()
+        acceptingSamples = false
+        detectorLock.unlock()
         let generation = beginSensorOp()
         let source = accel
         let box = WeakEngineRef(self)
@@ -487,10 +500,12 @@ final class Engine: ObservableObject {
         // against 1 with a healthy queue. Worse, the keystroke gate's monitors
         // are removed first, so those samples would reach a detector with the
         // typing defence already gone, and a trigger from one of them would run
-        // the bound action. `wantsRunning` is written on main before any of that
-        // starts, so reading it here closes the window with one branch.
-        guard wantsRunning else { return }
+        // the bound action. `acceptingSamples` is cleared under `detectorLock`
+        // on the same line that removes the gate, so checking it under the lock
+        // here closes the window on every disarm path, sleep included, and
+        // gives Thread Sanitizer nothing to report.
         detectorLock.lock()
+        guard acceptingSamples else { detectorLock.unlock(); return }
         let trigger = detector.ingest(sample: sample)
         let onsets = detector.drainOnsets()
         // The detector's own transient envelope, in g. Drawing that rather than
