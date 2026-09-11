@@ -1,0 +1,102 @@
+[
+{
+"key": "harness-doublegroups",
+"area": "harness",
+"severity": "user-visible",
+"title": "prompt_window double groups drop out of the detection denominator (onset-count rule overrides the FORMAT contract)",
+"file": "Sources/TunkScore/Scoring.swift",
+"line": 401,
+"demonstration": "FORMAT.md (labels section) says a prompt_window group 'counts toward the detection denominator but is excluded from latency'. TunkLabel/main.swift:239-240 writes an unresolved double as ONE row {intent: double, confidence: prompt_window} at the beep. Scoring.swift:398-401 sets n = rows.count = 1 and armed = policy.isArmed(1) = false, then line 447-467 books it as mustNotFire and `continue`s before `armedGroups += 1`. Probe: synthetic clean desk session (10 planted doubles), groups 5-9 relabelled that way with their strikes erased: harness prints '[ ok ] desk detection rate, all armed gestures \u2265 98 % -> 100.00 % (5/5)' and 'labelled must-not-fire gestures that fired = 0 -> 0 of 5 group(s)'; by the contract it is 5/10 = 50 % FAIL. Failing test: Tests/TunkCoreTests/AuditRefereeTests.swift testPromptWindowDoubleGroupsStayInTheDetectionDenominator, assertions at :160 ('Optional(5)' is not equal to 'Optional(10)') and :165 ('pass' is not equal to 'fail'). Current corpus has zero prompt_window rows, so today's numbers are unaffected; the next session with an unresolved prompted tap inflates its rate.",
+"fix": "In SessionScorer.score, when confidence == .promptWindow (or rows.count < intent.impliedTapCount), grade the group by intent.impliedTapCount: armed = policy.isArmed(implied), count it in armedGroups/labelledGroups for that count, match a trigger of that count within \u00b1150 ms of the anchor row, and keep the existing latencyExcluded path. Leave the 'onset count wins' warning for auto_refined/human_verified rows only."
+},
+{
+"key": "harness-only",
+"area": "harness",
+"severity": "user-visible",
+"title": "--check-determinism only warns: a detector that fails replay determinism still gets VERDICT: PASS, exit 0",
+"file": "Sources/TunkScore/Commands.swift",
+"line": 115,
+"demonstration": "Commands.swift:112-117 appends 'NON-DETERMINISTIC' to `warnings` only. Report.swift:80 computes the verdict from aggregates via PassLine.verdict (PassLine.swift:242-258), which never reads warnings. Probe (temporary env-gated score perturbation in StubDetector, since removed; Sources/ is clean): `TUNK_AUDIT_FLIP=1 tunk-score run --data /tmp/audit-p4 --detector stub --check-determinism` on a 3-surface synthetic set printed three '!! ...: NON-DETERMINISTIC \u2014 two identical replays produced different triggers' lines and 'VERDICT: PASS'; JSON report: failing checks [] . The check is also opt-in, while FORMAT.md's replay contract says 'The harness asserts this.' The shipped detector measured deterministic on held-out (0 warnings with --check-determinism).",
+"fix": "Make determinism a pass-line check: in Commands.run count sessions whose second replay differs and add Check(name: 'replay determinism', requirement: 'identical triggers', status: .fail) per scope, or short-circuit to CLIError.failed. Consider defaulting --check-determinism on for `run` (cost is one extra replay, seconds on this corpus)."
+},
+{
+"key": "harness-atypingsessio",
+"area": "harness",
+"severity": "latent",
+"title": "A typing session whose keystrokes shadow 100 % of the recording passes 'false triggers, typing sessions' with 0.0 min un-gated exposure",
+"file": "Sources/TunkScore/PassLine.swift",
+"line": 107,
+"demonstration": "PassLine.swift:93-95 says 'An empty or near-empty typing session must never be able to satisfy it'. The status at :107-108 gates on typingSessions and typingSeconds only; typingUngatedSeconds (Replay.swift:31-40 explains why it is the real denominator) is printed but not consulted. Probe: synthetic typing session with a key_down every 100 ms across its 51 s span: '[ ok ] desk false triggers, typing sessions = 0 -> 0 in 1 session(s), 0.8 min (0.0 min un-gated)'. Placed on all three surfaces with the synthetic clean and confound sessions, the real detector run reads 'VERDICT: PASS', exit 0, with zero seconds in which the detector could have fired while typing. Failing test: AuditRefereeTests.testFullyGatedTypingSessionIsNotEvidenceOfZeroFalseTriggers, assertion at :205 ('pass' is not equal to 'no_data').",
+"fix": "status: agg.typingSessions == 0 || agg.typingSeconds < minimumMeaningfulSeconds || agg.typingUngatedSeconds < minimumMeaningfulSeconds ? .noData : ...; and say 'only X s un-gated' in `actual` for that branch."
+},
+{
+"key": "harness-asymlin",
+"area": "harness",
+"severity": "hygiene",
+"title": "A symlinked --data root is treated as an empty corpus: 'No sessions found', INCOMPLETE, no error",
+"file": "Sources/TunkFormat/Session.swift",
+"line": 441,
+"demonstration": "`ln -s <repo>/data/holdout /tmp/audit-link-hd2; tunk-score run --data /tmp/audit-link-hd2` prints '!! No sessions found under /tmp/audit-link-hd2. Nothing was graded.' and exits 3, while `ls /tmp/audit-link-hd2/` lists the three sessions. Cause traced with a Foundation snippet: Paths.resolve (CLI.swift:136-140) builds the URL without isDirectory, so for a symlink hasDirectoryPath is false and contentsOfDirectory(at:) throws NSCocoaErrorDomain 256 / POSIX 20 'Not a directory'; Session.discover line 441 swallows it with `try?` and returns []. Not a guard bypass: nothing is graded, and a symlink to a single holdout session inside a fresh parent is refused on split=test (exit 77), as is `data/raw/../holdout` (exit 77) and `explain` through a symlink.",
+"fix": "Paths.resolve: URL(fileURLWithPath: ..., isDirectory: true) (or .resolvingSymlinksInPath()); Session.discover: propagate the contentsOfDirectory error instead of `try?` so an unreadable root is an error, not an empty run."
+},
+{
+"key": "app-settings-cancelcalibrwith",
+"area": "app-settings",
+"severity": "user-visible",
+"title": "Cancelling calibration with the resonator on hands the detector the STORED threshold (0.032) instead of the derived one (0.011); the narrow-band front end keeps running",
+"file": "Sources/TunkApp/Engine.swift",
+"line": 875,
+"demonstration": "Temporary probe (AppSettings on a throwaway suite, experimentalResonator=true, Engine(settings:), beginCalibration(), endCalibration(commit:nil)), output verbatim:\n  A. resonator ON, fresh engine: in force 0.011 g, front end 40 Hz, stored default 0.032\n  A. during calibration: in force 0.020 g\n  A. after Cancel (endCalibration(commit:nil)): in force 0.032 g, front end 40 Hz, isCalibrating=false, stored default 0.032\n  A. after one unrelated slider write: in force 0.011 g\nTrace: beginCalibration() saves `configBeforeCalibration = settings.config` (stored, Engine.swift:762); endCalibration() does `detector.config = restored` where restored == before (Engine.swift:875), then `settings.config = restored` (881) which is unchanged so AppSettings.config.didSet's `guard config != oldValue` returns and `onConfigChange?(effectiveConfig)` never fires. Result is exactly the collapse RESUME records as fixed for the didSet path (0.032 on a chain that needs 0.011, 2.9x the bar), now reachable from the sheet's Cancel button (CalibrationView.swift:320) and from closing the settings window mid-calibration (SettingsWindowController.endAnyCalibration -> endCalibration(commit:nil)). It heals on the next slider write or on start(), so it is the irreproducible-report class. Ships OFF (resonator is an experimental switch), so not ships-broken.",
+"fix": "In endCalibration, after `settings.config = restored`, push the derived config unconditionally: replace `detector.config = restored` / `arm(for: restored)` with `detector.config = settings.effectiveConfig` / `arm(for: settings.effectiveConfig)` (or call apply(config: settings.effectiveConfig) after clearing configBeforeCalibration). Add a --config-trace check: resonator on, begin+cancel calibration, assert engine.effectiveConfig.effectiveThreshold == 0.011."
+},
+{
+"key": "app-settings-calibrreviewreport",
+"area": "app-settings",
+"severity": "user-visible",
+"title": "Calibration review reports a committed bar the detector will not run when the resonator is on",
+"file": "Sources/TunkApp/CalibrationView.swift",
+"line": 229,
+"demonstration": "Probe, commit path with a derived threshold of 0.05 and the resonator on:\n  B. after Use-this with derived threshold 0.05: in force 0.011 g, stored calibrated 0.05\nTrace: `thresholdInForce` (CalibrationView.swift:222-232) computes `max(result.threshold * engine.calibrationSensitivity, tuning.noiseSnrMultiple * noiseFloor, tuning.minThresholdG)` with `let tuning = DSPTuning.default` (line 229); it never consults AppSettings.effectiveConfig, which forces calibratedThreshold to 0.011 whenever experimentalResonator is true (AppSettings.swift effectiveConfig). The review's 'bar the detector will run once this is committed' and the 'weakest tap clears by Nx' verdict are computed against 0.05 while the committed detector runs 0.011. The Detection card does separately show an 'in force' readout (SettingsView.swift:691-696), so the divergence is visible elsewhere, but the calibration screen states the wrong number about the one thing it exists to say. Experimental switch only.",
+"fix": "Derive the review's bar from what will actually be applied: build a candidate config with TapCalibration.apply(result, to: settings.config), run it through the same derivation as AppSettings.effectiveConfig (and engine.liveTuning for minThresholdG/noiseSnrMultiple), and show that, with a note when the resonator has overridden the learned value."
+},
+{
+"key": "app-settings-adisablonset",
+"area": "app-settings",
+"severity": "latent",
+"title": "A disabled onset ceiling (onsetCeilingG = nil) is re-enabled at 2.5 g on the next launch",
+"file": "Sources/TunkCore/Types.swift",
+"line": 344,
+"demonstration": "Kept test Tests/TunkCoreTests/AuditConfigRoundTripTests.swift, testDisabledOnsetCeilingSurvivesRoundTrip, fails:\n  XCTAssertEqual failed: (\"Optional(2.5)\") is not equal to (\"nil\") - a disabled ceiling came back as Optional(2.5) g after one persist/relaunch\nTrace: encode(to:) uses `encodeIfPresent(onsetCeilingG)` (Types.swift:344) so nil omits the key; init(from:) does `decodeIfPresent(...) ?? d.onsetCeilingG` (Types.swift:321) so an absent key means the 2.5 default. The doc comment says 'Nil disables the ceiling.' Latent: no slider or calibration code in Sources/TunkApp sets onsetCeilingG (grep across TunkApp and DetectorCalibration finds no writer), so only a hand-edited settings file or harness --config JSON hits it today.",
+"fix": "Encode the disabled state explicitly (e.g. `try c.encode(onsetCeilingG, forKey: .onsetCeilingG)` which writes JSON null, and in init(from:) distinguish key-absent from null via `c.contains(.onsetCeilingG)`), so nil round-trips; keep absent-key = default for old files."
+},
+{
+"key": "app-settings-draftkeys",
+"area": "app-settings",
+"severity": "hygiene",
+"title": "Old-build draft keys 'hotkeyDraft'/'shortcutDraft' were renamed to per-count keys with no read of the old name; the user's other-kind draft is replaced by the recommended default",
+"file": "Sources/TunkApp/AppSettings.swift",
+"line": 259,
+"demonstration": "Probe seeded a suite the way commit 881259b's build wrote it (bare key `hotkeyDraft` = 'Ctrl+Opt+K' beside a legacy `action` holding a shortcut), then constructed the current AppSettings:\n  D. old build stored hotkeyDraft=Ctrl+Opt+K beside a shortcut action; new build hotkeyDraft(for:2)=Ctrl+Opt+Cmd+;, recommendedDefault=Ctrl+Opt+Cmd+;\nTrace: git history of AppSettings.swift shows commit 5234ce0 changing `static let hotkeyDraft = \"hotkeyDraft\"` to `static func hotkeyDraft(_ count:) { \"hotkeyDraft.\\(count)\" }` (same for shortcutDraft); init only reads `Key.hotkeyDraft(count)` (line 259) and `Key.shortcutDraft(count)` (line 261). The bound action itself is migrated correctly through ActionBindings.restored(actionData:), so only the per-row UI memory for the kind not currently bound is lost. Hygiene: drafts are documented as UI memory the engine never reads, and the builds involved predate any release.",
+"fix": "In init's seeding loop, for count 2 fall back once more to the bare legacy keys: `?? d.string(forKey: \"hotkeyDraft\")` and `?? d.string(forKey: \"shortcutDraft\")`, mirroring how legacyHotkey/legacyAction are read-once."
+},
+{
+"key": "completeness-awhose",
+"area": "completeness",
+"severity": "user-visible",
+"title": "A double-tap whose keystroke is eaten by secure input reads as fired: lastActionFailed is unreachable on the sensor path",
+"file": "Sources/TunkApp/Engine.swift",
+"line": 556,
+"demonstration": "Failing test kept at /Users/stas/Playground/tunk/.claude/worktrees/wf_9c428217-75a-69/Tests/TunkCoreTests/AuditSensorPathFailureSignalTests.swift:82 (XCTAssertTrue(actionFailed) fails; full suite: 391 executed, 52 skipped, 1 failure = this one). The test builds what the Engine builds (ActionBindings.default = double -> Ctrl+Opt+Cmd+;, HotkeyEmitter with AlwaysTrustedPermission and StubSecureInput(active: true), RecordingPoster) and runs Engine.swift:556 verbatim: `do { _ = try runner.run(for: trigger) } catch { actionFailed = true }`. Result: runner.run(for:) does not throw, actionFailed stays false, while poster.events is empty, emitter.stats.emitCount == 0, failureCount == 1 and runner.stats.lastErrorText carries the secure-input text. Trace: ActionRunner.run(for:) -> run(action, waitForHotkey: false) -> `guard waitForHotkey else { emitter.emitAsync(spec); return record(error: nil) }` (ActionRunner.swift:273-276); emitAsync is `_ = try? self?.perform(...)` (HotkeyEmitter.swift:236); the .shortcut arm is documented as unable to throw. Engine.swift:571 `self.lastActionFailed = actionFailed` is the only writer of lastActionFailed, and AppDelegate.swift:190/209/268 read it for the 'Last action failed' menu line, the orange .actionBroken glyph and the tooltip. So on the shipped default a tap into a password field, or with any process holding secure event input (ioreg on this machine right now: kCGSSessionSecureInputPID = 72947, Telegram), posts nothing, increments triggerCount, flashes the glyph and leaves the menu on 'Listening \u00b7 N fired'; the error text reaches actionStats.l",
+"fix": "Drive the flag from the runner's report instead of a throw that cannot happen. In Engine.init's `runner.onChange = { stats in DispatchQueue.main.async { box.engine?.actionStats = stats } }` also set `box.engine?.lastActionFailed = stats.lastErrorText != nil`; in feed(sample:) change line 571 to write only when `actionFailed` is true (never write false there, or the async block enqueued after runner.run returns overwrites the failure that onEmit already reported). ActionRunner.record() fires onChange with lastErrorText nil at every run and recordFailure fires it again with the text, both on main in enqueue order, so the flag clears on the next clean tap exactly as today."
+},
+{
+"key": "completeness-keystrgateis",
+"area": "completeness",
+"severity": "latent",
+"title": "Keystroke gate is graded in an ingest order the app never runs; keystroke onsets escape suppression live, no false trigger observed",
+"file": "Sources/TunkCore/Detector.swift",
+"line": 275,
+"demonstration": "Tests/TunkCoreTests/AuditGateOrderTests.swift (kept, passes; output quoted). The harness delivers every input before any sample with t_ns >= input.t_ns (Replay.swift:166-169; TapDetector.replayGroups Detector.swift:662-673). Live, samples enter Engine.feed(sample:) on the sensor queue ~0.3 ms after their stamp and a keystroke enters Engine.feed(input:) on main only after NSEvent global-monitor delivery lag L, which the project records as never measured (web/progress.json:8205). Detector.ingest(input:) only retracts onsets at or BEFORE the input stamp (`input.tNs >= last && input.tNs - last <= preGateNs`, Detector.swift:275-283), and an onset accepted earlier was tested against a gateUntilNs that did not yet include this key (Detector.swift:438). Engine.feed(input:) then clamps the stamp forward to the start of the newest 8.33 ms display bucket (`e.tNs = max(e.tNs, ringBucket * Engine.bucketNs)`), which the harness does not do. Measured on the three data/raw typing sessions with the shipped detector armed {2}: the detector's onset is stamped AFTER its keyDown for 93 % (desk, p50 +6.2 ms), 55 % (lap, p50 +5.9 ms) and 80 % (soft, p50 +11.5 ms) of matched strikes, so live ingest order is reversed for most keystrokes whenever L exceeds ~6 ms. Replaying in app order with the clamp reproduced, ungated onsets rise from 5 (harness) to 12/32/56/67/49/23/94/96/92/81 on desk at L = 2/4/6/8/10/15/20/30/40/60 ms, 0 -> up to 27 on lap, 1 -> up to 38 on soft. Triggers stay 0 at every L on all three recordings and on a synthetic 150 ms pair at four bucket phases: each escaped strike forms a",
+"fix": "Make the gate order-independent so replay equals live: in Detector.ingest(input:), also clear the live group when groupLastOnsetNs is in (input.tNs, input.tNs + gateWindowNs], and mark pending / the last onsetLog entry suppressed on the same test; in harness order such onsets were already suppressed on acceptance, so replay results do not move (check with tunk-score run --check-determinism plus the byte-identical held-out report). Then drop the forward clamp in Engine.feed(input:), which only exists because the detector cannot look forward."
+}
+]
