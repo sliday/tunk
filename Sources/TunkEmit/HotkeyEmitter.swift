@@ -62,7 +62,7 @@ public struct EmitStats: Sendable, Equatable {
     public var unbalancedPairs: Int = 0
 
     /// True if any key-down was posted whose key-up was not. Must never be true.
-    public var hasStuckKey: Bool { unbalancedPairs > 0 || keyDownsPosted > keyUpsPosted }
+    public var hasStuckKey: Bool { unbalancedPairs > 0 }
 
     /// Seconds since the last emission, for "fired 3 s ago". Nil if never fired.
     public func secondsSinceLastEmit(now: Date = Date()) -> TimeInterval? {
