@@ -318,7 +318,11 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         confirmWindowNs = try c.decodeIfPresent(Int64.self, forKey: .confirmWindowNs) ?? d.confirmWindowNs
         refractoryNs = try c.decodeIfPresent(Int64.self, forKey: .refractoryNs) ?? d.refractoryNs
         calibratedInterTapNs = try c.decodeIfPresent(Int64.self, forKey: .calibratedInterTapNs)
-        onsetCeilingG = try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG) ?? d.onsetCeilingG
+        // Absent key: file predates the ceiling, use the default. Present key
+        // (including an explicit null) is the saved state; null means disabled.
+        onsetCeilingG = c.contains(.onsetCeilingG)
+            ? try c.decodeIfPresent(Double.self, forKey: .onsetCeilingG)
+            : d.onsetCeilingG
         motionGateG = try c.decodeIfPresent(Double.self, forKey: .motionGateG) ?? d.motionGateG
         if let armed = try c.decodeIfPresent(Set<Int>.self, forKey: .armedTapCounts) {
             armedTapCounts = armed
@@ -341,7 +345,9 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         try c.encode(refractoryNs, forKey: .refractoryNs)
         try c.encode(armedTapCounts, forKey: .armedTapCounts)
         try c.encodeIfPresent(calibratedInterTapNs, forKey: .calibratedInterTapNs)
-        try c.encodeIfPresent(onsetCeilingG, forKey: .onsetCeilingG)
+        // Written even when nil so a disabled ceiling round-trips as null
+        // instead of coming back as the default on the next launch.
+        try c.encode(onsetCeilingG, forKey: .onsetCeilingG)
         try c.encode(motionGateG, forKey: .motionGateG)
         // Written too, so a settings file stays readable by an older build
         // rather than silently losing the user's tap count on a downgrade.
