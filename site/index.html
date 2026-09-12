@@ -98,7 +98,7 @@
       "name": "Can I download Tunk yet?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. Tunk is in development and there is no release to download. The sensor layer, the action dispatch and the recording harness work, and the detector is being tuned against recorded sessions. The build ships when the measured detection and false-trigger numbers hold up on recordings the tuning never saw."
+        "text": "Yes. Version 0.2.0 is on this page, signed ad hoc. The sensor layer, the action dispatch and the recording harness all work. Detection on a lap is still 16 of 20 against a 98% bar, so read the measured numbers before you rely on it."
       }
     },
     {
@@ -267,7 +267,7 @@
         </figure>
         <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
       </div>
-      <p class="demo-hero__hint">Knock twice on the photograph. Two taps inside 400&nbsp;ms, the window the detector joins.</p>
+      <p class="demo-hero__hint">Knock twice on the photograph. The demo joins taps inside 400&nbsp;ms; the detector uses 220&nbsp;ms.</p>
     </div>
 
     </div>
@@ -492,10 +492,8 @@
       <div class="panel panel--no">
         <h3><span class="cross" aria-hidden="true"></span>Not measured yet</h3>
         <ul class="unknowns">
-          <li>Detection rate on deliberate taps. No percentage is published because no held-out tap set has been scored.</li>
-          <li>End-to-end latency from your second tap to the action firing.</li>
-          <li>False positives while typing, on a dedicated typing recording.</li>
-          <li>Anything on a lap, a bed, a cushion, or any surface other than a hard desk.</li>
+          <li>End-to-end latency, from your second tap to the key arriving in the app. The 209&nbsp;ms below is the detector replayed; posting the key is not in it.</li>
+          <li>A bed, a cushion, or any surface soft enough to swallow the knock outright.</li>
           <li>Any MacBook other than the one it was built on.</li>
           <li>Battery cost over a full charge cycle.</li>
         </ul>
@@ -507,8 +505,7 @@
           <figcaption>A cushion swallows a tap. Whether Tunk still hears one here is untested.</figcaption>
         </figure>
         <p class="panel__foot">
-          These are the numbers that decide whether Tunk ships. They will appear here when the
-          harness produces them, pass or fail.
+          These stay blank until the harness produces them, pass or fail.
         </p>
       </div>
     </div>
@@ -629,10 +626,9 @@
       <details class="faq__item">
         <summary><h3>Can I download Tunk yet?</h3></summary>
         <p>
-          No. Tunk is in development and there is no release to download. The sensor layer, the
-          action dispatch and the recording harness work, and the detector is being tuned against
-          recorded sessions. The build ships when the measured detection and false-trigger numbers
-          hold up on recordings the tuning never saw.
+          Yes. Version 0.2.0 is on this page, signed ad hoc. The sensor layer, the action
+          dispatch and the recording harness all work. Detection on a lap is still 16 of 20
+          against a 98% bar, so read the measured numbers before you rely on it.
         </p>
       </details>
 
