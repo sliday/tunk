@@ -198,7 +198,7 @@
         <a class="btn btn--primary" href="download/Tunk-0.2.0.dmg" download>
           Download Tunk 0.2.0
         </a>
-        <a class="btn btn--quiet" href="#app">See the screens</a>
+        <a class="btn btn--quiet" href="#app">See the screenshots</a>
       </div>
       <p class="cta-note">Apple silicon, macOS&nbsp;13 or later. Signed ad hoc, so macOS asks twice.
         <a href="https://github.com/sliday/tunk">Source on GitHub</a>.</p>
@@ -326,7 +326,7 @@
     <div class="feature enter beat-2">
       <div class="feature__text">
         <p class="eyebrow enter">What a tap can fire</p>
-        <h2 class="enter">Whatever a key can do, a knock can do</h2>
+        <h2 class="enter">A knock does what the key does</h2>
         <p>
           Tunk sends a keyboard combination you choose. Anything that listens for a global
           hotkey answers it: mute the call, play or pause, skip a track, take a screenshot,
@@ -355,7 +355,7 @@
   </section>
 
   <section class="wrap band demo-shots" id="app">
-    <h2>Three screens, no manual.</h2>
+    <h2>Three screens.</h2>
     <p class="lede">
       Turn it on and watch taps land. Bind what a double tap does. Teach it your knock.
       Experiments stay under Advanced, switched off.
@@ -369,7 +369,7 @@
       <figure class="demo-shot">
         <img src="img/app/actions.jpg" width="630" height="670" loading="lazy" decoding="async"
              alt="Tunk settings, Actions: double tap and single tap, each bound to a hotkey, a Shortcut, or nothing.">
-        <figcaption><b>Actions</b> A hotkey, or any macOS Shortcut. Single tap ships unbound: one knock is also a mug set down.</figcaption>
+        <figcaption><b>Actions</b> A hotkey, or any macOS Shortcut. Single tap ships unbound by default.</figcaption>
       </figure>
       <figure class="demo-shot">
         <img src="img/app/calibration.jpg" width="630" height="670" loading="lazy" decoding="async"
@@ -381,7 +381,7 @@
 
   <section class="wrap band" id="how">
     <p class="eyebrow enter">How it works</p>
-    <h2 class="enter">Five steps, and one of them is the hard one</h2>
+    <h2 class="enter">Five steps. Finding the onset is the hard one</h2>
     <p class="section-lede enter beat-2">
       Tunk never touches the microphone or the camera. It reads one motion sensor, and everything
       else is signal processing.
@@ -418,7 +418,7 @@
         <p>
           Every keystroke, trackpad click and trackpad touch opens a short suppression window
           during which onsets are discarded. Typing is the main way a tap detector fails, and this
-          gate is the defence. The cost is real and deliberate: you cannot trigger Tunk mid-word.
+          gate is the defence. The tradeoff: you cannot trigger Tunk mid-word.
         </p>
       </li>
       <li>
@@ -456,9 +456,8 @@
     <p class="eyebrow enter">Honesty</p>
     <h2 class="enter">What has been measured, and what has not</h2>
     <p class="section-lede enter beat-2">
-      Tunk is a detector, and detectors invite made-up percentages. Everything in the left column
-      came off real recordings on real hardware. Everything in the right column is unknown, and
-      stays unlabelled until it is not.
+      Detectors are easy to lie about, so here is the ledger. The left column came off real
+      recordings on real hardware. The right column is unknown, and stays blank until it isn't.
     </p>
 
     <div class="two-col enter beat-2">
@@ -468,12 +467,12 @@
           <div>
             <dt>Sensor rate</dt>
             <dd class="num">796 Hz</dd>
-            <p>Sustained, unbatched, samples exactly 1.25 ms apart.</p>
+            <p>Sustained and unbatched. 1.25 ms is the interval the sensor is asked for; 796 Hz is what it delivers.</p>
           </div>
           <div>
             <dt>Sensor to callback, p95</dt>
             <dd class="num">0.34 ms</dd>
-            <p>Transport costs under a millisecond, so the latency budget is spent on deciding, not on plumbing.</p>
+            <p>Transport costs under a millisecond, so the budget goes to the decision.</p>
           </div>
           <div>
             <dt>False triggers, recorded desk use</dt>
@@ -713,27 +712,27 @@
   <section class="wrap band closing">
     <h2 class="enter">It is not finished, and that is the point of this page</h2>
     <p class="section-lede enter beat-2">
-      The sensor works, the actions fire, the recordings are stacking up. What is left is the part
+      The sensor works and the actions fire. Recordings are stacking up. What is left is the part
       that decides whether the thing is any good: proving the detector answers a real tap and
-      ignores a real day. That page said the numbers would go here when they existed, whatever they
+      ignores a real day. This page said the numbers would go here when they existed, whatever they
       said. They exist, and one of them is bad.
     </p>
 
     <dl class="metrics enter beat-3">
       <div>
-        <dt>Detection, hard desk &mdash; held out, 20 gestures</dt>
-        <dd>100%</dd>
+        <dt>Detection, hard desk &mdash; held out</dt>
+        <dd>20 of 20</dd>
       </div>
       <div>
-        <dt>Detection, soft surface &mdash; held out, 20 gestures</dt>
-        <dd>100%</dd>
+        <dt>Detection, soft surface &mdash; held out</dt>
+        <dd>20 of 20</dd>
       </div>
       <div>
-        <dt>Detection, on a lap &mdash; held out, 20 gestures. The bar is 98%.</dt>
-        <dd>80%</dd>
+        <dt>Detection, on a lap &mdash; held out. The bar is 98%.</dt>
+        <dd>16 of 20</dd>
       </div>
       <div>
-        <dt>Response time, 95th percentile, every surface. The bar is 250&nbsp;ms.</dt>
+        <dt>Detector latency, 95th percentile, replayed. The bar is 250&nbsp;ms. Dispatch is not in it.</dt>
         <dd>209&nbsp;ms</dd>
       </div>
       <div>

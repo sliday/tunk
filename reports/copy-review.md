@@ -87,11 +87,25 @@ The page elsewhere clocks the URL scheme path at up to 345 ms on its own.
 
 Fix: "Detector latency, 95th percentile, replayed. Dispatch not included."
 
-## WARNING 3. The honesty standard is applied unevenly
+## WARNING 3. WITHDRAWN. The standard is not applied unevenly
 
-`site/index.html:480` publishes "0 in 28 min" with no disclosure. The typing zero
-volunteers that the gate muted 86 % of the window. The desk zero deserves the same
-treatment or the disclosure looks selective.
+Original finding: `site/index.html:480` publishes "0 in 28 min" with no disclosure,
+while the typing zero volunteers that the gate muted 86 % of its window.
+
+The data contradicts it. The harness reports un-gated minutes only for typing sessions,
+because the suppression gate is driven by input events:
+
+    desk  typing sessions    5.2 min (0.9 min un-gated)
+    desk  confound sessions  0.6 min
+    soft  typing sessions    3.2 min (0.5 min un-gated)
+    lap   typing sessions    3.2 min (0.2 min un-gated)
+
+The desk recordings behind the zero are idle-room and bass-through-the-desk sessions
+with no typing in them, so the gate mutes nothing there. The typing zero needs its
+caveat precisely because typing drives the gate. The desk zero does not.
+
+No change made. Inventing a muted figure to satisfy the finding would have introduced
+the defect the review exists to catch.
 
 ## WARNING 4. Sentences that read as machine written
 
