@@ -172,6 +172,7 @@
       <span class="brand__word">Tunk</span>
     </a>
     <nav class="head-nav" aria-label="Sections">
+      <a href="#gesture">Try it</a>
       <a href="#app">Screenshots</a>
       <a href="#how">How it works</a>
       <a href="#measured">What we measured</a>
@@ -278,9 +279,12 @@
     <p class="eyebrow enter">What a tap can fire</p>
     <h2 class="enter">A key combination, or anything you have built in Shortcuts</h2>
     <p class="section-lede enter beat-2">
-      Tunk posts a real key event, so any app already listening for a global hotkey works
-      without knowing Tunk exists. Bind a Shortcut instead and a tap runs whatever that
-      Shortcut does.
+      Tunk posts a real key event, so any app already listening for a global hotkey answers it:
+      mute the call, play or pause, skip a track, take a screenshot, start a recording, toggle
+      dictation. Bind a Shortcut instead and a tap runs whatever that Shortcut does. A fresh
+      install sends <kbd class="db-kbd">&#8963;</kbd><kbd class="db-kbd">&#8997;</kbd><kbd
+      class="db-kbd">&#8984;</kbd><kbd class="db-kbd">;</kbd> on a double tap, and nothing on a
+      single one.
     </p>
 
     <div class="fires enter beat-2">
@@ -318,31 +322,16 @@
 
     <p class="fire__note">
       Right&nbsp;Shift is refused as an emitted binding, with an explanation rather than silence.
-      The PRD reserves it as your manual VoiceInk key, and a synthesised one would collide.
+      It stays yours as the manual VoiceInk key, and a synthesised one would collide.
     </p>
-  </section>
 
-  <section class="wrap band band--feature" id="dictation">
     <div class="feature enter beat-2">
       <div class="feature__text">
-        <p class="eyebrow enter">What a tap can fire</p>
-        <h2 class="enter">A knock does what the key does</h2>
-        <p>
-          Tunk sends a keyboard combination you choose. Anything that listens for a global
-          hotkey answers it: mute the call, play or pause, skip a track, take a screenshot,
-          start a recording, toggle dictation. Pick the combination in Settings and bind the
-          same one in the app that should react.
-        </p>
-        <p>
-          Or skip hotkeys. Point the tap at a macOS Shortcut and a knock runs whatever you have
-          built there, the way Back Tap does on an iPhone.
-        </p>
         <p class="note">
           A worked example, because it is what Tunk was built for:
           <a href="https://tryvoiceink.com/">VoiceInk</a> takes the combination as its Second
           Shortcut in toggle mode, so tapping the case starts and stops dictation and the
-          shortcut you already use keeps working. Tunk refuses to emit a bare Right&nbsp;Shift,
-          the key VoiceInk uses by default, so the two never fight over one binding.
+          shortcut you already use keeps working.
         </p>
       </div>
       <figure class="feature__fig">
@@ -354,8 +343,9 @@
     </div>
   </section>
 
+
   <section class="wrap band demo-shots" id="app">
-    <h2>Three screens.</h2>
+    <h2 class="enter">Three screens.</h2>
     <p class="lede">
       Turn it on and watch taps land. Bind what a double tap does. Teach it your knock.
       Experiments stay under Advanced, switched off.
@@ -491,8 +481,9 @@
       <div class="panel panel--no">
         <h3><span class="cross" aria-hidden="true"></span>Not measured yet</h3>
         <ul class="unknowns">
-          <li>End-to-end latency, from your second tap to the key arriving in the app. The 209&nbsp;ms below is the detector replayed; posting the key is not in it.</li>
+          <li>End-to-end latency, from your second tap to the key arriving in the app. The <a href="#results">209&nbsp;ms</a> is the detector replayed; posting the key is not in it.</li>
           <li>A bed, a cushion, or any surface soft enough to swallow the knock outright.</li>
+          <li>A closed lid, docked to an external display. Never recorded, and a shut machine couples the knock differently.</li>
           <li>Any MacBook other than the one it was built on.</li>
           <li>Battery cost over a full charge cycle.</li>
         </ul>
@@ -534,9 +525,36 @@
     </div>
   </section>
 
+  <section class="wrap band" id="requirements">
+    <h2 class="enter">What it needs</h2>
+    <div class="reqs enter beat-2">
+      <div class="req">
+        <h3>An Apple Silicon MacBook</h3>
+        <p>
+          The sensor lives in the laptop. A Mac mini, Studio or Pro has nothing to tap. Built and
+          measured on an M4 Max, macOS 26.5.
+        </p>
+      </div>
+      <div class="req">
+        <h3>Two permissions</h3>
+        <p>
+          <b>Input Monitoring</b> to read the sensor and see keyboard and trackpad activity for the
+          suppression gate. <b>Accessibility</b> to post the key event your tap is bound to.
+        </p>
+      </div>
+      <div class="req">
+        <h3>Nothing else</h3>
+        <p>
+          Menubar only, no dock icon, no window beyond a small settings panel. No microphone, no
+          camera, no network. Nothing leaves the machine.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <section class="wrap band demo-setup" id="setup">
     <div>
-      <h2>Running in four steps.</h2>
+      <h2 class="enter">Running in four steps.</h2>
       <ol class="demo-steps">
         <li><b>Open the DMG</b> and drag Tunk onto Applications.</li>
         <li><b>Open it from Applications.</b> Tunk lives at the right-hand end of the menu bar and has no Dock icon.</li>
@@ -565,33 +583,6 @@
         It is also why macOS asks for both permissions again after every update: a grant belongs to
         one signature, and each build makes a new one.
       </p>
-    </div>
-  </section>
-
-  <section class="wrap band" id="requirements">
-    <h2 class="enter">What it needs</h2>
-    <div class="reqs enter beat-2">
-      <div class="req">
-        <h3>An Apple Silicon MacBook</h3>
-        <p>
-          The sensor lives in the laptop. A Mac mini, Studio or Pro has nothing to tap. Built and
-          measured on an M4 Max, macOS 26.5.
-        </p>
-      </div>
-      <div class="req">
-        <h3>Two permissions</h3>
-        <p>
-          <b>Input Monitoring</b> to read the sensor and see keyboard and trackpad activity for the
-          suppression gate. <b>Accessibility</b> to post the key event your tap is bound to.
-        </p>
-      </div>
-      <div class="req">
-        <h3>Nothing else</h3>
-        <p>
-          Menubar only, no dock icon, no window beyond a small settings panel. No microphone, no
-          camera, no network. Nothing leaves the machine.
-        </p>
-      </div>
     </div>
   </section>
 
@@ -709,7 +700,7 @@
 
   <hr class="deck" aria-hidden="true">
 
-  <section class="wrap band closing">
+  <section class="wrap band closing" id="results">
     <h2 class="enter">It is not finished, and that is the point of this page</h2>
     <p class="section-lede enter beat-2">
       The sensor works and the actions fire. Recordings are stacking up. What is left is the part
