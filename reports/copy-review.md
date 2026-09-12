@@ -9,6 +9,21 @@ Severity: **BLOCKER** cannot ship as is. **WARNING** likely rework, not blocking
 Reviewed against the deployed page, 2797 words, by three independent readers plus a
 check of every disputed number against the source that produces it.
 
+## Status
+
+All three blockers applied and live (commit dacfced). All warnings and observations
+applied and live (commit d2ed8aa), with two exceptions, both deliberate:
+
+- **WARNING 3 withdrawn.** The data contradicted the finding. See that section.
+- **WARNING 5 applied in part.** The proposal was to delete the dictation section as a
+  duplicate. The owner had earlier asked for that section to be broadened, so only its
+  slogan heading changed. Deleting it would have reversed a decision the review was not
+  entitled to relitigate.
+
+Verified on the live page: every replaced phrase returns zero occurrences, every
+replacement returns one, the JSON-LD parses, and the visible FAQ answer matches the
+structured data.
+
 ---
 
 ## BLOCKER 1. The FAQ says the app does not exist
