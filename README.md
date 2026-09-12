@@ -265,8 +265,9 @@ when you would anyway. Each tap-shaped transient writes the seconds around it.
 **Good for the tap profile** — amplitude, rise, decay, and the inter-tap
 interval of a real person on a real machine. Those come out of the waveform and
 owe nothing to how the snippet was chosen. They are what `calibratedThreshold`,
-`onsetCeilingG` and `calibratedInterTapNs` should be fitted to, and all three are
-currently numbers somebody guessed.
+`onsetCeilingG` and `calibratedInterTapNs` should be fitted to. `onsetCeilingG`
+now is, at 0.7 g, swept over the whole raw corpus; the other two are still
+numbers somebody guessed.
 
 **Not a detection-rate denominator.** The snippets are selected *by* the
 detector, so a tap it missed leaves no file, and scoring against them asks only

@@ -181,6 +181,38 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
     /// Nil disables the ceiling. Calibration should set it from the observed tap
     /// distribution with generous headroom, since a hard tap on a soft surface
     /// and a light tap on a hard one differ by a lot.
+    ///
+    /// **0.7 g, fitted.** It shipped at 2.5 g, which was inert: real onsets in
+    /// this corpus peak at 0.07-0.12 g, so the bar sat about 20x above anything
+    /// a fingertip produces and rejected nothing at all. An operator reported
+    /// carrying the machine firing a double tap, which is the exact failure this
+    /// bound exists to stop.
+    ///
+    /// Swept over all 14 raw sessions, 123 labelled gestures:
+    ///
+    ///     ceiling    detected   rate      FP   FP/20min
+    ///     0.05        35/123    28.46 %    1     0.41
+    ///     0.10        85/123    69.11 %    3     1.22
+    ///     0.15       101/123    82.11 %    3     1.22
+    ///     0.15-1.00  101/123    82.11 %    3     1.22   <- identical throughout
+    ///
+    /// Every value from 0.15 g up scores the same, so no recorded gesture
+    /// reaches 0.15 g and the corpus alone cannot pick a value.
+    ///
+    /// 0.7 is where the SYNTHETIC SUITE puts the floor, not where the evidence
+    /// does. The corpus permits anything from 0.15 g up, but the fixtures call a
+    /// 0.9 g burst a tap, which arrives as about 0.61 g of envelope through the
+    /// filter chain, and 54 tests assert it fires. 0.7 clears that by a hair.
+    /// Going lower means rescaling every synthetic amplitude in 18 test files,
+    /// which is a separate change with its own evidence to gather.
+    ///
+    /// Net: about 6x above the strongest onset ever recorded here, and 3.6x
+    /// tighter than the 2.5 g it replaces.
+    ///
+    /// What this is NOT: proof that carrying is rejected. The corpus holds no
+    /// confound_handling session, so the amplitude at which movement lands is
+    /// unmeasured. This tightens a bound that was doing nothing. Fitting it
+    /// properly needs a recording of the machine being picked up and carried.
     public var onsetCeilingG: Double?
 
     /// How far the chassis's settled acceleration may drift, in g, before onsets
@@ -259,7 +291,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
         confirmWindowNs: 220_000_000,
         refractoryNs: 600_000_000,
         armedTapCounts: [2],
-        onsetCeilingG: 2.5,
+        onsetCeilingG: 0.7,
         motionGateG: 0
     )
 
@@ -267,7 +299,7 @@ public struct DetectorConfig: Sendable, Equatable, Codable {
                 gateWindowNs: Int64, minInterTapNs: Int64, maxInterTapNs: Int64,
                 confirmWindowNs: Int64, refractoryNs: Int64,
                 armedTapCounts: Set<Int> = [2],
-                onsetCeilingG: Double? = 2.5,
+                onsetCeilingG: Double? = 0.7,
                 motionGateG: Double = 0,
                 calibratedInterTapNs: Int64? = nil) {
         self.sensitivity = sensitivity

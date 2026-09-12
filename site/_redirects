@@ -1,0 +1,4 @@
+# /demo folded into the landing page. Keep the old paths working: the release
+# notes, the README and anything already linked point at them.
+/demo      /    301
+/demo.html /    301

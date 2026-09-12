@@ -139,9 +139,9 @@ public enum TunkAction: Codable, Hashable, Sendable {
 /// One action per tap count, the iPhone Back Tap model where Double Tap and
 /// Triple Tap are separate rows.
 ///
-/// Single and double are surfaced. Triple is representable and persists
-/// correctly, so wiring it later is a UI change and a detector change, not a
-/// change to this type or to the settings file format.
+/// All three counts are surfaced. Triple was always representable and always
+/// persisted correctly, so turning it on took no migration and no change to
+/// this type or to the settings file format.
 ///
 /// ## Why single tap defaults to `.none`
 ///
@@ -150,8 +150,9 @@ public enum TunkAction: Codable, Hashable, Sendable {
 /// deliberate onsets close together. So single tap ships unbound: having it is
 /// the owner's call, arming it must be the user's.
 public struct ActionBindings: Codable, Hashable, Sendable {
-    /// Counts the settings panel offers today.
-    public static let wiredCounts = [2, 1]
+    /// Counts the settings panel offers today. Double leads because it is what
+    /// ships armed; single and triple follow, both unbound until asked for.
+    public static let wiredCounts = [2, 1, 3]
     /// Counts this type will store and reload without loss. Triple is here so
     /// enabling it later does not need a migration.
     public static let representableCounts = [1, 2, 3]

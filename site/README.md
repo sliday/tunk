@@ -45,7 +45,7 @@ JSON-LD-only setup has no origin requirements.
 | `styles.css` | Every visual rule. Tokens come from `../design/IDENTITY.md`. |
 | `llms.txt` | Plain-text summary for language models, per the llmstxt.org convention. Kept in sync with the page by hand. |
 | `robots.txt`, `sitemap.xml` | Standard. Both point at `https://tunk.dev/`. |
-| `fonts/inter-latin-var.woff2` | Inter variable, latin subset, weights 400–600, 47 KB. Self-hosted so the page has no third-party requests. |
+| `fonts/ibm-plex-sans-var.woff2` | IBM Plex Sans variable, latin subset, weights 400–700, 39 KB. Self-hosted so the page has no third-party requests. |
 | `vendor/daub.css` | The DAUB component library. See the note below. |
 | `tools/` | The scripts that generate every generated asset. Not deployed. |
 

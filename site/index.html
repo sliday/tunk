@@ -98,7 +98,7 @@
       "name": "Can I download Tunk yet?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. Tunk is in development and there is no release to download. The sensor layer, the action dispatch and the recording harness work, and the detector is being tuned against recorded sessions. The build ships when the measured detection and false-trigger numbers hold up on recordings the tuning never saw."
+        "text": "Yes. Version 0.2.0 is on this page, signed ad hoc. The sensor layer, the action dispatch and the recording harness all work. Detection on a lap is still 16 of 20 against a 98% bar, so read the measured numbers before you rely on it."
       }
     },
     {
@@ -172,11 +172,12 @@
       <span class="brand__word">Tunk</span>
     </a>
     <nav class="head-nav" aria-label="Sections">
-      <a href="demo.html">Demo</a>
+      <a href="#app">Screenshots</a>
       <a href="#how">How it works</a>
       <a href="#measured">What we measured</a>
       <a href="#faq">FAQ</a>
     </nav>
+    <a class="btn btn--primary head-cta" href="download/Tunk-0.2.0.dmg" download>Download</a>
   </div>
 </header>
 
@@ -194,32 +195,21 @@
       </p>
 
       <div class="cta-row">
-        <a class="btn btn--primary" href="https://github.com/sliday/tunk/releases/tag/v0.1.0">
-          Get the 0.1.0 build
+        <a class="btn btn--primary" href="download/Tunk-0.2.0.dmg" download>
+          Download Tunk 0.2.0
         </a>
-        <a class="btn btn--quiet" href="demo.html">See it running</a>
+        <a class="btn btn--quiet" href="#app">See the screenshots</a>
       </div>
       <p class="cta-note">Apple silicon, macOS&nbsp;13 or later. Signed ad hoc, so macOS asks twice.
         <a href="https://github.com/sliday/tunk">Source on GitHub</a>.</p>
     </div>
 
-    <div class="demo-stage" id="wake-stage">
-      <figure class="demo-hero__fig" id="hero-fig">
-        <img src="img/demo-hero.jpg" width="1024" height="1024" fetchpriority="high" decoding="async"
-             alt="An open MacBook seen from directly above on a dark desk, with two amber points of light blooming out of the aluminium palm rest beside the trackpad.">
-        <img class="demo-hero__lit" id="hero-lit" src="img/demo-hero-on.jpg" width="1024" height="1024"
-             loading="lazy" decoding="async" alt="" aria-hidden="true">
-      </figure>
-      <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
-    </div>
-    <p class="demo-hero__hint">Knock twice on the photograph. Two taps inside 400&nbsp;ms, the window the detector joins.</p>
-
-    <div class="demo-controls" id="ripple-controls" hidden>
-      <label>Strength <input type="range" id="c-amp" min="0.2" max="2" step="0.1" value="0.8"></label>
-      <label>Speed <input type="range" id="c-speed" min="0.2" max="1.6" step="0.05" value="0.65"></label>
-      <label>Rings <input type="range" id="c-rings" min="1" max="6" step="1" value="2"></label>
-      <p class="demo-controls__note" id="c-note"></p>
-    </div>
+    <figure class="demo-hero__media">
+      <video src="video/tunk-hero.mp4" poster="video/tunk-hero-poster.jpg"
+             width="1068" height="1128" autoplay muted loop playsinline preload="metadata"
+             aria-label="A hand knocking twice on the palm rest of an open MacBook that sits on a desk, with the Tunk page on its screen."></video>
+      <figcaption>A knock on the bare aluminium beside the trackpad. No key, and no spot to find.</figcaption>
+    </figure>
   </section>
 
   <section class="wrap band" id="gesture">
@@ -230,6 +220,7 @@
       one unbound.
     </p>
 
+    <div class="gesture-split">
     <ol class="gesture-list enter beat-2">
       <li class="gesture-card">
         <span class="gesture-card__beats" aria-hidden="true">
@@ -253,17 +244,33 @@
           world from triggering it.
         </p>
       </li>
-      <li class="gesture-card gesture-card--muted">
+      <li class="gesture-card">
         <span class="gesture-card__beats" aria-hidden="true">
           <span class="beat"></span><span class="beat"></span><span class="beat"></span>
         </span>
         <h3>Triple tap</h3>
         <p>
-          Built but not wired. The grouping already counts taps, so turning triple on later costs
-          nothing and, by design, will not change how double feels.
-        </p>
+            Three knocks inside the same join window. Wired now, and unbound until you bind it:
+            of the three it is the hardest to fire by accident, because nothing you do to a
+            laptop by mistake knocks it three times on a beat.
+          </p>
       </li>
     </ol>
+
+    <div class="demo-try enter beat-2">
+      <div class="demo-stage" id="wake-stage">
+        <figure class="demo-hero__fig" id="hero-fig">
+          <img src="img/demo-hero.jpg" width="1024" height="1024" fetchpriority="high" decoding="async"
+               alt="An open MacBook seen from directly above on a dark desk, with two amber points of light blooming out of the aluminium palm rest beside the trackpad.">
+          <img class="demo-hero__lit" id="hero-lit" src="img/demo-hero-on.jpg" width="1024" height="1024"
+               loading="lazy" decoding="async" alt="" aria-hidden="true">
+        </figure>
+        <canvas class="ripple-layer" id="hero-ripple" aria-hidden="true"></canvas>
+      </div>
+      <p class="demo-hero__hint">Knock twice on the photograph. The demo joins taps inside 400&nbsp;ms; the detector uses 220&nbsp;ms.</p>
+    </div>
+
+    </div>
   </section>
 
 
@@ -319,7 +326,7 @@
     <div class="feature enter beat-2">
       <div class="feature__text">
         <p class="eyebrow enter">What a tap can fire</p>
-        <h2 class="enter">Whatever a key can do, a knock can do</h2>
+        <h2 class="enter">A knock does what the key does</h2>
         <p>
           Tunk sends a keyboard combination you choose. Anything that listens for a global
           hotkey answers it: mute the call, play or pause, skip a track, take a screenshot,
@@ -347,9 +354,34 @@
     </div>
   </section>
 
+  <section class="wrap band demo-shots" id="app">
+    <h2>Three screens.</h2>
+    <p class="lede">
+      Turn it on and watch taps land. Bind what a double tap does. Teach it your knock.
+      Experiments stay under Advanced, switched off.
+    </p>
+    <div class="demo-shots__row">
+      <figure class="demo-shot">
+        <img src="img/app/general.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, General: an enable switch, live sample rate, taps fired, last latency, and a tap monitor drawing onsets.">
+        <figcaption><b>General</b> Every onset drawn as it lands. Grey means the typing gate ate it, on purpose.</figcaption>
+      </figure>
+      <figure class="demo-shot">
+        <img src="img/app/actions.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, Actions: double tap and single tap, each bound to a hotkey, a Shortcut, or nothing.">
+        <figcaption><b>Actions</b> A hotkey, or any macOS Shortcut. Single tap ships unbound by default.</figcaption>
+      </figure>
+      <figure class="demo-shot">
+        <img src="img/app/calibration.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, Calibration: a learned threshold, a sensitivity slider, and a slider for how long to ignore taps after typing.">
+        <figcaption><b>Calibration</b> The threshold comes from your own taps. Every machine and surface couples differently.</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <section class="wrap band" id="how">
     <p class="eyebrow enter">How it works</p>
-    <h2 class="enter">Five steps, and one of them is the hard one</h2>
+    <h2 class="enter">Five steps. Finding the onset is the hard one</h2>
     <p class="section-lede enter beat-2">
       Tunk never touches the microphone or the camera. It reads one motion sensor, and everything
       else is signal processing.
@@ -386,7 +418,7 @@
         <p>
           Every keystroke, trackpad click and trackpad touch opens a short suppression window
           during which onsets are discarded. Typing is the main way a tap detector fails, and this
-          gate is the defence. The cost is real and deliberate: you cannot trigger Tunk mid-word.
+          gate is the defence. The tradeoff: you cannot trigger Tunk mid-word.
         </p>
       </li>
       <li>
@@ -424,9 +456,8 @@
     <p class="eyebrow enter">Honesty</p>
     <h2 class="enter">What has been measured, and what has not</h2>
     <p class="section-lede enter beat-2">
-      Tunk is a detector, and detectors invite made-up percentages. Everything in the left column
-      came off real recordings on real hardware. Everything in the right column is unknown, and
-      stays unlabelled until it is not.
+      Detectors are easy to lie about, so here is the ledger. The left column came off real
+      recordings on real hardware. The right column is unknown, and stays blank until it isn't.
     </p>
 
     <div class="two-col enter beat-2">
@@ -436,12 +467,12 @@
           <div>
             <dt>Sensor rate</dt>
             <dd class="num">796 Hz</dd>
-            <p>Sustained, unbatched, samples exactly 1.25 ms apart.</p>
+            <p>Sustained and unbatched. 1.25 ms is the interval the sensor is asked for; 796 Hz is what it delivers.</p>
           </div>
           <div>
             <dt>Sensor to callback, p95</dt>
             <dd class="num">0.34 ms</dd>
-            <p>Transport costs under a millisecond, so the latency budget is spent on deciding, not on plumbing.</p>
+            <p>Transport costs under a millisecond, so the budget goes to the decision.</p>
           </div>
           <div>
             <dt>False triggers, recorded desk use</dt>
@@ -460,10 +491,8 @@
       <div class="panel panel--no">
         <h3><span class="cross" aria-hidden="true"></span>Not measured yet</h3>
         <ul class="unknowns">
-          <li>Detection rate on deliberate taps. No percentage is published because no held-out tap set has been scored.</li>
-          <li>End-to-end latency from your second tap to the action firing.</li>
-          <li>False positives while typing, on a dedicated typing recording.</li>
-          <li>Anything on a lap, a bed, a cushion, or any surface other than a hard desk.</li>
+          <li>End-to-end latency, from your second tap to the key arriving in the app. The 209&nbsp;ms below is the detector replayed; posting the key is not in it.</li>
+          <li>A bed, a cushion, or any surface soft enough to swallow the knock outright.</li>
           <li>Any MacBook other than the one it was built on.</li>
           <li>Battery cost over a full charge cycle.</li>
         </ul>
@@ -475,8 +504,7 @@
           <figcaption>A cushion swallows a tap. Whether Tunk still hears one here is untested.</figcaption>
         </figure>
         <p class="panel__foot">
-          These are the numbers that decide whether Tunk ships. They will appear here when the
-          harness produces them, pass or fail.
+          These stay blank until the harness produces them, pass or fail.
         </p>
       </div>
     </div>
@@ -503,6 +531,40 @@
                aria-label="The Tunk settings window while the machine is being tapped: the tap monitor draws each knock as it lands and the taps-fired counter moves."></video>
         <figcaption>The monitor drawing real knocks at 796&nbsp;Hz, while the counter moves.</figcaption>
       </figure>
+    </div>
+  </section>
+
+  <section class="wrap band demo-setup" id="setup">
+    <div>
+      <h2>Running in four steps.</h2>
+      <ol class="demo-steps">
+        <li><b>Open the DMG</b> and drag Tunk onto Applications.</li>
+        <li><b>Open it from Applications.</b> Tunk lives at the right-hand end of the menu bar and has no Dock icon.</li>
+        <li><b>Grant two permissions.</b> A window opens on first launch: Input Monitoring to read the
+            accelerometer, Accessibility to press the key. Each row opens the right pane for you, and
+            the window notices the moment you come back.</li>
+        <li><b>Double-tap the case.</b> Palm rest, lid, or the deck beside the trackpad. The ring lights
+            up for each knock it hears.</li>
+      </ol>
+    </div>
+
+    <div class="demo-download">
+      <h3>Tunk 0.2.0</h3>
+      <p class="demo-download__meta">
+        4.6 MB · Apple silicon · macOS 13 or later<br>
+        sha256 210f7df2da516a42…
+      </p>
+      <a class="btn btn--primary" href="download/Tunk-0.2.0.dmg" download>Download Tunk 0.2.0</a>
+      <p class="demo-download__meta" style="margin:10px 0 0">
+        <a href="https://github.com/sliday/tunk/releases/tag/v0.2.0">Release notes on GitHub</a>
+      </p>
+      <p class="demo-download__warn">
+        <b>This build is signed ad hoc, not with a Developer ID.</b> On a Mac that is not the one it
+        was built on, macOS will refuse to open it and say it cannot verify the developer. Opening it
+        from the right-click menu is the usual way past that, and a notarised build is the real fix.
+        It is also why macOS asks for both permissions again after every update: a grant belongs to
+        one signature, and each build makes a new one.
+      </p>
     </div>
   </section>
 
@@ -563,10 +625,9 @@
       <details class="faq__item">
         <summary><h3>Can I download Tunk yet?</h3></summary>
         <p>
-          No. Tunk is in development and there is no release to download. The sensor layer, the
-          action dispatch and the recording harness work, and the detector is being tuned against
-          recorded sessions. The build ships when the measured detection and false-trigger numbers
-          hold up on recordings the tuning never saw.
+          Yes. Version 0.2.0 is on this page, signed ad hoc. The sensor layer, the action
+          dispatch and the recording harness all work. Detection on a lap is still 16 of 20
+          against a 98% bar, so read the measured numbers before you rely on it.
         </p>
       </details>
 
@@ -651,27 +712,27 @@
   <section class="wrap band closing">
     <h2 class="enter">It is not finished, and that is the point of this page</h2>
     <p class="section-lede enter beat-2">
-      The sensor works, the actions fire, the recordings are stacking up. What is left is the part
+      The sensor works and the actions fire. Recordings are stacking up. What is left is the part
       that decides whether the thing is any good: proving the detector answers a real tap and
-      ignores a real day. That page said the numbers would go here when they existed, whatever they
+      ignores a real day. This page said the numbers would go here when they existed, whatever they
       said. They exist, and one of them is bad.
     </p>
 
     <dl class="metrics enter beat-3">
       <div>
-        <dt>Detection, hard desk &mdash; held out, 20 gestures</dt>
-        <dd>100%</dd>
+        <dt>Detection, hard desk &mdash; held out</dt>
+        <dd>20 of 20</dd>
       </div>
       <div>
-        <dt>Detection, soft surface &mdash; held out, 20 gestures</dt>
-        <dd>100%</dd>
+        <dt>Detection, soft surface &mdash; held out</dt>
+        <dd>20 of 20</dd>
       </div>
       <div>
-        <dt>Detection, on a lap &mdash; held out, 20 gestures. The bar is 98%.</dt>
-        <dd>80%</dd>
+        <dt>Detection, on a lap &mdash; held out. The bar is 98%.</dt>
+        <dd>16 of 20</dd>
       </div>
       <div>
-        <dt>Response time, 95th percentile, every surface. The bar is 250&nbsp;ms.</dt>
+        <dt>Detector latency, 95th percentile, replayed. The bar is 250&nbsp;ms. Dispatch is not in it.</dt>
         <dd>209&nbsp;ms</dd>
       </div>
       <div>
@@ -692,8 +753,8 @@
       activity, so the honest exposure is 1.6&nbsp;minutes, not 11.7.
     </p>
     <div class="cta-row enter beat-2">
-      <a class="btn btn--primary" href="https://github.com/sliday/tunk/releases/tag/v0.1.0">
-        Get the 0.1.0 build
+      <a class="btn btn--primary" href="download/Tunk-0.2.0.dmg" download>
+        Download Tunk 0.2.0
       </a>
     </div>
     <p class="cta-note">The source is public, and so is every rejected experiment behind it.</p>
@@ -708,7 +769,15 @@
     </p>
     <p class="foot-meta">
       Numbers on this page were measured on an M4 Max MacBook running macOS 26.5.
-      Nothing here is projected.
+      Nothing here is projected. The photograph you can knock on is generated, not a picture of
+      the machine that was measured. The ripple over it is
+      <a href="https://canvasui.dev/docs/components/ripple">Ripple from Canvas UI</a>,
+      by David Haz, MIT with Commons Clause.
+    </p>
+    <p class="foot-made">
+      Made by <a href="https://x.com/staskulesh" target="_blank" rel="noopener">@staskulesh</a>
+      <a class="foot-rabbit" href="https://aichess.co/static/easter-egg/index.html"
+         title="🎃" target="_blank" rel="noopener">🐇</a>
     </p>
   </div>
 </footer>
