@@ -984,3 +984,15 @@ figcaption {
   .band { padding-block: 24px; }
   [data-anim="on"] .enter { opacity: 1; transform: none; }
 }
+
+
+/* The header carries one action. Smaller than a body button so it sits inside
+   the bar instead of shouting from it, and it steps aside on a narrow screen
+   where the nav already needs the room. */
+.head-cta {
+  padding: 7px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) { .head-cta { display: none; } }
