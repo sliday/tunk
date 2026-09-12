@@ -915,6 +915,32 @@ figcaption {
   color: var(--text-3) !important;
 }
 
+/* The signature. Same quiet register as the meta line above it. !important
+   matches the rule it sits beside, which needs it to beat `.foot-row p`. */
+.foot-made {
+  margin-top: 10px !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  color: var(--text-3) !important;
+}
+
+.foot-made a { color: var(--accent-text); }
+
+/* The rabbit grows when you find it. CSS rather than an inline handler, so it
+   survives a content policy and honours a visitor who asked for less motion. */
+.foot-rabbit {
+  display: inline-block;
+  text-decoration: none;
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.foot-rabbit:hover { transform: scale(1.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .foot-rabbit { transition: none; }
+  .foot-rabbit:hover { transform: none; }
+}
+
 /* --------------------------------------------------------------- motion -- */
 
 /* M1, the double beat. Two chunks, 90 ms apart, split by meaning. The rule is
