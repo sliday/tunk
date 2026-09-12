@@ -172,7 +172,7 @@
       <span class="brand__word">Tunk</span>
     </a>
     <nav class="head-nav" aria-label="Sections">
-      <a href="demo.html">Demo</a>
+      <a href="#app">Screens</a>
       <a href="#how">How it works</a>
       <a href="#measured">What we measured</a>
       <a href="#faq">FAQ</a>
@@ -194,10 +194,10 @@
       </p>
 
       <div class="cta-row">
-        <a class="btn btn--primary" href="https://github.com/sliday/tunk/releases/tag/v0.1.0">
-          Get the 0.1.0 build
+        <a class="btn btn--primary" href="download/Tunk-0.1.0.dmg" download>
+          Download Tunk 0.1.0
         </a>
-        <a class="btn btn--quiet" href="demo.html">See it running</a>
+        <a class="btn btn--quiet" href="#app">See the screens</a>
       </div>
       <p class="cta-note">Apple silicon, macOS&nbsp;13 or later. Signed ad hoc, so macOS asks twice.
         <a href="https://github.com/sliday/tunk">Source on GitHub</a>.</p>
@@ -349,6 +349,31 @@
              sizes="(min-width: 56rem) 46vw, 92vw"
              width="1440" height="806" loading="lazy" decoding="async"
              alt="Overhead close-up of two fingertips resting on the brushed aluminium palm rest of a laptop.">
+      </figure>
+    </div>
+  </section>
+
+  <section class="wrap band demo-shots" id="app">
+    <h2>Three screens, no manual.</h2>
+    <p class="lede">
+      Turn detection on and watch taps land. Choose what a double tap does. Teach it how hard
+      you knock. Everything an experiment rather than a feature lives under Advanced, switched off.
+    </p>
+    <div class="demo-shots__row">
+      <figure class="demo-shot">
+        <img src="img/app/general.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, General: an enable switch, live sample rate, taps fired, last latency, and a tap monitor drawing onsets.">
+        <figcaption><b>General</b> The tap monitor draws every onset as it lands. A grey spike is one the typing gate ate on purpose.</figcaption>
+      </figure>
+      <figure class="demo-shot">
+        <img src="img/app/actions.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, Actions: double tap and single tap, each bound to a hotkey, a Shortcut, or nothing.">
+        <figcaption><b>Actions</b> A hotkey or any macOS Shortcut. Single tap ships unbound, because one knock is a mug set down.</figcaption>
+      </figure>
+      <figure class="demo-shot">
+        <img src="img/app/calibration.jpg" width="630" height="670" loading="lazy" decoding="async"
+             alt="Tunk settings, Calibration: a learned threshold, a sensitivity slider, and a slider for how long to ignore taps after typing.">
+        <figcaption><b>Calibration</b> The threshold comes from your own taps. Coupling changes with the machine and the surface.</figcaption>
       </figure>
     </div>
   </section>
@@ -509,6 +534,40 @@
                aria-label="The Tunk settings window while the machine is being tapped: the tap monitor draws each knock as it lands and the taps-fired counter moves."></video>
         <figcaption>The monitor drawing real knocks at 796&nbsp;Hz, while the counter moves.</figcaption>
       </figure>
+    </div>
+  </section>
+
+  <section class="wrap band demo-setup" id="setup">
+    <div>
+      <h2>Running in four steps.</h2>
+      <ol class="demo-steps">
+        <li><b>Open the DMG</b> and drag Tunk onto Applications.</li>
+        <li><b>Open it from Applications.</b> Tunk lives at the right-hand end of the menu bar and has no Dock icon.</li>
+        <li><b>Grant two permissions.</b> A window opens on first launch: Input Monitoring to read the
+            accelerometer, Accessibility to press the key. Each row opens the right pane for you, and
+            the window notices the moment you come back.</li>
+        <li><b>Double-tap the case.</b> Palm rest, lid, or the deck beside the trackpad. The ring lights
+            up for each knock it hears.</li>
+      </ol>
+    </div>
+
+    <div class="demo-download">
+      <h3>Tunk 0.1.0</h3>
+      <p class="demo-download__meta">
+        4.6 MB · Apple silicon · macOS 13 or later<br>
+        sha256 d285a62f2fe402ab…
+      </p>
+      <a class="btn btn--primary" href="download/Tunk-0.1.0.dmg" download>Download Tunk 0.1.0</a>
+      <p class="demo-download__meta" style="margin:10px 0 0">
+        <a href="https://github.com/sliday/tunk/releases/tag/v0.1.0">Release notes on GitHub</a>
+      </p>
+      <p class="demo-download__warn">
+        <b>This build is signed ad hoc, not with a Developer ID.</b> On a Mac that is not the one it
+        was built on, macOS will refuse to open it and say it cannot verify the developer. Opening it
+        from the right-click menu is the usual way past that, and a notarised build is the real fix.
+        It is also why macOS asks for both permissions again after every update: a grant belongs to
+        one signature, and each build makes a new one.
+      </p>
     </div>
   </section>
 
@@ -698,8 +757,8 @@
       activity, so the honest exposure is 1.6&nbsp;minutes, not 11.7.
     </p>
     <div class="cta-row enter beat-2">
-      <a class="btn btn--primary" href="https://github.com/sliday/tunk/releases/tag/v0.1.0">
-        Get the 0.1.0 build
+      <a class="btn btn--primary" href="download/Tunk-0.1.0.dmg" download>
+        Download Tunk 0.1.0
       </a>
     </div>
     <p class="cta-note">The source is public, and so is every rejected experiment behind it.</p>
@@ -714,7 +773,10 @@
     </p>
     <p class="foot-meta">
       Numbers on this page were measured on an M4 Max MacBook running macOS 26.5.
-      Nothing here is projected.
+      Nothing here is projected. The photograph you can knock on is generated, not a picture of
+      the machine that was measured. The ripple over it is
+      <a href="https://canvasui.dev/docs/components/ripple">Ripple from Canvas UI</a>,
+      by David Haz, MIT with Commons Clause.
     </p>
     <p class="foot-made">
       Made by <a href="https://x.com/staskulesh" target="_blank" rel="noopener">@staskulesh</a>
