@@ -88,7 +88,9 @@ public final class ShortcutsProcessSpawner: ShortcutSpawning, @unchecked Sendabl
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = ["run", name]
+            // "--" ends option parsing. Without it the CLI read a name such as
+            // "-Focus" as flags and failed with "Missing value for '-o'".
+            process.arguments = ["run", "--", name]
 
             // Drained asynchronously. An unread pipe fills at 64 KB and then
             // blocks the child, which would turn a chatty shortcut into a hang.

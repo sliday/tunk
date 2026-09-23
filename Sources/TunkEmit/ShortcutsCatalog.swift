@@ -176,6 +176,13 @@ public enum ShortcutsCatalog {
         }
         guard process.terminationStatus == 0 else { return .unknown }
 
+        // The termination handler drops the reader the moment the child exits,
+        // and the tail of its output can still be in the pipe. Parsing without
+        // draining it returned a short listing marked as succeeded, and every
+        // bound Shortcut missing from it was refused as deleted. The write end
+        // is closed by now, so this returns promptly, and TextBox is locked.
+        out.append(outPipe.fileHandleForReading.readDataToEndOfFile())
+
         // A clean exit is a real answer, even when it names nothing: that user
         // genuinely has no Shortcuts.
         return ShortcutsListing(names: parse(out.text), succeeded: true)

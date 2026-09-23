@@ -214,9 +214,25 @@ public struct ActionBindings: Codable, Hashable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CountKey.self)
         var out: [Int: TunkAction] = [:]
+        var failures = 0
         for key in c.allKeys {
             guard let count = key.intValue else { continue }
-            out[count] = try c.decode(TunkAction.self, forKey: key)
+            // One entry that will not decode (an action kind from a newer
+            // build, read after a downgrade) used to throw for the whole set.
+            // The caller then fell back to the default hotkey and silently
+            // dropped every binding that did decode. Keep the good ones.
+            if let action = try? c.decode(TunkAction.self, forKey: key) {
+                out[count] = action
+            } else {
+                failures += 1
+            }
+        }
+        // Nothing survived: throw, so `restored` still falls back to the legacy
+        // keys or the default rather than leaving every count unbound.
+        if out.isEmpty && failures > 0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "no action binding could be decoded"))
         }
         self.init(out)
     }
