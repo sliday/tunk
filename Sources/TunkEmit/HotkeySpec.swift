@@ -16,7 +16,7 @@ public struct HotkeyModifiers: OptionSet, Sendable, Hashable, CustomStringConver
 
     /// Apple's canonical order for printed shortcuts: fn ⌃ ⌥ ⇧ ⌘.
     static let ordered: [(flag: HotkeyModifiers, name: String, symbol: String, spellings: [String])] = [
-        (.function, "Fn",    "\u{1F310}", ["fn", "function"]),
+        (.function, "Fn",    "\u{1F310}", ["fn", "function", "\u{1F310}"]),
         (.control,  "Ctrl",  "\u{2303}",  ["ctrl", "control", "ctl", "\u{2303}"]),
         (.option,   "Opt",   "\u{2325}",  ["opt", "option", "alt", "\u{2325}"]),
         (.shift,    "Shift", "\u{21E7}",  ["shift", "shft", "\u{21E7}"]),

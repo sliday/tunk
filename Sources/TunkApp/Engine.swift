@@ -439,7 +439,12 @@ final class Engine: ObservableObject {
         }
         lastSampleCount = sampleCount
         starvedTicks = 0
-        reacquireBackoff = 1
+        // Not resetting reacquireBackoff here. A reacquire that opens the
+        // service but gets no data comes through this path on every attempt, so
+        // a reset here pinned the backoff at 1 and brought back the fixed 3 s
+        // spin the watchdog documents. The watchdog resets it once the stream
+        // has been healthy for five ticks; a new stream counts from zero.
+        healthyTicks = 0
         status = .running
     }
 
@@ -971,6 +976,23 @@ final class Engine: ObservableObject {
 
         if permissions != PermissionState.current() { permissions = .current() }
         guard wantsRunning else { return }
+
+        // A running engine that loses a permission has to stop, the same way
+        // start() refuses to arm without one. Without Input Monitoring it no
+        // longer sees keystrokes and cannot suppress typing, and a bound
+        // Shortcut needs no Accessibility, so it would fire on every keystroke
+        // that knocks the case. The .needsPermission branch below re-arms once
+        // the grant comes back.
+        if !permissions.ready {
+            switch status {
+            case .running, .sensorLost:
+                stopSensors()
+                status = .needsPermission
+                return
+            default:
+                break
+            }
+        }
 
         // A sensor call that has not come back. It is on its own queue and the
         // UI is alive, which is the whole point — but a menubar reading

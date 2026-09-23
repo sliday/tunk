@@ -131,6 +131,21 @@ extension DetectorConfig {
         out.maxInterTapNs = clampWindow(out.maxInterTapNs, "maxInterTapNs")
         out.minInterTapNs = clampWindow(out.minInterTapNs, "minInterTapNs")
 
+        // The debounce is the floor of the whole join band, not only of its
+        // minimum. A confirm window or a maximum under it left the minimum to be
+        // clamped down below the floor it had just been raised to, so the result
+        // failed its own `isCoherent` and no double tap could ever join. Raising
+        // the ceiling first keeps every later clamp inside [debounce, window].
+        let debounceNs = DSPTuning.default.onsetDebounceNs
+        if out.confirmWindowNs < debounceNs {
+            issues.append(CoherenceIssue(
+                field: "confirmWindowNs",
+                reason: "a window under the \(ms(debounceNs)) debounce leaves no spacing "
+                      + "two separate onsets can have",
+                applied: ms(debounceNs)))
+            out.confirmWindowNs = debounceNs
+        }
+
         if out.maxInterTapNs > out.confirmWindowNs {
             issues.append(CoherenceIssue(
                 field: "maxInterTapNs",
@@ -140,12 +155,20 @@ extension DetectorConfig {
             out.maxInterTapNs = out.confirmWindowNs
         }
 
+        if out.maxInterTapNs < debounceNs {
+            issues.append(CoherenceIssue(
+                field: "maxInterTapNs",
+                reason: "a maximum under the \(ms(debounceNs)) debounce leaves no spacing "
+                      + "two separate onsets can have",
+                applied: ms(debounceNs)))
+            out.maxInterTapNs = debounceNs
+        }
+
         // A minimum below the onset debounce describes a gesture the front end
         // cannot emit: two onsets closer than the debounce are merged into one,
         // so the band between them is unreachable. This pair drifted apart once,
         // when the debounce moved to 100 ms to fix soft-surface detection and
         // left the minimum at 80 ms.
-        let debounceNs = DSPTuning.default.onsetDebounceNs
         if out.minInterTapNs < debounceNs {
             issues.append(CoherenceIssue(
                 field: "minInterTapNs",
@@ -199,6 +222,33 @@ extension DetectorConfig {
                                          reason: "not a positive threshold in g",
                                          applied: "uncalibrated"))
             out.calibratedThreshold = nil
+        }
+
+        // The onset ceiling must sit above the threshold. Every onset that
+        // crosses the threshold would otherwise be over the ceiling by
+        // construction and be discarded as too large: the detector goes deaf
+        // and reports nothing. At 2.5 g that was unreachable; at 0.7 g a
+        // heavily raised sensitivity or a calibration on hard knocks reaches it.
+        if let ceiling = out.onsetCeilingG, !(ceiling.isFinite && ceiling > 0) {
+            let fallback = DetectorConfig.default.onsetCeilingG
+            issues.append(CoherenceIssue(field: "onsetCeilingG",
+                                         reason: "not a positive ceiling in g",
+                                         applied: fallback.map { "\($0) g" } ?? "none"))
+            out.onsetCeilingG = fallback
+        }
+        if let ceiling = out.onsetCeilingG, out.effectiveThreshold >= ceiling {
+            // Restore the gap the defaults ship with rather than invent one. A
+            // flat doubling would still deafen it: real taps peak 2-4x above the
+            // threshold they cross.
+            let shippedRatio = (DetectorConfig.default.onsetCeilingG ?? ceiling)
+                             / DetectorConfig.default.defaultThreshold
+            let lifted = out.effectiveThreshold * shippedRatio
+            issues.append(CoherenceIssue(
+                field: "onsetCeilingG",
+                reason: "a threshold of \(out.effectiveThreshold) g is not below the \(ceiling) g "
+                      + "ceiling, so every onset would be discarded as too large",
+                applied: "\(lifted) g"))
+            out.onsetCeilingG = lifted
         }
 
         return (out, issues)

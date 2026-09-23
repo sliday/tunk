@@ -584,8 +584,11 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            // Floor at the 100 ms onset debounce. Below it the front end merges
+            // the two onsets, so coherence rewrote the value on the next launch
+            // and showed a "settings updated" note for a number this slider set.
             slider(title: "Min gap between taps",
-                   value: msBinding(\.minInterTapNs), range: 40...200, step: 10,
+                   value: msBinding(\.minInterTapNs), range: 100...200, step: 10,
                    readout: msReadout(settings.config.minInterTapNs,
                                       inForce: inForce.minInterTapNs), help: nil)
             slider(title: "Max gap between taps",

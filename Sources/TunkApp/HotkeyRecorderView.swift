@@ -9,6 +9,9 @@ struct HotkeyRecorderView: View {
     @State private var recording = false
     @State private var monitor: Any?
     @State private var complaint: String?
+    /// A lone modifier pressed and not yet released. It becomes the binding
+    /// only if it comes back up with nothing else pressed in between.
+    @State private var pendingBare: HotkeySpec?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -48,10 +51,12 @@ struct HotkeyRecorderView: View {
 
     private func beginRecording() {
         complaint = nil
+        pendingBare = nil
         recording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
             switch event.type {
             case .keyDown:
+                pendingBare = nil
                 if event.keyCode == 53 {                   // Escape
                     endRecording()
                     return nil
@@ -66,11 +71,23 @@ struct HotkeyRecorderView: View {
 
             case .flagsChanged:
                 // A modifier on its own is a legitimate shortcut; VoiceInk takes
-                // one. Press it and it lands on the press, not on the release,
-                // so the panel reacts the moment the key goes down.
+                // one. It used to commit on the press, which made every combo
+                // unrecordable for anyone who presses the modifiers first, which
+                // is everyone: Ctrl went down and "LCtrl" was saved before the
+                // other modifiers or the key arrived. Hold a lone modifier as a
+                // candidate, and commit it only when that same key comes back up
+                // with nothing else pressed in between.
                 guard KeyCodes.isModifier(event.keyCode) else { return nil }
-                guard isPress(event) else { return nil }
-                commit(HotkeySpec(keyCode: event.keyCode, eventModifiers: event.modifierFlags))
+                if isPress(event) {
+                    pendingBare = heldModifierCount(event) == 1
+                        ? HotkeySpec(keyCode: event.keyCode, eventModifiers: event.modifierFlags)
+                        : nil
+                } else if let bare = pendingBare, bare.keyCode == event.keyCode {
+                    pendingBare = nil
+                    commit(bare)
+                } else {
+                    pendingBare = nil
+                }
 
             default:
                 break
@@ -93,6 +110,13 @@ struct HotkeyRecorderView: View {
         case .function: return raw & NSEvent.ModifierFlags.function.rawValue != 0
         default:        return false
         }
+    }
+
+    /// How many of the five modifiers are held once this event has applied.
+    /// One means a lone modifier; more means a combination is being built.
+    private func heldModifierCount(_ event: NSEvent) -> Int {
+        let all: [NSEvent.ModifierFlags] = [.control, .option, .shift, .command, .function]
+        return all.filter { event.modifierFlags.contains($0) }.count
     }
 
     private func commit(_ spec: HotkeySpec) {
